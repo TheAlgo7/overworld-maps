@@ -45,6 +45,10 @@ import com.thealgothrim.overworld.theme.OverworldTheme
 import com.thealgothrim.overworld.ui.arrivalClock
 import com.thealgothrim.overworld.ui.formatDistance
 import com.thealgothrim.overworld.ui.formatDuration
+import com.thealgothrim.overworld.ui.distanceMeters
+import com.thealgothrim.overworld.ui.lengthMeters
+import com.thealgothrim.overworld.ui.relativeBearing
+import com.thealgothrim.overworld.ui.turnSentence
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -103,7 +107,7 @@ fun BoxScope.GtaDriveHud(
         }
         GtaHelpLine(
             if (uiState.isCalculatingNewRoute == true) "Recalculating route."
-            else gtaInstruction(uiState, uiState.destination)
+            else turnSentence(uiState, uiState.destination)
         )
       }
     }
@@ -161,42 +165,6 @@ fun BoxScope.GtaDriveHud(
   }
 }
 
-/** Turns Ferrostar's maneuver data into a GTA-style help-text sentence. */
-private fun gtaInstruction(uiState: NavigationUiState, destination: String?): String {
-  val content = uiState.visualInstruction?.primaryContent ?: return "Follow the route."
-  // Named roads come through as the road name; unnamed ones as a sentence ("Bear left.").
-  val road = content.text.trim().takeUnless { it.endsWith(".") }.orEmpty()
-  val type = content.maneuverType?.name.orEmpty()
-  val mod = content.maneuverModifier?.name.orEmpty()
-  val side = when { "LEFT" in mod -> "left"; "RIGHT" in mod -> "right"; else -> "" }
-  val dist = uiState.progress?.distanceToNextManeuver?.let(::formatDistance)
-  if (type == "ARRIVE") {
-    val where = destination?.takeIf { it.isNotBlank() } ?: road.ifBlank { "your destination" }
-    return if (dist != null) "In $dist, arrive at $where." else "Arrive at $where."
-  }
-  val verb =
-      when (type) {
-        "DEPART" -> "head out"
-        "MERGE" -> "merge"
-        "ON_RAMP" -> "take the ramp"
-        "OFF_RAMP" -> "take the exit"
-        "FORK" -> "keep $side"
-        "ROUNDABOUT", "ROTARY", "ROUNDABOUT_TURN" -> "at the roundabout, take the exit"
-        "END_OF_ROAD" -> "turn $side"
-        "CONTINUE", "NEW_NAME" -> if (mod.startsWith("SLIGHT")) "keep $side" else "continue"
-        else ->
-            when {
-              mod == "U_TURN" -> "make a U-turn"
-              mod.startsWith("SLIGHT") -> "bear $side"
-              mod.startsWith("SHARP") -> "turn sharp $side"
-              side.isNotEmpty() -> "turn $side"
-              else -> "continue straight"
-            }
-      }.trim()
-  val onto = if (road.isNotBlank()) " onto $road" else ""
-  return if (dist != null) "In $dist, $verb$onto." else "${verb.replaceFirstChar { it.uppercase() }}$onto."
-}
-
 // ================================================================ planner
 
 /** GTA V menu for choosing a destination: header, search row, results, options, description. */
@@ -213,6 +181,8 @@ fun BoxScope.GtaPlanner(
     onTestDrive: (Boolean) -> Unit,
     onTheme: () -> Unit,
     onLocate: () -> Unit,
+    carGameHud: Boolean = true,
+    onCarHud: (Boolean) -> Unit = {},
 ) {
   val focus = LocalFocusManager.current
   var selected by remember(planner.destination) { mutableIntStateOf(0) }
@@ -222,7 +192,7 @@ fun BoxScope.GtaPlanner(
     GtaMenuHeader("OVERWORLD")
     if (destination == null) {
       val results = planner.results.take(7)
-      val total = 1 + if (results.isEmpty()) 2 else results.size
+      val total = 1 + if (results.isEmpty()) 3 else results.size
       GtaMenuSubheader("Set waypoint", "${selected + 1}/$total")
       GtaSearchRow(planner.query, onQuery, planner.searching, onDone = { focus.clearFocus() })
       if (results.isNotEmpty()) {
@@ -242,6 +212,7 @@ fun BoxScope.GtaPlanner(
       } else {
         GtaMenuRow("Test drive", selected == 1, { selected = 1; onTestDrive(!testDrive) }, checked = testDrive)
         GtaMenuRow("Theme", selected == 2, { selected = 2; onTheme() }, value = theme.name)
+        GtaMenuRow("Car screen", selected == 3, { selected = 3; onCarHud(!carGameHud) }, value = if (carGameHud) "Game HUD" else "Android Auto")
         GtaDescription(
             if (planner.query.isNotBlank() && !planner.searching) "No places found."
             else "Search for a place, or long-press the map to set a waypoint."
@@ -301,26 +272,3 @@ private fun GtaSearchRow(query: String, onQuery: (String) -> Unit, searching: Bo
   }
 }
 
-// ================================================================ geometry
-
-private fun distanceMeters(a: GeographicCoordinate, b: GeographicCoordinate): Double {
-  val r = 6_371_008.8
-  val dLat = Math.toRadians(b.lat - a.lat)
-  val dLng = Math.toRadians(b.lng - a.lng)
-  val h = sin(dLat / 2) * sin(dLat / 2) + cos(Math.toRadians(a.lat)) * cos(Math.toRadians(b.lat)) * sin(dLng / 2) * sin(dLng / 2)
-  return 2 * r * atan2(sqrt(h), sqrt(1 - h))
-}
-
-private fun lengthMeters(points: List<GeographicCoordinate>): Double =
-    points.zipWithNext().sumOf { (a, b) -> distanceMeters(a, b) }
-
-/** Screen-relative direction to [to], given the map's current bearing. */
-private fun relativeBearing(from: GeographicCoordinate?, to: GeographicCoordinate, mapBearing: Double): Float {
-  if (from == null) return 0f
-  val y = sin(Math.toRadians(to.lng - from.lng)) * cos(Math.toRadians(to.lat))
-  val x =
-      cos(Math.toRadians(from.lat)) * sin(Math.toRadians(to.lat)) -
-          sin(Math.toRadians(from.lat)) * cos(Math.toRadians(to.lat)) * cos(Math.toRadians(to.lng - from.lng))
-  val bearing = Math.toDegrees(atan2(y, x))
-  return ((bearing - mapBearing + 360) % 360).toFloat()
-}

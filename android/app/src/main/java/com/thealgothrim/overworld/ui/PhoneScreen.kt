@@ -55,6 +55,9 @@ import com.thealgothrim.overworld.theme.THEMES
 import com.thealgothrim.overworld.ui.gta.GtaBigMessage
 import com.thealgothrim.overworld.ui.gta.GtaDriveHud
 import com.thealgothrim.overworld.ui.gta.GtaPlanner
+import com.thealgothrim.overworld.ui.rdr.RdrBigMessage
+import com.thealgothrim.overworld.ui.rdr.RdrDriveHud
+import com.thealgothrim.overworld.ui.rdr.RdrPlanner
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -86,7 +89,10 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
   }
 
   val gta = theme.id == "metro"
+  val rdr = theme.id == "frontier"
+  val game = gta || rdr
   val area by viewModel.area.collectAsState()
+  val carGameHud by AppModule.themeStore.carGameHud.collectAsState()
   var arrivedAt by remember { mutableStateOf<String?>(null) }
   LaunchedEffect(Unit) {
     viewModel.arrived.collect {
@@ -112,12 +118,12 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
         pickedDestination = planner.destination?.coordinate,
         attributionPadding =
             when {
-              gta && navigating -> PaddingValues(top = 130.dp, end = 12.dp)
-              gta -> PaddingValues(bottom = 80.dp, end = 12.dp)
+              game && navigating -> PaddingValues(top = 130.dp, end = 12.dp)
+              game -> PaddingValues(bottom = 80.dp, end = 12.dp)
               navigating -> PaddingValues(top = 150.dp, end = 12.dp)
               else -> PaddingValues(top = 110.dp, end = 12.dp)
             },
-        attributionAlignment = if (gta && !navigating) Alignment.BottomEnd else Alignment.TopEnd,
+        attributionAlignment = if (game && !navigating) Alignment.BottomEnd else Alignment.TopEnd,
         onLongPress = viewModel::dropPin,
     )
     if (theme.paperOverlay) PaperOverlay()
@@ -148,6 +154,36 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
             onTestDrive = viewModel::setTestDrive,
             onTheme = AppModule.themeStore::cycle,
             onLocate = { scope.launch { mapState.recenter(isNavigating = false) } },
+            carGameHud = carGameHud,
+            onCarHud = AppModule.themeStore::setCarGameHud,
+        )
+      } else if (rdr && navigating) {
+        RdrDriveHud(
+            theme = theme,
+            uiState = uiState,
+            area = area,
+            mapBearing = { mapState.cameraState.position.bearing },
+            following = mapState.isTrackingUser,
+            onMute = viewModel::toggleMute,
+            onOverview = toggleOverview,
+            onTheme = AppModule.themeStore::cycle,
+            onEnd = viewModel::stopNavigation,
+        )
+      } else if (rdr) {
+        RdrPlanner(
+            theme = theme,
+            planner = planner,
+            testDrive = testDrive,
+            here = uiState.location?.coordinates,
+            onQuery = viewModel::onQueryChange,
+            onChoose = viewModel::choose,
+            onClear = viewModel::clearDestination,
+            onGo = viewModel::go,
+            onTestDrive = viewModel::setTestDrive,
+            onTheme = AppModule.themeStore::cycle,
+            onLocate = { scope.launch { mapState.recenter(isNavigating = false) } },
+            carGameHud = carGameHud,
+            onCarHud = AppModule.themeStore::setCarGameHud,
         )
       } else if (navigating) {
         TurnBanner(theme, uiState, Modifier.align(Alignment.TopCenter))
@@ -195,7 +231,13 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
         subtitle = arrivedAt.orEmpty(),
         modifier = Modifier.align(Alignment.Center),
     )
-    if (!gta) {
+    RdrBigMessage(
+        visible = rdr && arrivedAt != null,
+        title = "ARRIVED",
+        subtitle = arrivedAt.orEmpty(),
+        modifier = Modifier.align(Alignment.Center),
+    )
+    if (!game) {
       arrivedAt?.let {
         Text(
             "Arrived at $it",

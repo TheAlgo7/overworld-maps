@@ -20,6 +20,12 @@ object GameFonts {
   var condensed: FontFamily = FontFamily(Font(R.font.barlow_condensed_semibold, FontWeight.SemiBold))
     private set
 
+  // RDR2: RDR Lino (display: titles, prompts, big messages), Hapna Slab Serif (body, help text).
+  var lino: FontFamily = FontFamily(Font(R.font.im_fell_english, FontWeight.Normal))
+    private set
+  var hapna: FontFamily = UiFont
+    private set
+
   private var loaded = false
 
   fun init(context: Context) {
@@ -30,5 +36,7 @@ object GameFonts {
     if ("pricedown.ttf" in have) price = FontFamily(Font("fonts/pricedown.ttf", assets))
     if ("chalet-london.otf" in have) menu = FontFamily(Font("fonts/chalet-london.otf", assets))
     if ("chalet-comprime.ttf" in have) condensed = FontFamily(Font("fonts/chalet-comprime.ttf", assets))
+    if ("rdr-lino.ttf" in have) lino = FontFamily(Font("fonts/rdr-lino.ttf", assets))
+    if ("hapna-slab.ttf" in have) hapna = FontFamily(Font("fonts/hapna-slab.ttf", assets))
   }
 }

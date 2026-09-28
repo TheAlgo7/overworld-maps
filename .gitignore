@@ -19,3 +19,6 @@ Reference - */
 
 # Personal-use game fonts (Pricedown, Chalet): bundled in local builds only, never committed
 android/app/src/local/
+
+# Font sources for tools/make_glyphs.py (downloadable, large)
+tools/fonts/

@@ -30,7 +30,7 @@ import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.surfaceStableFractio
 import androidx.compose.ui.text.style.TextAlign
 import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.theme.OverworldTheme
-import com.thealgothrim.overworld.ui.gta.GtaText
+import com.thealgothrim.overworld.ui.CarGameHud
 import com.thealgothrim.overworld.theme.StyleCache
 import com.thealgothrim.overworld.theme.family
 import com.thealgothrim.overworld.theme.style
@@ -123,38 +123,33 @@ fun OverworldCarMap(
     }
 
     Box(Modifier.fillMaxSize().padding(stable).padding(8.dp)) {
-      uiState.currentStepRoadName
-          ?.takeIf { it.isNotBlank() && uiState.isNavigating() }
-          ?.let { road ->
-            if (theme.id == "metro") {
-              // GTA V's "Street | Area" line: outlined white text straight on the map, no box.
-              val area by AppModule.viewModel.area.collectAsState()
-              GtaText(
-                  listOfNotNull(road, area).joinToString("  |  "),
-                  20.sp,
-                  modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp),
-                  align = TextAlign.Center,
+      val gameHud by AppModule.themeStore.carGameHud.collectAsState()
+      val area by AppModule.viewModel.area.collectAsState()
+      if (gameHud && uiState.isNavigating()) {
+        CarGameHud(theme, uiState, area)
+      } else {
+        uiState.currentStepRoadName
+            ?.takeIf { it.isNotBlank() && uiState.isNavigating() }
+            ?.let { road ->
+              Text(
+                  text = theme.display(listOfNotNull(road, area).joinToString(", ")),
+                  color = theme.hudFg,
+                  style =
+                      TextStyle(
+                          fontFamily = theme.font.family,
+                          fontWeight = theme.font.weight,
+                          fontStyle = theme.font.style,
+                          fontSize = 20.sp,
+                      ),
+                  modifier =
+                      Modifier.align(Alignment.BottomCenter)
+                          // Sits above the OpenStreetMap credit line in the corner.
+                          .padding(bottom = 18.dp)
+                          .background(theme.hudBg, RoundedCornerShape(12.dp))
+                          .padding(horizontal = 14.dp, vertical = 6.dp),
               )
-              return@let
             }
-            Text(
-                text = theme.display(road),
-                color = theme.hudFg,
-                style =
-                    TextStyle(
-                        fontFamily = theme.font.family,
-                        fontWeight = theme.font.weight,
-                        fontStyle = theme.font.style,
-                        fontSize = 20.sp,
-                    ),
-                modifier =
-                    Modifier.align(Alignment.BottomCenter)
-                        // Sits above the OpenStreetMap credit line in the corner.
-                        .padding(bottom = 18.dp)
-                        .background(theme.hudBg, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 14.dp, vertical = 6.dp),
-            )
-          }
+      }
       // OpenStreetMap attribution stays readable on the car screen too.
       Text(
           text = "© OpenStreetMap contributors",

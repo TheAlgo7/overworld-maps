@@ -92,6 +92,7 @@ class CarNavigationScreen(
             }
             .launchIn(scope)
     themeStore.theme.onEach { invalidate() }.launchIn(scope)
+    themeStore.carGameHud.onEach { invalidate() }.launchIn(scope)
 
     initialDestination?.location?.let {
       viewModel.startNavigation(
@@ -148,8 +149,13 @@ class CarNavigationScreen(
       return NavigationTemplate.Builder()
           .setBackgroundColor(CarColor.createCustom(card, card))
           .apply {
-            metricRoutingInfo(carContext, tripState)?.let { setNavigationInfo(it) }
-            tripState.progress()?.let { setDestinationTravelEstimate(it.toMetricTravelEstimate()) }
+            // Game HUD mode draws the turn and ETA on the map surface instead of these cards.
+            // Turn data still reaches the car's own cluster display through NavigationManager.
+            if (!themeStore.carGameHud.value) {
+              metricRoutingInfo(carContext, tripState)?.let { setNavigationInfo(it) }
+              val timeColor = if (theme.id == "frontier") CarColor.YELLOW else CarColor.GREEN
+              tripState.progress()?.let { setDestinationTravelEstimate(it.toMetricTravelEstimate(timeColor)) }
+            }
           }
           .setActionStrip(
               ActionStrip.Builder()

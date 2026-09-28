@@ -141,7 +141,10 @@ fun ThemedPuck(uiState: NavigationUiState, theme: OverworldTheme, car: Boolean) 
       )
   val painter =
       remember(theme.id) {
-        ChevronPainter(theme.puckFill, theme.puckShade, theme.puckStroke, glow = theme.routeGlow != null)
+        when (theme.puckShape) {
+          "teardrop" -> TeardropPainter(theme.puckFill, theme.puckStroke)
+          else -> ChevronPainter(theme.puckFill, theme.puckShade, theme.puckStroke, glow = theme.routeGlow != null)
+        }
       }
   val size = iconSize(if (car) 46.dp else 40.dp)
   SymbolLayer(
@@ -157,7 +160,7 @@ fun ThemedPuck(uiState: NavigationUiState, theme: OverworldTheme, car: Boolean) 
   )
 }
 
-/** The waypoint marker: the theme's blip (four-lobed for Metro Crime, a diamond otherwise). */
+/** The waypoint marker: the theme's blip (GTA V four petals, RDR2 crossed ring, or a diamond). */
 @Composable
 @MaplibreComposable
 fun ThemedDestination(at: GeographicCoordinate, theme: OverworldTheme, id: String = "ow-destination") {
@@ -171,10 +174,13 @@ fun ThemedDestination(at: GeographicCoordinate, theme: OverworldTheme, id: Strin
       )
   val painter =
       remember(theme.id) {
-        if (theme.blipQuatrefoil) QuatrefoilPainter(theme.blipFill, theme.blipCenter, theme.blipStroke)
-        else DiamondPainter(theme.blipFill, theme.blipStroke)
+        when (theme.blipShape) {
+          "quatrefoil" -> QuatrefoilPainter(theme.blipFill, theme.blipCenter, theme.blipStroke)
+          "crossring" -> CrossRingPainter(theme.blipFill, theme.blipStroke)
+          else -> DiamondPainter(theme.blipFill, theme.blipStroke)
+        }
       }
-  val size = iconSize(if (theme.blipQuatrefoil) 34.dp else 30.dp)
+  val size = iconSize(when (theme.blipShape) { "quatrefoil" -> 34.dp; "crossring" -> 38.dp; else -> 30.dp })
   SymbolLayer(
       id = id,
       source = source,
@@ -291,6 +297,63 @@ internal class QuatrefoilPainter(
     for (turn in 0 until 4) rotate(turn * 90f, c) { drawPath(petal, fill) }
     drawCircle(stroke, s * 0.17f, c)
     drawCircle(core, s * 0.12f, c)
+  }
+}
+
+/**
+ * The RDR2 player pointer, traced from blip_code_center: an off-white teardrop pointing the way you
+ * face, with a ring punched through it and a rough dark outline.
+ */
+internal class TeardropPainter(private val fill: Color, private val stroke: Color) : Painter() {
+  override val intrinsicSize: Size = Size.Unspecified
+
+  override fun DrawScope.onDraw() {
+    val s = size.minDimension
+    val ox = (size.width - s) / 2f
+    val oy = (size.height - s) / 2f
+    fun p(x: Float, y: Float) = Offset(ox + x * s, oy + y * s)
+    val drop =
+        Path().apply {
+          val tip = p(0.5f, 0.07f)
+          moveTo(tip.x, tip.y)
+          p(0.63f, 0.24f).let { a -> p(0.8f, 0.42f).let { b -> p(0.8f, 0.62f).let { c -> cubicTo(a.x, a.y, b.x, b.y, c.x, c.y) } } }
+          p(0.8f, 0.8f).let { a -> p(0.67f, 0.93f).let { b -> p(0.5f, 0.93f).let { c -> cubicTo(a.x, a.y, b.x, b.y, c.x, c.y) } } }
+          p(0.33f, 0.93f).let { a -> p(0.2f, 0.8f).let { b -> p(0.2f, 0.62f).let { c -> cubicTo(a.x, a.y, b.x, b.y, c.x, c.y) } } }
+          p(0.2f, 0.42f).let { a -> p(0.37f, 0.24f).let { b -> cubicTo(a.x, a.y, b.x, b.y, tip.x, tip.y) } }
+          close()
+        }
+    val hole = p(0.5f, 0.63f)
+    drawPath(drop, Color.Black.copy(alpha = 0.22f), style = Stroke(width = s * 0.2f, join = StrokeJoin.Round))
+    drawPath(drop, stroke, style = Stroke(width = s * 0.1f, join = StrokeJoin.Round))
+    drawPath(drop, fill)
+    drawCircle(stroke, s * 0.13f, hole)
+    drawCircle(fill.copy(alpha = 0f), s * 0.07f, hole, blendMode = androidx.compose.ui.graphics.BlendMode.Clear)
+  }
+}
+
+/**
+ * The RDR2 waypoint, traced from blip_code_waypoint: a hand-drawn X struck through a ring, in the
+ * waypoint red with a dark edge.
+ */
+internal class CrossRingPainter(private val color: Color, private val stroke: Color) : Painter() {
+  override val intrinsicSize: Size = Size.Unspecified
+
+  override fun DrawScope.onDraw() {
+    val s = size.minDimension
+    val c = Offset(size.width / 2f, size.height / 2f)
+    fun p(x: Float, y: Float) = Offset(c.x + x * s, c.y + y * s)
+    val ring = s * 0.25f
+    val line = s * 0.085f
+    // Slightly uneven ends, like the ink-drawn blip.
+    val a1 = p(-0.4f, -0.36f); val a2 = p(0.38f, 0.41f)
+    val b1 = p(0.41f, -0.38f); val b2 = p(-0.37f, 0.39f)
+    val edge = line + s * 0.07f
+    drawCircle(stroke, ring, c, style = Stroke(width = edge))
+    drawLine(stroke, a1, a2, strokeWidth = edge, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+    drawLine(stroke, b1, b2, strokeWidth = edge, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+    drawCircle(color, ring, c, style = Stroke(width = line))
+    drawLine(color, a1, a2, strokeWidth = line, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+    drawLine(color, b1, b2, strokeWidth = line, cap = androidx.compose.ui.graphics.StrokeCap.Round)
   }
 }
 

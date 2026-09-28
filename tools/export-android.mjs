@@ -21,7 +21,8 @@ fs.mkdirSync(stylesDir, { recursive: true });
 
 for (const t of Object.values(THEMES)) {
   for (const car of [false, true]) {
-    const style = buildStyle(t, { car });
+    // Themes with their own map lettering read the bundled glyphs (tools/make_glyphs.py).
+    const style = buildStyle(t, { car, glyphs: "asset://glyphs/{fontstack}/{range}.pbf" });
     // The app draws the route itself (themed, below the labels), so drop the web route.
     delete style.sources.route;
     style.layers = style.layers.filter((l) => l.source !== "route");
@@ -58,9 +59,10 @@ const entries = Object.values(THEMES).map((t) => {
       routeCasing = ${color(r.casing)},
       routeGlow = ${r.glow ? color(r.glow) : "null"},
       puckFill = ${color(t.marker.fill)},
+      puckShape = ${esc(t.marker.shape || "chevron")},
       puckShade = ${t.marker.shade ? color(t.marker.shade) : "null"},
       puckStroke = ${color(t.marker.stroke)},
-      blipQuatrefoil = ${t.blip?.shape === "quatrefoil"},
+      blipShape = ${esc(t.blip?.shape || "diamond")},
       blipFill = ${color(t.blip?.fill || h.accent)},
       blipCenter = ${color(t.blip?.center || t.marker.stroke)},
       blipStroke = ${color(t.blip?.stroke || t.marker.stroke)},

@@ -28,11 +28,13 @@ data class OverworldTheme(
     val routeCasing: Color,
     val routeGlow: Color?,
     val puckFill: Color,
-    /** Right half of the arrow, for the two-tone radar arrow; null draws a single fill. */
+    /** Player marker shape: "chevron", "radar" (GTA V two-tone arrow) or "teardrop" (RDR2). */
+    val puckShape: String,
+    /** Right half of the GTA V radar arrow; null draws a single fill. */
     val puckShade: Color?,
     val puckStroke: Color,
-    /** Waypoint marker: four-lobed blip when true, otherwise a diamond. */
-    val blipQuatrefoil: Boolean,
+    /** Waypoint marker shape: "diamond", "quatrefoil" (GTA V) or "crossring" (RDR2). */
+    val blipShape: String,
     val blipFill: Color,
     val blipCenter: Color,
     val blipStroke: Color,
@@ -56,7 +58,7 @@ val HudFont.family: FontFamily
   get() =
       when (this) {
         HudFont.CONDENSED -> GameFonts.condensed
-        HudFont.SERIF -> FontFamily(Font(R.font.im_fell_english, FontWeight.Normal))
+        HudFont.SERIF -> GameFonts.lino
         HudFont.TECH ->
             FontFamily(
                 Font(R.font.chakra_petch_semibold_italic, FontWeight.SemiBold, FontStyle.Italic)
@@ -93,21 +95,39 @@ class ThemeStore(context: Context) {
     select(THEMES[(i + 1) % THEMES.size].id)
   }
 
+  private val _carGameHud = MutableStateFlow(prefs.getBoolean(KEY_CAR_HUD, true))
+  /**
+   * Car screen style while navigating. true: our own game HUD drawn on the map (Android Auto's
+   * turn and ETA cards are not sent). false: Android Auto's standard cards, themed where allowed.
+   */
+  val carGameHud: StateFlow<Boolean> = _carGameHud.asStateFlow()
+
+  fun setCarGameHud(on: Boolean) {
+    _carGameHud.value = on
+    prefs.edit { putBoolean(KEY_CAR_HUD, on) }
+  }
+
   companion object {
     private const val KEY = "theme"
+    private const val KEY_CAR_HUD = "car_game_hud"
 
     fun byId(id: String?): OverworldTheme = THEMES.firstOrNull { it.id == id } ?: THEMES.first()
   }
 }
 
-/** Style JSON is bundled in assets and read once per variant. */
+/**
+ * Style JSON is bundled in assets and read once per variant. Personal builds may carry a local
+ * sprite with the RDR2 POI blips (src/local, gitignored); when it is there the styles use it.
+ */
 object StyleCache {
   private val cache = ConcurrentHashMap<String, String>()
 
   fun json(context: Context, theme: OverworldTheme, car: Boolean): String {
     val asset = theme.styleAsset(car)
     return cache.getOrPut(asset) {
-      context.assets.open(asset).bufferedReader().use { it.readText() }
+      val json = context.assets.open(asset).bufferedReader().use { it.readText() }
+      val localSprite = runCatching { context.assets.list("sprites-local")?.isNotEmpty() == true }.getOrDefault(false)
+      if (localSprite) json.replace("asset://sprites/overworld", "asset://sprites-local/overworld") else json
     }
   }
 }

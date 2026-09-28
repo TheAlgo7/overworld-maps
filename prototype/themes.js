@@ -46,7 +46,7 @@
       },
       // Radar arrow (radar_centre): white left half, #b3b3b3 right half, black outline.
       // Waypoint (radar_waypoint): four pointed petals in the waypoint colour, dark ring centre.
-      marker: { fill: "#ffffff", shade: "#b3b3b3", stroke: "#000000" },
+      marker: { fill: "#ffffff", shade: "#b3b3b3", stroke: "#000000", shape: "radar" },
       blip: { shape: "quatrefoil", fill: "#a44cf2", center: "#3a3a3a", stroke: "#000000" },
       hud: {
         // HUD panels: black at ~73%. Health green for arrival, waypoint purple for accents.
@@ -57,40 +57,52 @@
       overlay: null,
     },
 
+    // RDR2. Cartography palette from Lee Martin's RDR2 map analysis (parchment, ink, water,
+    // contour, pencil); navigation colours from the game's colors.xml: user waypoint and GPS
+    // route COLOR_RED #CC0000, objective COLOR_YELLOW #FEF390, player COLOR_GREYLIGHT #D5D3D2.
     frontier: {
       id: "frontier",
       name: "Frontier",
-      blurb: "Parchment land, ink roads, double-line highways, hatched forest, railway ties. The western atlas.",
+      blurb: "Parchment and ink: the RDR2 map. Ink roads, dotted railways, pencil landmarks, a red GPS route.",
       page: "#1b1611",
       dark: false,
       map: {
-        land: "#d9c69c", residential: "#d2bf94", industrial: "#cdb98f",
-        park: "#cbc394", wood: "#c4bc8a", grass: "#cbc394", sand: "#e0cb9c",
-        water: "#a3b3a9", waterway: "#a3b3a9",
-        waterLine: "#56685f",
-        building: "#cdb98e", buildingLine: "#ad9870",
-        rail: "#342d26", railTies: true,
+        land: "#dec29b", residential: "#dec29b", industrial: "#d8bb93",
+        park: "#d5b98e", wood: "#cfb287", grass: "#d5b98e", sand: "#e3cca3",
+        water: "#9e9985", waterway: "#9e9985",
+        waterLine: "#8c8775", waterLineBlur: 4, waterLineOpacity: 0.85,
+        building: "#e4cfaa", buildingLine: "#40423d",
+        rail: "#40423d", railStyle: "dots", railDot: "#ebddc0",
+        roadScale: 1.1,
         roads: {
-          motorway: { fill: "#efe4cc", casing: "#342d26" },
-          major: { fill: "#efe4cc", casing: "#342d26" },
-          mid: { fill: "#4a3f33", casing: null },
-          minor: { fill: "#756856", casing: null },
-          service: { fill: "#8f826d", casing: null },
+          motorway: { fill: "#40423d", casing: null },
+          major: { fill: "#40423d", casing: null },
+          mid: { fill: "#40423d", casing: null },
+          minor: { fill: "#46453f", casing: null },
+          service: { fill: "#55524a", casing: null, dash: [2.2, 1.4] },
         },
+        trails: { color: "#40423d", dash: [1.6, 1.6] },
         patterns: { wood: "hatch", park: "stipple" },
         glow: null,
+        roadLabels: false,
+        pois: true,
+        // Android map lettering (bundled SDF glyphs, see tools/make_glyphs.py). The web preview
+        // falls back to OpenFreeMap's Noto fonts below.
+        fonts: { place: "RalewayBlack", city: "MerriweatherBlack", water: "CrimsonBoldItalic", pencil: "HomemadeApple" },
         label: {
-          road: "#342d26", roadHalo: "#e6d8b6", roadFont: "Noto Sans Italic",
-          place: "#2c241d", placeHalo: "#e6d8b6", placeFont: "Noto Sans Bold", placeSpacing: 0.28, upper: true,
-          water: "#43574f", waterHalo: "#bfcbc3",
+          road: "#40423d", roadHalo: "#dec29b", roadFont: "Noto Sans Italic",
+          place: "#40423d", placeHalo: "rgba(222,194,155,0.7)", placeFont: "Noto Sans Bold", placeSpacing: 0.22, upper: true,
+          water: "#3b3d38", waterHalo: "rgba(158,153,133,0.6)", pencil: "#716454",
         },
-        route: { line: "#a44838", casing: "#efe4cc", glow: null },
+        route: { line: "#cc0000", casing: "#7a0e1d", glow: null },
       },
-      marker: { fill: "#2c241d", stroke: "#efe4cc" },
+      // blip_code_center: off-white teardrop with a ring; blip_code_waypoint: red X through a ring.
+      marker: { fill: "#d5d3d2", stroke: "#1b1a1a", shape: "teardrop" },
+      blip: { shape: "crossring", fill: "#cc0000", center: "#cc0000", stroke: "#1b1a1a" },
       hud: {
-        bg: "#efe4cc", fg: "#2c241d", sub: "#6b5b47", accent: "#a44838", good: "#4f6b35",
-        border: "#342d26", font: "'IM Fell English', serif", fontKey: "serif", weight: 400, upper: false,
-        card: "#3a2e22",
+        bg: "rgba(10,9,8,0.78)", fg: "#e6e6e6", sub: "#aca8a6", accent: "#cc0000", good: "#fef390",
+        border: "rgba(230,230,230,0.22)", font: "'IM Fell English', serif", fontKey: "serif", weight: 400, upper: true,
+        card: "#7a0e1d",
       },
       overlay: "paper",
     },
@@ -162,7 +174,7 @@
   }
 
   function roadLayers(m, car, brunnel) {
-    const scale = car ? 1.25 : 1;
+    const scale = (car ? 1.25 : 1) * (m.roadScale || 1);
     const out = [];
     const tag = brunnel || "road";
     const faded = brunnel === "tunnel";
@@ -180,11 +192,13 @@
     }
     for (const g of GROUPS) {
       const spec = m.roads[g.key];
+      const paint = { "line-color": spec.fill, "line-width": widthExpr(g.w, scale), "line-opacity": faded ? 0.4 : 1 };
+      if (spec.dash) paint["line-dasharray"] = spec.dash;
       out.push({
         id: `${tag}-${g.key}`, type: "line", source: "omt", "source-layer": "transportation",
         minzoom: g.minzoom, filter: classFilter(g.classes, brunnel),
-        layout: { "line-cap": brunnel ? "butt" : "round", "line-join": "round" },
-        paint: { "line-color": spec.fill, "line-width": widthExpr(g.w, scale), "line-opacity": faded ? 0.4 : 1 },
+        layout: { "line-cap": brunnel || spec.dash ? "butt" : "round", "line-join": "round" },
+        paint,
       });
     }
     return out;
@@ -275,10 +289,19 @@
     });
 
     const railFilter = ["all", ["match", ["get", "class"], ["rail", "transit"], true, false], ["!=", ["get", "brunnel"], "tunnel"]];
+    const dotted = m.railStyle === "dots";
     layers.push({
       id: "rail", type: "line", source: "omt", "source-layer": "transportation", minzoom: 11, filter: railFilter,
-      paint: { "line-color": m.rail, "line-width": ["interpolate", ["linear"], ["zoom"], 11, 0.6, 18, 2] },
+      paint: { "line-color": m.rail, "line-width": ["interpolate", ["linear"], ["zoom"], 11, dotted ? 1.2 : 0.6, 18, dotted ? 5 : 2] },
     });
+    if (dotted && !car) {
+      // RDR2 railways: a thick ink line with light dots running along it.
+      layers.push({
+        id: "rail-dots", type: "line", source: "omt", "source-layer": "transportation", minzoom: 13, filter: railFilter,
+        layout: { "line-cap": "round" },
+        paint: { "line-color": m.railDot, "line-width": ["interpolate", ["linear"], ["zoom"], 13, 1.4, 18, 3], "line-dasharray": [0, 2.4] },
+      });
+    }
     if (m.railTies && !car) {
       layers.push({
         id: "rail-ties", type: "line", source: "omt", "source-layer": "transportation", minzoom: 13, filter: railFilter,
@@ -300,6 +323,13 @@
       }
     }
 
+    if (m.trails && !car) {
+      layers.push({
+        id: "trails", type: "line", source: "omt", "source-layer": "transportation", minzoom: 15,
+        filter: ["all", ["match", ["get", "class"], ["path"], true, false], ["match", ["get", "brunnel"], ["tunnel"], false, true]],
+        paint: { "line-color": m.trails.color, "line-width": ["interpolate", ["linear"], ["zoom"], 15, 0.8, 18, 1.6], "line-dasharray": m.trails.dash },
+      });
+    }
     layers.push(...roadLayers(m, car, "tunnel"));
     layers.push(...roadLayers(m, car, null));
     layers.push(...roadLayers(m, car, "bridge"));
@@ -321,43 +351,89 @@
       paint: { "line-color": R.line, "line-width": ["interpolate", ["linear"], ["zoom"], 10, car ? 4.5 : 3.5, 18, car ? 15 : 12] },
     });
 
+    // Fonts: bundled map-lettering glyphs on Android (opts.glyphs), OpenFreeMap's Noto otherwise.
+    const custom = !!(opts && opts.glyphs && m.fonts);
+    const F = custom
+      ? { place: m.fonts.place, city: m.fonts.city, water: m.fonts.water, road: m.fonts.place, pencil: m.fonts.pencil }
+      : { place: L.placeFont, city: L.placeFont, water: "Noto Sans Italic", road: L.roadFont, pencil: "Noto Sans Italic" };
+
     const firstLabel = layers.length;
     layers.push({
       id: "label-water", type: "symbol", source: "omt", "source-layer": "water_name", minzoom: 11,
       filter: ["match", ["geometry-type"], ["Point", "MultiPoint"], true, false],
-      layout: { "text-field": NAME, "text-font": ["Noto Sans Italic"], "text-size": 12 * labelScale, "text-letter-spacing": 0.12, "text-max-width": 8 },
+      layout: { "text-field": NAME, "text-font": [F.water], "text-size": (custom ? 15 : 12) * labelScale, "text-letter-spacing": 0.12, "text-max-width": 8 },
       paint: { "text-color": L.water, "text-halo-color": L.waterHalo, "text-halo-width": 1.4 },
     });
     layers.push({
       id: "label-waterway", type: "symbol", source: "omt", "source-layer": "waterway", minzoom: 12,
       filter: ["match", ["get", "class"], ["river", "canal"], true, false],
-      layout: { "text-field": NAME, "text-font": ["Noto Sans Italic"], "text-size": 12 * labelScale, "text-letter-spacing": 0.12, "symbol-placement": "line" },
+      layout: { "text-field": NAME, "text-font": [F.water], "text-size": (custom ? 15 : 12) * labelScale, "text-letter-spacing": 0.12, "symbol-placement": "line" },
       paint: { "text-color": L.water, "text-halo-color": L.waterHalo, "text-halo-width": 1.4 },
     });
+    const roadLabelLayout = m.roadLabels === false ? { visibility: "none" } : {};
     layers.push({
       id: "label-road-major", type: "symbol", source: "omt", "source-layer": "transportation_name", minzoom: 13,
       filter: ["match", ["get", "class"], ["motorway", "trunk", "primary", "secondary", "tertiary"], true, false],
-      layout: {
-        "text-field": NAME, "text-font": [L.roadFont], "symbol-placement": "line",
+      layout: Object.assign({
+        "text-field": NAME, "text-font": [F.road], "symbol-placement": "line",
         "text-size": ["interpolate", ["linear"], ["zoom"], 13, 10.5 * labelScale, 18, 14 * labelScale],
         "text-letter-spacing": 0.04, "symbol-spacing": 320,
-      },
+      }, roadLabelLayout),
       paint: { "text-color": L.road, "text-halo-color": L.roadHalo, "text-halo-width": 1.6 },
     });
     if (!car) {
       layers.push({
         id: "label-road-minor", type: "symbol", source: "omt", "source-layer": "transportation_name", minzoom: 15.5,
         filter: ["match", ["get", "class"], ["minor", "service"], true, false],
-        layout: { "text-field": NAME, "text-font": [L.roadFont], "symbol-placement": "line", "text-size": 10.5 },
+        layout: Object.assign({ "text-field": NAME, "text-font": [F.road], "symbol-placement": "line", "text-size": 10.5 }, roadLabelLayout),
         paint: { "text-color": L.road, "text-halo-color": L.roadHalo, "text-halo-width": 1.4, "text-opacity": 0.85 },
+      });
+    }
+    if (m.pois && !car) {
+      // Shops and services as the game's black-disc blips (icons ship in the app's local sprite).
+      const cls = ["get", "class"];
+      layers.push({
+        id: "poi-blips", type: "symbol", source: "omt", "source-layer": "poi", minzoom: 15.5,
+        filter: ["<=", ["coalesce", ["get", "rank"], 99], 20],
+        layout: {
+          "icon-image": ["match", cls,
+            ["restaurant", "fast_food", "food_court", "cafe", "ice_cream", "bakery"], "poi-food",
+            ["bar", "pub", "beer", "alcohol_shop"], "poi-bar",
+            ["hospital", "doctors", "clinic", "dentist"], "poi-doctor",
+            ["pharmacy", "chemist"], "poi-pharmacy",
+            ["bank", "atm"], "poi-bank",
+            ["post"], "poi-post",
+            ["lodging"], "poi-hotel",
+            ["railway"], "poi-train",
+            ["hairdresser", "beauty"], "poi-barber",
+            ["clothing_store", "shoes", "fashion"], "poi-clothes",
+            ["car", "car_repair"], "poi-repair",
+            ["grocery", "shop", "supermarket", "convenience", "department_store"], "poi-store",
+            ["marketplace"], "poi-market",
+            ["fuel"], "poi-fuel",
+            ["police"], "poi-police",
+            ["cinema", "theatre"], "poi-theatre",
+            ["attraction", "museum", "monument", "castle"], "poi-landmark",
+            ""],
+          "icon-size": 0.95, "symbol-sort-key": ["coalesce", ["get", "rank"], 99], "icon-padding": 4,
+        },
+      });
+    }
+    if (m.fonts && m.fonts.pencil && !car) {
+      // Parks and landmarks in pencil handwriting, the way the RDR2 map names farms and features.
+      layers.push({
+        id: "label-pencil", type: "symbol", source: "omt", "source-layer": "poi", minzoom: 15,
+        filter: ["match", ["get", "class"], ["park", "garden", "attraction", "monument", "castle", "stadium"], true, false],
+        layout: { "text-field": NAME, "text-font": [F.pencil], "text-size": custom ? 14 : 11, "text-max-width": 8, "text-optional": true },
+        paint: { "text-color": L.pencil || L.place, "text-halo-color": L.placeHalo, "text-halo-width": 1 },
       });
     }
     layers.push({
       id: "label-place-local", type: "symbol", source: "omt", "source-layer": "place", minzoom: 12,
       filter: ["match", ["get", "class"], ["suburb", "neighbourhood", "quarter"], true, false],
       layout: {
-        "text-field": text(NAME), "text-font": [L.placeFont], "text-max-width": 7,
-        "text-size": ["interpolate", ["linear"], ["zoom"], 12, 10.5 * labelScale, 16, 13 * labelScale],
+        "text-field": text(NAME), "text-font": [F.place], "text-max-width": 7,
+        "text-size": ["interpolate", ["linear"], ["zoom"], 12, 10.5 * labelScale, 16, (custom ? 16 : 13) * labelScale],
         "text-letter-spacing": L.placeSpacing,
       },
       paint: { "text-color": L.place, "text-halo-color": L.placeHalo, "text-halo-width": 1.6, "text-opacity": car ? 0.8 : 0.9 },
@@ -366,9 +442,10 @@
       id: "label-place-city", type: "symbol", source: "omt", "source-layer": "place", maxzoom: 14,
       filter: ["match", ["get", "class"], ["city", "town", "village"], true, false],
       layout: {
-        "text-field": text(NAME), "text-font": [L.placeFont], "text-max-width": 8,
-        "text-size": ["interpolate", ["linear"], ["zoom"], 5, 11, 12, 18 * labelScale],
-        "text-letter-spacing": L.placeSpacing,
+        "text-field": text(NAME), "text-font": [F.city], "text-max-width": 8,
+        "text-size": ["interpolate", ["linear"], ["zoom"], 5, 11, 12, (custom ? 22 : 18) * labelScale],
+        // Region names on the RDR2 map are set with very wide spacing.
+        "text-letter-spacing": custom ? 0.6 : L.placeSpacing,
       },
       paint: { "text-color": L.place, "text-halo-color": L.placeHalo, "text-halo-width": 2 },
     });
@@ -381,7 +458,7 @@
     return {
       version: 8,
       name: `Overworld ${theme.name}${car ? " (car)" : ""}`,
-      glyphs: `${OFM}/fonts/{fontstack}/{range}.pbf`,
+      glyphs: custom ? opts.glyphs : `${OFM}/fonts/{fontstack}/{range}.pbf`,
       sources: {
         omt: { type: "vector", url: `${OFM}/planet` },
         route: { type: "geojson", data: { type: "FeatureCollection", features: [] } },

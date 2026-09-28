@@ -45,13 +45,13 @@ fun metricRoutingInfo(context: CarContext, tripState: TripState): RoutingInfo? {
       .build()
 }
 
-fun TripProgress.toMetricTravelEstimate(): TravelEstimate {
+fun TripProgress.toMetricTravelEstimate(timeColor: CarColor = CarColor.GREEN): TravelEstimate {
   val arrival = System.currentTimeMillis() + (durationRemaining * 1000).toLong()
   return TravelEstimate.Builder(
           distanceRemaining.toMetricCarDistance(),
           DateTimeWithZone.create(arrival, TimeZone.getDefault()),
       )
       .setRemainingTimeSeconds(durationRemaining.toLong())
-      .setRemainingTimeColor(CarColor.GREEN)
+      .setRemainingTimeColor(timeColor)
       .build()
 }
