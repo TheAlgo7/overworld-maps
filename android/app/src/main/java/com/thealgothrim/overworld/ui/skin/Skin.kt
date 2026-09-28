@@ -272,7 +272,7 @@ fun RowScope.SkinRowSpacer() = Spacer(Modifier.weight(1f))
 
 enum class GameIcon {
   SEARCH, SETTINGS, LOCATE, CLOSE, BACK, STAR, STAR_FILLED, HOME, WORK, RECENT, PIN, SOUND_ON, SOUND_OFF,
-  ROUTE, CHEVRON_UP, CHEVRON_DOWN, NORTH, NAVIGATE, CAR,
+  ROUTE, CHEVRON_UP, CHEVRON_DOWN, NORTH, NAVIGATE, CAR, LAYERS,
 }
 
 /** Simple line icons drawn in code, so they match any theme and stay sharp on the car screen. */
@@ -382,6 +382,12 @@ fun DrawScope.drawGameIcon(icon: GameIcon, color: Color) {
       drawPath(path(12f to 3f, 12f to 16f, 7f to 20f, close = true), color)
     }
     GameIcon.NAVIGATE -> drawPath(path(12f to 2.5f, 20f to 21f, 12f to 16.5f, 4f to 21f, close = true), color)
+    GameIcon.LAYERS -> {
+      // Two stacked map sheets, like Google Maps' layers button.
+      drawPath(path(12f to 3.5f, 21f to 8.5f, 12f to 13.5f, 3f to 8.5f, close = true), color, style = line)
+      drawPath(path(3f to 12.5f, 12f to 17.5f, 21f to 12.5f), color, style = line)
+      drawPath(path(3f to 16.5f, 12f to 21.5f, 21f to 16.5f), color, style = line)
+    }
     GameIcon.CAR -> {
       drawPath(path(3f to 16f, 3f to 12f, 6f to 6f, 18f to 6f, 21f to 12f, 21f to 16f, close = true), color, style = line)
       drawCircle(color, 1.8f * u, p(7.5f, 16.5f))

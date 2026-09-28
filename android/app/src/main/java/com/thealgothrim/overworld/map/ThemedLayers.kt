@@ -59,7 +59,7 @@ private const val FIRST_LABEL_LAYER = "label-water"
  * size. Scale the requested size so the icon lands at the intended dp on either display.
  */
 @Composable
-private fun iconSize(size: Dp): Dp {
+internal fun iconSize(size: Dp): Dp {
   val local = LocalDensity.current.density
   val bitmap = DisplayMetrics.DENSITY_DEVICE_STABLE / DisplayMetrics.DENSITY_DEFAULT.toFloat()
   return size * (bitmap / local)
@@ -187,7 +187,8 @@ fun ThemedDestination(at: GeographicCoordinate, theme: OverworldTheme, id: Strin
       iconImage = image(painter, size = DpSize(size, size), drawAsSdf = false),
       iconAnchor = const(SymbolAnchor.Center),
       iconAllowOverlap = const(true),
-      iconIgnorePlacement = const(true),
+      // Map labels under the waypoint step aside instead of printing through it.
+      iconIgnorePlacement = const(false),
   )
 }
 

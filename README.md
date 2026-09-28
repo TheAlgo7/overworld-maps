@@ -10,9 +10,9 @@ Themes (a personal build, so they carry the games' names; rename before any publ
 | **Red Dead 2** (`rdr2`) | parchment and ink: ink roads, dotted railways, pencil landmarks, hatched forest, paper grain, red route; Red Dead menus and HUD | active |
 | **GTA VI** (`gta6`) | night-navy land, sand boulevards, coral route | paused until GTA VI's real map UI is public |
 
-**Layout = Google Maps, look = the game.** Phone: search bar with a settings button on top, Home / Work / Saved chips, compass and locate buttons on the right, a place sheet (Directions, Save as Home / Work / star), a route preview (time, distance, via, arrival, Start), then driving with a turn banner on top, sound and overview buttons on the right, re-centre and street name, and a bottom sheet (end, time to go, distance, arrival, more). Settings is the game's pause menu: theme, car screen style, voice, test drive, Home, Work, clear recents, about. Arrival times use a 12-hour clock.
+**Layout = Google Maps, look = the game.** Phone: search bar with a settings button on top, Home / Work / Saved chips, a Layers button and compass on the right, locate bottom-right, a place sheet (Directions, Save as Home / Work / star), a route preview (time, distance, via, traffic lights and incidents on the route, arrival, Start), then driving with a turn banner and road alerts on top, sound, overview and Layers buttons on the right, speedometer with the speed limit and the street name at the bottom, and a bottom sheet (end, time to go, distance, arrival, more). **Layers** is Google's layers sheet: pick the theme from two preview cards (one tap) and switch map details (live traffic, traffic lights, incidents). Settings is the game's pause menu: theme, car screen style, voice, test drive, Home, Work, clear recents, about. The map opens where the phone was last seen. Arrival times use a 12-hour clock.
 
-**Android Auto (built for the Tata Curvv's 10.25-inch 1920x720 HARMAN screen):** the same placement as Google Maps there: turn card top-left, time/arrival/distance card bottom-left, street name bottom-centre, Android Auto's own buttons on the right. Idle shows a themed "Where to?" card with **Saved** (Home, Work, starred and recent places, one tap to drive) and **Theme**. Red Dead's paper texture shows in the car too. To preview on the laptop: `desktop-head-unit.exe -c config	ata_curvv.ini` (preset in `tools/dhu/`, copy it to the SDK's `extras\googleuto\config`).
+**Android Auto (built for the Tata Curvv's 10.25-inch 1920x720 HARMAN screen):** the same placement as Google Maps on a right-hand-drive car: turn card (with "Then") and road alerts top-right by the driver, time / distance / arrival card bottom-right, speedometer and limit bottom-left, street name bottom-centre, Android Auto's own buttons on the right edge. Idle shows a themed "Where to?" card with **Saved** (Home, Work, starred and recent places, one tap to drive) and **Theme**; a route picked on the phone shows as a preview card with **Start** and **Cancel**. Red Dead's paper texture shows in the car too. To preview on the laptop: `desktop-head-unit.exe -c config\tata_curvv.ini` (preset in `tools/dhu/`, copy it to the SDK's `extras\google\auto\config`).
 
 **Where the GTA V values come from:** map colours measured from pause-map screenshots (land `#1e1e1e`, blocks `#424242`, roads `#b5b5b5`, water `#bcc7cd` with `#d6dee1` shore); the route and waypoint use the game's documented `HUD_COLOUR_WAYPOINT` `#A44CF2` (dark `#522679`); arrival time uses the health green `#359A47`. The arrow and waypoint shapes are redrawn as vectors from the radar sprites. Reference screenshots live in `Reference - GTA V/` (gitignored). The HUD font is Barlow Condensed as a free stand-in for GTA's commercial Chalet.
 
@@ -24,7 +24,10 @@ Themes (a personal build, so they carry the games' names; rename before any publ
 | `prototype/` | Web preview of the themes on a recorded Delhi drive; open `prototype/index.html` |
 | `prototype/themes.js` | **The single theme source.** Palettes in, MapLibre styles out, for the web and the app |
 | `tools/export-android.mjs` | Writes the app's style files and `ThemeTokens.kt` from `themes.js` |
-| `tools/make_sprite.py` | Builds Frontier's hatch and stipple patterns |
+| `tools/make_sprite.py` | Builds Red Dead's hatch and stipple patterns and map blips |
+| `tools/make_glyphs.py` | Builds Red Dead's map-label fonts as MapLibre SDF glyphs |
+| `tools/make_icon.py` | Builds the app icon (GTA-style map of India Gate, purple route and arrow) |
+| `tools/build-install.ps1` | Builds the debug APK and installs it |
 | `tools/make_route.py` | Re-records the prototype's demo route |
 
 After changing a theme in `themes.js`: `node tools/export-android.mjs`, then rebuild the app.
@@ -37,17 +40,29 @@ After changing a theme in `themes.js`: `node tools/export-android.mjs`, then reb
 - **Search:** Photon by komoot. Long-press the map to drop a pin instead.
 - **Android Auto:** a navigation `CarAppService`. Android Auto draws the turn card, ETA and buttons; the app draws the themed map under them and tints the turn card with the theme colour. Distances on the dashboard are forced to metric.
 
+### Road info
+
+| What | Where it comes from | Needs |
+|---|---|---|
+| Traffic lights on the route | Valhalla `trace_attributes` on the same FOSSGIS server that routes (OpenStreetMap `highway=traffic_signals`), about a second per route | nothing |
+| Speed cameras ahead | OpenStreetMap through Overpass, in small boxes along the route (Overpass is often busy; cameras simply arrive later) | nothing |
+| Live traffic colours on the roads | TomTom traffic-flow vector tiles, coloured per theme | TomTom key |
+| Accidents, road works, closures, jams, lane closures, flooding ahead (icons on the map and an alert under the turn banner) | TomTom incident details, refreshed every 2.5 minutes while driving | TomTom key |
+| Time to go with traffic, "+6 min of traffic", time coloured like Google's (neutral when unknown) | TomTom routing with `traffic=true` | TomTom key |
+
+**TomTom key (free, no card):** sign up at developer.tomtom.com, copy the default API key from the dashboard, add `tomtomKey=<key>` to `android/local.properties`, rebuild. The free tier gives 2,500 non-tile and 50,000 tile requests a day, far more than one driver uses. Without a key the app works as before and Layers shows those rows as off.
+
 Running cost: nothing. The public routing and search servers are fair-use; fine for one driver, not for a public release.
 
 ## Build
 
 Needs JDK 21 and the Android SDK (both are on this laptop: `%LOCALAPPDATA%\Android\Sdk`).
 
-```bash
-cd android
-JAVA_HOME="/c/Program Files/Microsoft/jdk-21.0.12.8-hotspot" ./gradlew :app:assembleDebug
-# APK: android/app/build/outputs/apk/debug/app-debug.apk
+```powershell
+powershell -File tools/build-install.ps1        # build and install on the connected phone or emulator
 ```
+
+Or by hand from PowerShell: `cd android; .\gradlew.bat :app:assembleDebug` (APK: `android/app/build/outputs/apk/debug/app-debug.apk`). Don't call `gradlew.bat` from Git Bash: the space in "Overworld Maps" breaks it and the old APK stays in place without an obvious error.
 
 Tests (the Android Auto screen inside Google's car-app test host, with a real simulated trip) need an emulator or phone connected:
 
@@ -86,7 +101,7 @@ adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver -a com.
 adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver -a com.thealgothrim.overworld.DEBUG_STOP
 ```
 
-Check map icons (arrow, waypoint) on the real phone or DHU: the emulator's software GPU does not draw runtime-added icons with the OpenGL renderer.
+Map icons and labels (arrow, waypoint, traffic lights, Red Dead's place names) don't draw on the emulator's default software GPU. Start the emulator on the laptop's GPU instead: `emulator -avd overworld -gpu host`.
 
 ## Put it in the car (one-time USD 25)
 
@@ -99,7 +114,7 @@ Android Auto will not show a sideloaded navigation app in a real car ([Google's 
 
 ## Known limits
 
-- Map labels use OpenFreeMap's Noto Sans glyphs. Themed map-label fonts need self-generated glyph files.
+- GTA V hides map labels, like the game's pause map. Red Dead's label fonts are SDF glyphs made by `tools/make_glyphs.py` (Latin ranges only).
 - No offline maps yet (OpenFreeMap has no India extract download; Protomaps PMTiles would be the route).
 - Android refuses the background location service if a trip starts while the app isn't on screen. The app then keeps navigating while the phone or car screen shows it, instead of crashing.
 - MapLibre renders with **OpenGL**, not its default Vulkan: the Snapdragon Vulkan driver on the S24 Ultra failed to compile MapLibre's shaders and only the background drew (see `app/build.gradle`).
@@ -107,4 +122,4 @@ Android Auto will not show a sideloaded navigation app in a real car ([Google's 
 
 ## Credits
 
-Map data © OpenStreetMap contributors (ODbL). Tiles: OpenFreeMap / OpenMapTiles. Routing: Valhalla, FOSSGIS server. Search: Photon by komoot. Navigation: Ferrostar by Stadia Maps (BSD 3-Clause, see `THIRD_PARTY_NOTICES.txt`). Fonts: Barlow, Barlow Condensed, IM Fell English, Chakra Petch (SIL Open Font License).
+Map data © OpenStreetMap contributors (ODbL). Tiles: OpenFreeMap / OpenMapTiles. Routing and traffic lights: Valhalla, FOSSGIS server. Speed cameras: Overpass API. Live traffic (optional): TomTom. Search: Photon by komoot. Navigation: Ferrostar by Stadia Maps (BSD 3-Clause, see `THIRD_PARTY_NOTICES.txt`). Fonts: Barlow, Barlow Condensed, IM Fell English, Chakra Petch (SIL Open Font License).

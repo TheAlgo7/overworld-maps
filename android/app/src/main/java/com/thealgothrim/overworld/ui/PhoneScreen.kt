@@ -24,9 +24,9 @@ import androidx.compose.ui.unit.dp
 import com.stadiamaps.ferrostar.core.boundingBox
 import com.stadiamaps.ferrostar.maplibreui.runtime.NavigationCameraMode
 import com.stadiamaps.ferrostar.maplibreui.runtime.navigationCameraOptions
-import com.stadiamaps.ferrostar.maplibreui.runtime.rememberNavigationMapState
 import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.OverworldViewModel
+import com.thealgothrim.overworld.map.rememberOverworldMapState
 import com.thealgothrim.overworld.map.OverworldPhoneMap
 import com.thealgothrim.overworld.theme.Skin
 import com.thealgothrim.overworld.ui.gta.GtaBigMessage
@@ -53,25 +53,30 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
   val testDrive by viewModel.testDrive.collectAsState()
   val area by viewModel.area.collectAsState()
   val cameraOptions = navigationCameraOptions()
-  val mapState = rememberNavigationMapState(navigationCameraOptions = cameraOptions)
+  val mapState = rememberOverworldMapState(cameraOptions)
   val scope = rememberCoroutineScope()
   val navigating = uiState.isNavigating()
 
   var settingsOpen by rememberSaveable { mutableStateOf(false) }
+  var layersOpen by rememberSaveable { mutableStateOf(false) }
+  val extras by viewModel.extras.collectAsState()
   var searchOpen by remember { mutableStateOf(false) }
   var arrivedAt by remember { mutableStateOf<String?>(null) }
   val rotated by remember { derivedStateOf { abs(mapState.cameraState.position.bearing) > 1.0 } }
 
-  // Back steps out one level at a time, like Google Maps.
-  BackHandler(settingsOpen) { settingsOpen = false }
-  BackHandler(!settingsOpen && searchOpen) {
+  // Back steps out one level at a time, like Google Maps. The handler registered last runs first,
+  // so these go from the bottom level (the place card) up to the top (the Layers sheet).
+  val overlay = layersOpen || settingsOpen
+  BackHandler(!overlay && !searchOpen && planner.preview == null && planner.destination != null) {
+    viewModel.clearDestination()
+  }
+  BackHandler(!overlay && !searchOpen && planner.preview != null) { viewModel.cancelPreview() }
+  BackHandler(!overlay && searchOpen) {
     searchOpen = false
     viewModel.onQueryChange("")
   }
-  BackHandler(!settingsOpen && !searchOpen && planner.preview != null) { viewModel.cancelPreview() }
-  BackHandler(!settingsOpen && !searchOpen && planner.preview == null && planner.destination != null) {
-    viewModel.clearDestination()
-  }
+  BackHandler(settingsOpen && !layersOpen) { settingsOpen = false }
+  BackHandler(layersOpen) { layersOpen = false }
 
   LaunchedEffect(navigating) { if (navigating) mapState.recenter(isNavigating = true) }
   LaunchedEffect(planner.destination) {
@@ -121,7 +126,6 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
         cameraOptions = cameraOptions,
         pickedDestination = planner.destination?.coordinate,
         previewRoute = planner.preview?.route?.geometry,
-        attributionPadding = PaddingValues(top = if (navigating) 250.dp else 200.dp, end = 12.dp),
         onLongPress = {
           searchOpen = false
           viewModel.dropPin(it)
@@ -135,6 +139,10 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
             NavigationLayer(
                 spec = spec,
                 uiState = uiState,
+                extras = extras,
+                remaining = viewModel.remainingSeconds(uiState, extras),
+                hazard = viewModel.hazardAhead(uiState, extras),
+                onLayers = { layersOpen = true },
                 area = area,
                 following = mapState.isTrackingUser,
                 onRecenter = locate,
@@ -147,6 +155,7 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
             PreviewLayer(
                 spec = spec,
                 preview = planner.preview!!,
+                extras = extras,
                 testDrive = testDrive,
                 onBack = viewModel::cancelPreview,
                 onStart = viewModel::startPreview,
@@ -168,6 +177,7 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
                 onClear = viewModel::clearDestination,
                 onDirections = viewModel::directions,
                 onSettings = { settingsOpen = true },
+                onLayers = { layersOpen = true },
                 onLocate = locate,
                 onNorthUp = northUp,
             )
@@ -189,8 +199,11 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
           saved = saved,
           onTestDrive = viewModel::setTestDrive,
           onMute = viewModel::toggleMute,
+          onLayers = { layersOpen = true },
           onClose = { settingsOpen = false },
       )
     }
+
+    if (layersOpen) MapLayersSheet(theme, onClose = { layersOpen = false })
   }
 }

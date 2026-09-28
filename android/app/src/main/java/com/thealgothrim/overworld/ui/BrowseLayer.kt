@@ -72,6 +72,7 @@ fun BoxScope.BrowseLayer(
     onClear: () -> Unit,
     onDirections: () -> Unit,
     onSettings: () -> Unit,
+    onLayers: () -> Unit,
     onLocate: () -> Unit,
     onNorthUp: () -> Unit,
 ) {
@@ -146,16 +147,23 @@ fun BoxScope.BrowseLayer(
       }
     }
 
-    if (!searchOpen && rotated) {
+    // Right column under the search bar, like Google Maps: layers, then the compass when rotated.
+    if (!searchOpen) {
       Spacer(Modifier.height(10.dp))
-      SkinRoundButton(spec, GameIcon.NORTH, onNorthUp, Modifier.align(Alignment.End))
+      Column(Modifier.align(Alignment.End), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SkinRoundButton(spec, GameIcon.LAYERS, onLayers)
+        if (rotated) SkinRoundButton(spec, GameIcon.NORTH, onNorthUp)
+      }
     }
   }
 
   // ---- bottom: locate button, then the place sheet
   if (!searchOpen) {
     Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-      SkinRoundButton(spec, GameIcon.LOCATE, onLocate, Modifier.align(Alignment.End).padding(end = 14.dp, bottom = 14.dp))
+      Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 14.dp, bottom = 14.dp), verticalAlignment = Alignment.Bottom) {
+        MapCredit(spec, Modifier.weight(1f))
+        SkinRoundButton(spec, GameIcon.LOCATE, onLocate)
+      }
       if (destination != null) {
         PlaceSheet(spec, destination, planner, saved, here, onDirections)
       }

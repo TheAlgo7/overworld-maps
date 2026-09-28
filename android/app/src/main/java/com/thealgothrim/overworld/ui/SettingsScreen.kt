@@ -61,6 +61,7 @@ fun SettingsScreen(
     saved: SavedState,
     onTestDrive: (Boolean) -> Unit,
     onMute: () -> Unit,
+    onLayers: () -> Unit,
     onClose: () -> Unit,
 ) {
   val store = AppModule.themeStore
@@ -69,7 +70,7 @@ fun SettingsScreen(
 
   val rows =
       listOf(
-          Setting("Map theme", theme.blurb, value = theme.name) { store.cycle() },
+          Setting("Map theme", "${theme.blurb} Tap to choose a theme and map details.", value = theme.name) { onLayers() },
           Setting(
               "Car screen",
               if (carGameHud) "Android Auto shows the game HUD: turn, time and street drawn in the theme."
@@ -100,7 +101,8 @@ fun SettingsScreen(
           ) { AppModule.saved.clearRecents() },
           Setting(
               "About",
-              "Overworld 0.1. Map data © OpenStreetMap contributors (ODbL), tiles by OpenFreeMap, routing by Valhalla (FOSSGIS), search by Photon (komoot), navigation by Ferrostar (Stadia Maps). A personal build.",
+              "Overworld 0.2. Map data © OpenStreetMap contributors (ODbL), tiles by OpenFreeMap, routing by Valhalla (FOSSGIS), search by Photon (komoot), traffic lights from Valhalla and speed cameras from Overpass, navigation by Ferrostar (Stadia Maps)." +
+                  if (AppModule.traffic.hasLiveTraffic) " Live traffic by TomTom." else " Live traffic is off: add a free TomTom key (tomtomKey in local.properties) to turn on traffic, incidents and live travel times.",
           ) {},
       )
   val current = rows[selected.coerceIn(0, rows.lastIndex)]

@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.stadiamaps.ferrostar.composeui.views.components.maneuver.ManeuverImage
 import com.stadiamaps.ferrostar.core.NavigationUiState
+import com.thealgothrim.overworld.HazardAhead
+import com.thealgothrim.overworld.RouteExtras
 import com.thealgothrim.overworld.RoutePreview
 import com.thealgothrim.overworld.ui.gta.Gta
 import com.thealgothrim.overworld.ui.gta.GtaHudBars
@@ -55,6 +57,7 @@ import com.thealgothrim.overworld.ui.skin.skinPanel
 fun BoxScope.PreviewLayer(
     spec: SkinSpec,
     preview: RoutePreview,
+    extras: RouteExtras,
     testDrive: Boolean,
     onBack: () -> Unit,
     onStart: () -> Unit,
@@ -73,15 +76,24 @@ fun BoxScope.PreviewLayer(
 
   SkinPanel(spec, Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
     Column(Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
+      // Live-traffic time when TomTom is set up, otherwise the routing engine's estimate.
+      val seconds = extras.eta?.travelSeconds ?: preview.durationSeconds
       Row(verticalAlignment = Alignment.Bottom) {
-        SkinText(formatDuration(preview.durationSeconds).uppercase(), spec.big, if (spec.gta) 34.sp else 34.sp, spec.good)
+        SkinText(formatDuration(seconds).uppercase(), spec.big, 34.sp, spec.trafficColor(extras.eta))
         Spacer(Modifier.width(10.dp))
         SkinText("(${formatDistance(preview.distanceMeters)})", spec.body, 18.sp, spec.sub, Modifier.padding(bottom = 4.dp))
       }
-      preview.via?.let { SkinText("via $it", spec.body, 16.sp, spec.fg, Modifier.padding(top = 4.dp)) }
+      val facts =
+          listOfNotNull(
+              preview.via?.let { "via $it" },
+              trafficNote(extras.eta),
+              extras.lightsOnRoute.takeIf { it > 0 }?.let { "$it traffic light${if (it == 1) "" else "s"}" },
+              extras.incidentsOnRoute.size.takeIf { it > 0 }?.let { "$it incident${if (it == 1) "" else "s"} on route" },
+          )
+      if (facts.isNotEmpty()) SkinText(facts.joinToString("  ·  "), spec.body, 16.sp, spec.fg, Modifier.padding(top = 4.dp), maxLines = 2)
       SkinText(
           if (testDrive) "Test drive is on: the trip will be simulated. Turn it off in Settings."
-          else "Arrive at ${arrivalClock(preview.durationSeconds)}",
+          else "Arrive at ${arrivalClock(seconds)}${if (extras.eta == null) "  ·  typical traffic" else "  ·  live traffic"}",
           spec.body, 14.sp, if (testDrive) spec.accent else spec.sub, Modifier.padding(top = 4.dp), maxLines = 2,
       )
       Spacer(Modifier.height(14.dp))
@@ -100,6 +112,10 @@ fun BoxScope.PreviewLayer(
 fun BoxScope.NavigationLayer(
     spec: SkinSpec,
     uiState: NavigationUiState,
+    extras: RouteExtras,
+    remaining: Double?,
+    hazard: HazardAhead?,
+    onLayers: () -> Unit,
     area: String?,
     following: Boolean,
     onRecenter: () -> Unit,
@@ -114,16 +130,20 @@ fun BoxScope.NavigationLayer(
   // ---- top: turn banner, then map buttons on the right
   Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
     TurnBanner(spec, uiState)
+    hazard?.let { HazardStrip(spec, it, Modifier.padding(top = 8.dp)) }
     Spacer(Modifier.height(12.dp))
     Column(Modifier.align(Alignment.End), verticalArrangement = Arrangement.spacedBy(10.dp)) {
       SkinRoundButton(spec, if (uiState.isMuted == true) GameIcon.SOUND_OFF else GameIcon.SOUND_ON, onMute)
       SkinRoundButton(spec, if (following) GameIcon.ROUTE else GameIcon.NAVIGATE, if (following) onOverview else onRecenter)
+      SkinRoundButton(spec, GameIcon.LAYERS, onLayers)
     }
   }
 
   // ---- bottom: re-centre + street, then the trip sheet
   Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
     Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
+      if (following) SpeedBadge(spec, uiState, Modifier.align(Alignment.BottomStart))
+      MapCredit(spec, Modifier.align(Alignment.BottomEnd))
       if (!following) {
         Row(
             Modifier.align(Alignment.CenterStart).skinPanel(spec).clickable(onClick = onRecenter).padding(horizontal = 14.dp, vertical = 10.dp),
@@ -136,10 +156,12 @@ fun BoxScope.NavigationLayer(
       }
       val street = listOfNotNull(uiState.currentStepRoadName?.takeIf { it.isNotBlank() }, area)
       if (street.isNotEmpty() && following) {
+        // Centred in the room right of the speedometer and limit sign, never over them.
+        val place = Modifier.align(Alignment.Center).padding(start = 112.dp)
         if (spec.gta) {
-          GtaText(street.joinToString("  |  "), 21.sp, Modifier.align(Alignment.Center), align = TextAlign.Center)
+          GtaText(street.joinToString("  |  "), 21.sp, place, align = TextAlign.Center)
         } else {
-          RdrText(street.joinToString(",  ").uppercase(), 16.sp, Modifier.align(Alignment.Center), color = Rdr.GreyLight, align = TextAlign.Center, spacing = 1.sp)
+          RdrText(street.joinToString(",  ").uppercase(), 16.sp, place, color = Rdr.GreyLight, align = TextAlign.Center, spacing = 1.sp)
         }
       }
     }
@@ -150,9 +172,10 @@ fun BoxScope.NavigationLayer(
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
           SheetIconButton(spec, GameIcon.CLOSE, onEnd, tint = spec.accent)
           Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-            SkinText(formatDuration(progress.durationRemaining).uppercase(), spec.big, 32.sp, spec.good)
+            val left = remaining ?: progress.durationRemaining
+            SkinText(formatDuration(left).uppercase(), spec.big, 32.sp, spec.trafficColor(extras.eta))
             SkinText(
-                "${formatDistance(progress.distanceRemaining)}  ·  ${arrivalClock(progress.durationRemaining)}",
+                "${formatDistance(progress.distanceRemaining)}  ·  ${arrivalClock(left)}",
                 spec.body, 16.sp, spec.sub,
             )
           }

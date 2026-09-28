@@ -9,6 +9,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.core.content.edit
 import com.thealgothrim.overworld.R
 import java.util.concurrent.ConcurrentHashMap
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -83,6 +85,8 @@ val UiFont =
         Font(R.font.barlow_semibold, FontWeight.SemiBold),
     )
 
+data class MapDetails(val traffic: Boolean, val signals: Boolean, val incidents: Boolean)
+
 /** The selected theme, shared by the phone and the Android Auto screen. */
 class ThemeStore(context: Context) {
   private val prefs = context.getSharedPreferences("overworld", Context.MODE_PRIVATE)
@@ -111,6 +115,25 @@ class ThemeStore(context: Context) {
     prefs.edit { putBoolean(KEY_CAR_HUD, on) }
   }
 
+  private val _details = MutableStateFlow(
+      MapDetails(
+          traffic = prefs.getBoolean("detail_traffic", true),
+          signals = prefs.getBoolean("detail_signals", true),
+          incidents = prefs.getBoolean("detail_incidents", true),
+      )
+  )
+  /** Map details, like Google Maps' layers: live traffic, traffic lights and incidents. */
+  val details: StateFlow<MapDetails> = _details.asStateFlow()
+
+  fun setDetails(d: MapDetails) {
+    _details.value = d
+    prefs.edit {
+      putBoolean("detail_traffic", d.traffic)
+      putBoolean("detail_signals", d.signals)
+      putBoolean("detail_incidents", d.incidents)
+    }
+  }
+
   companion object {
     private const val KEY = "theme"
     private const val KEY_CAR_HUD = "car_game_hud"
@@ -132,12 +155,61 @@ class ThemeStore(context: Context) {
 object StyleCache {
   private val cache = ConcurrentHashMap<String, String>()
 
-  fun json(context: Context, theme: OverworldTheme, car: Boolean): String {
+  /**
+   * [trafficTiles]: TomTom flow tiles URL. When set, a live-traffic layer is added above the roads
+   * and below the route, coloured like Google's (green free-flowing, amber slow, red jammed) in
+   * tones that suit the theme.
+   */
+  fun json(context: Context, theme: OverworldTheme, car: Boolean, trafficTiles: String? = null): String {
     val asset = theme.styleAsset(car)
-    return cache.getOrPut(asset) {
-      val json = context.assets.open(asset).bufferedReader().use { it.readText() }
-      val localSprite = runCatching { context.assets.list("sprites-local")?.isNotEmpty() == true }.getOrDefault(false)
-      if (localSprite) json.replace("asset://sprites/overworld", "asset://sprites-local/overworld") else json
+    val base =
+        cache.getOrPut(asset) {
+          val json = context.assets.open(asset).bufferedReader().use { it.readText() }
+          val localSprite = runCatching { context.assets.list("sprites-local")?.isNotEmpty() == true }.getOrDefault(false)
+          if (localSprite) json.replace("asset://sprites/overworld", "asset://sprites-local/overworld") else json
+        }
+    if (trafficTiles == null) return base
+    return cache.getOrPut("$asset+traffic") { withTraffic(base, theme, car, trafficTiles) }
+  }
+
+  private fun withTraffic(style: String, theme: OverworldTheme, car: Boolean, tiles: String): String {
+    val root = JSONObject(style)
+    root.getJSONObject("sources").put(
+        "traffic",
+        JSONObject().put("type", "vector").put("tiles", JSONArray().put(tiles)).put("minzoom", 0).put("maxzoom", 22),
+    )
+    val (jam, slow, busy, free) =
+        if (theme.skin == Skin.RDR) listOf("#5a0a14", "#b3120c", "#c47a12", "#5b7a38")
+        else listOf("#8f0e1a", "#ff3b30", "#ffb020", "#34c759")
+    val level = JSONArray("[\"to-number\", [\"get\", \"traffic_level\"], 1]")
+    val layer =
+        JSONObject()
+            .put("id", "traffic-flow")
+            .put("type", "line")
+            .put("source", "traffic")
+            .put("source-layer", "Traffic flow")
+            .put("minzoom", 10)
+            .put("layout", JSONObject().put("line-cap", "round").put("line-join", "round"))
+            .put(
+                "paint",
+                JSONObject()
+                    .put("line-color", JSONArray().put("step").put(level).put(jam).put(0.25).put(slow).put(0.5).put(busy).put(0.8).put(free))
+                    .put("line-width", JSONArray("[\"interpolate\", [\"linear\"], [\"zoom\"], 10, 1.2, 14, ${if (car) 3.5 else 3}, 18, ${if (car) 9 else 7}]"))
+                    // Free-flowing roads stay subtle, slow ones stand out.
+                    .put("line-opacity", JSONArray().put("step").put(level).put(0.95).put(0.8).put(0.55))
+                    .put("line-offset", JSONArray("[\"interpolate\", [\"linear\"], [\"zoom\"], 12, 0, 18, 3]")),
+            )
+    val layers = root.getJSONArray("layers")
+    var insertAt = layers.length()
+    for (i in 0 until layers.length()) if (layers.getJSONObject(i).optString("id") == "label-water") insertAt = i
+    val out = JSONArray()
+    for (i in 0 until layers.length()) {
+      if (i == insertAt) out.put(layer)
+      out.put(layers.get(i))
     }
+    if (insertAt == layers.length()) out.put(layer)
+    root.put("layers", out)
+    return root.toString()
   }
 }
+

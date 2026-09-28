@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,6 +19,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.stadiamaps.ferrostar.composeui.views.components.maneuver.ManeuverImage
 import com.stadiamaps.ferrostar.core.NavigationUiState
+import com.thealgothrim.overworld.HazardAhead
+import com.thealgothrim.overworld.RouteExtras
+import com.thealgothrim.overworld.RoutePreview
 import com.thealgothrim.overworld.theme.OverworldTheme
 import com.thealgothrim.overworld.ui.gta.GtaText
 import com.thealgothrim.overworld.ui.rdr.Rdr
@@ -29,58 +31,77 @@ import com.thealgothrim.overworld.ui.skin.SkinText
 import com.thealgothrim.overworld.ui.skin.skinPanel
 import com.thealgothrim.overworld.ui.skin.spec
 
+/** Room kept clear for Android Auto's own buttons: the action strip on top, map buttons on the right. */
+private val TOP_CLEAR = 84.dp
+private val RIGHT_CLEAR = 92.dp
+
 /**
- * The game HUD on the Android Auto screen, in the same places Google Maps uses there: the turn card
- * top-left, the ETA card bottom-left and the street name along the bottom. Android Auto's own
- * cards are not sent in this mode; its buttons on the right and its bottom bar stay as they are.
+ * The game HUD on the Android Auto screen, placed where Google Maps puts things on a right-hand
+ * drive car like the Curvv: turn card and alerts top-right by the driver, time card bottom-right,
+ * speed bottom-left, street along the bottom. Android Auto's cards are not sent in this mode.
  */
 @Composable
-fun BoxScope.CarGameHud(theme: OverworldTheme, uiState: NavigationUiState, area: String?) {
+fun BoxScope.CarGameHud(
+    theme: OverworldTheme,
+    uiState: NavigationUiState,
+    area: String?,
+    extras: RouteExtras,
+    remaining: Double?,
+    hazard: HazardAhead?,
+    preview: RoutePreview?,
+) {
   val spec = theme.spec
   val progress = uiState.progress
   if (!uiState.isNavigating() || progress == null) {
-    IdleCard(spec, Modifier.align(Alignment.TopStart))
+    if (preview != null) PreviewCard(spec, preview, extras, Modifier.align(Alignment.TopEnd).padding(top = TOP_CLEAR, end = RIGHT_CLEAR))
+    else IdleCard(spec, Modifier.align(Alignment.TopEnd).padding(top = TOP_CLEAR, end = RIGHT_CLEAR))
     return
   }
 
-  TurnCard(spec, uiState, Modifier.align(Alignment.TopStart))
+  Column(Modifier.align(Alignment.TopEnd).padding(top = TOP_CLEAR, end = RIGHT_CLEAR), horizontalAlignment = Alignment.End) {
+    TurnCard(spec, uiState)
+    hazard?.let { HazardStrip(spec, it, Modifier.padding(top = 8.dp).widthIn(min = 300.dp, max = 440.dp), textSize = 20.sp, icon = 40.dp) }
+  }
 
-  Row(Modifier.align(Alignment.BottomStart).fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-    Column(Modifier.widthIn(min = 230.dp).skinPanel(spec).padding(horizontal = 18.dp, vertical = 12.dp)) {
-      SkinText(formatDuration(progress.durationRemaining).uppercase(), spec.big, 34.sp, spec.good)
-      SkinText("${arrivalClock(progress.durationRemaining)}  ·  ${formatDistance(progress.distanceRemaining)}", spec.body, 19.sp, spec.fg)
-    }
-    Box(Modifier.weight(1f).padding(bottom = 6.dp), contentAlignment = Alignment.Center) {
-      val street = listOfNotNull(uiState.currentStepRoadName?.takeIf { it.isNotBlank() }, area)
-      if (street.isNotEmpty()) {
-        if (spec.gta) {
-          GtaText(street.joinToString("  |  "), 24.sp, align = TextAlign.Center)
-        } else {
-          RdrText(
-              street.joinToString(",  ").uppercase(),
-              20.sp,
-              Modifier.skinPanel(spec, elevated = false).padding(horizontal = 18.dp, vertical = 6.dp),
-              color = Rdr.GreyLight,
-              align = TextAlign.Center,
-              spacing = 1.sp,
-          )
-        }
+  SpeedBadge(spec, uiState, Modifier.align(Alignment.BottomStart), big = true)
+
+  val street = listOfNotNull(uiState.currentStepRoadName?.takeIf { it.isNotBlank() }, area)
+  if (street.isNotEmpty()) {
+    Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp, end = 280.dp)) {
+      if (spec.gta) {
+        GtaText(street.joinToString("  |  "), 24.sp, align = TextAlign.Center)
+      } else {
+        RdrText(
+            street.joinToString(",  ").uppercase(),
+            20.sp,
+            Modifier.skinPanel(spec, elevated = false).padding(horizontal = 18.dp, vertical = 6.dp),
+            color = Rdr.GreyLight,
+            align = TextAlign.Center,
+            spacing = 1.sp,
+        )
       }
     }
-    // Keeps the street name clear of Android Auto's map buttons on the right.
-    Spacer(Modifier.width(96.dp))
+  }
+
+  val left = remaining ?: progress.durationRemaining
+  Column(
+      Modifier.align(Alignment.BottomEnd).padding(end = RIGHT_CLEAR).widthIn(min = 260.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 12.dp)
+  ) {
+    SkinText(formatDuration(left).uppercase(), spec.big, 36.sp, spec.trafficColor(extras.eta))
+    SkinText("${formatDistance(progress.distanceRemaining)}  ·  ${arrivalClock(left)}", spec.body, 20.sp, spec.fg)
+    trafficNote(extras.eta)?.let { SkinText(it, spec.body, 16.sp, spec.sub) }
   }
 }
 
 @Composable
-private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState, modifier: Modifier) {
+private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState) {
   val content = uiState.visualInstruction?.primaryContent
   val distance = uiState.progress?.distanceToNextManeuver?.let(::formatDistance).orEmpty()
   val road = content?.text?.trim().orEmpty()
   val next = uiState.remainingSteps?.getOrNull(1)
   val then = next?.visualInstructions?.firstOrNull()?.primaryContent?.takeIf { next.distance < 500 }
 
-  Column(modifier.widthIn(min = 300.dp, max = 420.dp)) {
+  Column(Modifier.widthIn(min = 320.dp, max = 440.dp)) {
     Row(Modifier.skinPanel(spec).padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
       Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) { content?.let { ManeuverImage(it, tint = spec.fg) } }
       Spacer(Modifier.width(16.dp))
@@ -106,9 +127,31 @@ private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState, modifier: Modif
   }
 }
 
+/** Mirrors the phone's route preview, like Google's card: place, time, arrival; Start in the strip. */
+@Composable
+private fun PreviewCard(spec: SkinSpec, preview: RoutePreview, extras: RouteExtras, modifier: Modifier) {
+  val seconds = extras.eta?.travelSeconds ?: preview.durationSeconds
+  Column(modifier.widthIn(min = 320.dp, max = 460.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 16.dp)) {
+    SkinText(spec.title(preview.place.name), spec.title, if (spec.gta) 28.sp else 32.sp, spec.fg, maxLines = 2, spacing = if (spec.gta) 0.sp else 1.sp)
+    if (preview.place.detail.isNotBlank()) SkinText(preview.place.detail, spec.body, 18.sp, spec.sub, maxLines = 1)
+    Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.Bottom) {
+      SkinText(formatDuration(seconds).uppercase(), spec.big, 32.sp, spec.trafficColor(extras.eta))
+      Spacer(Modifier.width(10.dp))
+      SkinText("${formatDistance(preview.distanceMeters)}  ·  ${arrivalClock(seconds)}", spec.body, 19.sp, spec.fg, Modifier.padding(bottom = 3.dp))
+    }
+    val facts =
+        listOfNotNull(
+            trafficNote(extras.eta),
+            extras.lightsOnRoute.takeIf { it > 0 }?.let { "$it traffic lights" },
+            extras.incidentsOnRoute.size.takeIf { it > 0 }?.let { "$it incident${if (it == 1) "" else "s"}" },
+        )
+    if (facts.isNotEmpty()) SkinText(facts.joinToString("  ·  "), spec.body, 17.sp, spec.sub, Modifier.padding(top = 4.dp))
+  }
+}
+
 @Composable
 private fun IdleCard(spec: SkinSpec, modifier: Modifier) {
-  Column(modifier.widthIn(max = 420.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 16.dp)) {
+  Column(modifier.widthIn(max = 440.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 16.dp)) {
     SkinText(spec.title("Where to?"), spec.title, if (spec.gta) 28.sp else 32.sp, spec.fg, spacing = if (spec.gta) 0.sp else 1.sp)
     SkinText("Pick a place on your phone, or open Saved.", spec.body, 19.sp, spec.sub, Modifier.padding(top = 4.dp), maxLines = 2)
   }

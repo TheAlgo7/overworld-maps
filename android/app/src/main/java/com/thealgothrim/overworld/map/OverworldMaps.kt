@@ -31,7 +31,10 @@ import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.screenSurfaceState
 import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.surfaceStableFractionalPadding
 import androidx.compose.ui.text.style.TextAlign
 import com.thealgothrim.overworld.AppModule
+import com.thealgothrim.overworld.RouteExtras
+import com.thealgothrim.overworld.theme.MapDetails
 import com.thealgothrim.overworld.theme.OverworldTheme
+import com.thealgothrim.overworld.traffic.RoadFeature
 import com.thealgothrim.overworld.ui.CarGameHud
 import com.thealgothrim.overworld.ui.PaperOverlay
 import com.thealgothrim.overworld.theme.StyleCache
@@ -51,30 +54,22 @@ fun OverworldPhoneMap(
     mapState: NavigationMapState,
     cameraOptions: NavigationCameraOptions,
     pickedDestination: GeographicCoordinate?,
-    attributionPadding: PaddingValues,
     onLongPress: (GeographicCoordinate) -> Unit,
-    attributionAlignment: Alignment = Alignment.TopEnd,
     previewRoute: List<GeographicCoordinate>? = null,
 ) {
   val context = LocalContext.current
-  val baseStyle = remember(theme.id) { BaseStyle.Json(StyleCache.json(context, theme, car = false)) }
+  val details by AppModule.themeStore.details.collectAsState()
+  val extras by AppModule.viewModel.extras.collectAsState()
+  val trafficTiles = AppModule.traffic.flowTilesUrl?.takeIf { details.traffic }
+  val baseStyle = remember(theme.id, trafficTiles) { BaseStyle.Json(StyleCache.json(context, theme, car = false, trafficTiles)) }
   val route = remember(theme.id) { themedRouteOverlay(theme, car = false) }
   NavigationMapView(
       baseStyle = baseStyle,
       navigationMapState = mapState,
       uiState = uiState,
-      mapOptions =
-          MapOptions(
-              ornamentOptions =
-                  OrnamentOptions(
-                      padding = attributionPadding,
-                      isLogoEnabled = false,
-                      isAttributionEnabled = true,
-                      attributionAlignment = attributionAlignment,
-                      isCompassEnabled = false,
-                      isScaleBarEnabled = false,
-                  )
-          ),
+      // No MapLibre ornaments: its (i) attribution button moved around with the camera padding.
+      // The OpenStreetMap credit is drawn by the screen instead (MapCredit).
+      mapOptions = MapOptions(ornamentOptions = OrnamentOptions.AllDisabled),
       routeOverlayBuilder = route,
       navigationCameraOptions = cameraOptions,
       showDefaultPuck = false,
@@ -90,6 +85,7 @@ fun OverworldPhoneMap(
     if (!state.isNavigating() && previewRoute != null && previewRoute.size >= 2) {
       ThemedRouteLine(previewRoute, theme, car = false)
     }
+    RoadFeatureLayers(visibleFeatures(extras, details), theme, car = false)
     val end = state.routeGeometry?.lastOrNull() ?: previewRoute?.lastOrNull() ?: pickedDestination
     if (end != null) ThemedDestination(end, theme)
     ThemedPuck(state, theme, car = false)
@@ -128,7 +124,11 @@ fun OverworldCarMap(
           )
         }
       } ?: surfaceStableFractionalPadding(surfaceArea?.compositeArea)
-  val baseStyle = remember(theme.id) { BaseStyle.Json(StyleCache.json(context, theme, car = true)) }
+  val details by AppModule.themeStore.details.collectAsState()
+  val extras by AppModule.viewModel.extras.collectAsState()
+  val trafficTiles = AppModule.traffic.flowTilesUrl?.takeIf { details.traffic }
+  val planner by AppModule.viewModel.planner.collectAsState()
+  val baseStyle = remember(theme.id, trafficTiles) { BaseStyle.Json(StyleCache.json(context, theme, car = true, trafficTiles)) }
   val route = remember(theme.id) { themedRouteOverlay(theme, car = true) }
 
   Box(Modifier.fillMaxSize()) {
@@ -141,6 +141,9 @@ fun OverworldCarMap(
         routeOverlayBuilder = route,
         showDefaultPuck = false,
     ) { state ->
+      val preview = planner.preview
+      if (!state.isNavigating() && preview != null) ThemedRouteLine(preview.route.geometry, theme, car = true)
+      RoadFeatureLayers(visibleFeatures(extras, details), theme, car = true)
       state.routeGeometry?.lastOrNull()?.let { ThemedDestination(it, theme) }
       ThemedPuck(state, theme, car = true)
     }
@@ -152,7 +155,8 @@ fun OverworldCarMap(
       val gameHud by AppModule.themeStore.carGameHud.collectAsState()
       val area by AppModule.viewModel.area.collectAsState()
       if (gameHud) {
-        CarGameHud(theme, uiState, area)
+        val vm = AppModule.viewModel
+        CarGameHud(theme, uiState, area, extras, vm.remainingSeconds(uiState, extras), vm.hazardAhead(uiState, extras), planner.preview)
       } else {
         uiState.currentStepRoadName
             ?.takeIf { it.isNotBlank() && uiState.isNavigating() }
@@ -186,3 +190,10 @@ fun OverworldCarMap(
     }
   }
 }
+
+/** Road features the map should show, per the Layers switches. */
+fun visibleFeatures(extras: RouteExtras, details: MapDetails): List<RoadFeature> =
+    buildList {
+      if (details.signals) addAll(extras.signals)
+      if (details.incidents) addAll(extras.incidents)
+    }

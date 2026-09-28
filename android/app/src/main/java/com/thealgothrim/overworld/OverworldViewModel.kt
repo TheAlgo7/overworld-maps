@@ -1,5 +1,6 @@
 package com.thealgothrim.overworld
 
+import android.content.Context
 import android.Manifest
 import android.content.pm.PackageManager
 import android.util.Log
@@ -10,6 +11,11 @@ import com.stadiamaps.ferrostar.core.NavigationUiState
 import com.stadiamaps.ferrostar.core.annotation.valhalla.valhallaExtendedOSRMAnnotationPublisher
 import com.stadiamaps.ferrostar.core.location.toUserLocation
 import com.thealgothrim.overworld.search.Place
+import com.thealgothrim.overworld.traffic.metres
+import com.thealgothrim.overworld.traffic.RoadFeature
+import com.thealgothrim.overworld.traffic.RoadFeatureKind
+import com.thealgothrim.overworld.traffic.RouteLine
+import com.thealgothrim.overworld.traffic.TrafficEta
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -28,6 +34,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import uniffi.ferrostar.GeographicCoordinate
 import uniffi.ferrostar.Route
@@ -35,6 +42,24 @@ import uniffi.ferrostar.TripState
 import uniffi.ferrostar.UserLocation
 import uniffi.ferrostar.Waypoint
 import uniffi.ferrostar.WaypointKind
+
+/** Road data for the current route: lights and cameras, live incidents, live travel time. */
+data class RouteExtras(
+    val signals: List<RoadFeature> = emptyList(),
+    val incidents: List<RoadFeature> = emptyList(),
+    val eta: TrafficEta? = null,
+    /** Distance left when [eta] was fetched, to scale it down as the trip goes on. */
+    val etaAtDistance: Double = 0.0,
+) {
+  val lightsOnRoute: Int
+    get() = signals.count { it.kind == RoadFeatureKind.TRAFFIC_LIGHT && it.along != null }
+
+  val incidentsOnRoute: List<RoadFeature>
+    get() = incidents.filter { it.along != null }
+}
+
+/** The next incident or camera ahead on the route, for the "Accident ahead" alert. */
+data class HazardAhead(val feature: RoadFeature, val distance: Double)
 
 /** A route shown before driving, like Google Maps' directions preview. */
 data class RoutePreview(
@@ -88,6 +113,15 @@ class OverworldViewModel :
 
   private var destinationName: String? = null
 
+  private val traffic = AppModule.traffic
+  private val _extras = MutableStateFlow(RouteExtras())
+  /** Signals, incidents and live travel time for the previewed or active route. */
+  val extras: StateFlow<RouteExtras> = _extras.asStateFlow()
+  private var extrasJob: Job? = null
+  private var extrasRoute: List<GeographicCoordinate>? = null
+  private var extrasLive = false
+  private val extrasLoaded = mutableSetOf<RoadFeatureKind>()
+
   /** Shows the user's position on the map even before a trip starts. */
   override val navigationUiState: StateFlow<NavigationUiState> =
       combine(super.navigationUiState, lastLocation) { state, location ->
@@ -104,7 +138,12 @@ class OverworldViewModel :
             if (granted) locationProvider.locationUpdates(3000L).map { it.toUserLocation() }
             else flowOf(null)
           }
-          .collect { if (it != null) lastLocation.value = it }
+          .collect {
+            if (it != null) {
+              lastLocation.value = it
+              rememberFix(it.coordinates)
+            }
+          }
     }
     viewModelScope.launch {
       var lastLookup = 0L
@@ -114,6 +153,17 @@ class OverworldViewModel :
         if (state.isNavigating() && now - lastLookup > 45_000) {
           lastLookup = now
           launch { runCatching { AppModule.search.areaAt(at) }.getOrNull()?.let { _area.value = it } }
+        }
+      }
+    }
+    viewModelScope.launch {
+      navigationUiState.map { it.routeGeometry }.collect { geometry ->
+        if (geometry != null && geometry.size >= 2 && (geometry != extrasRoute || !extrasLive)) loadExtras(geometry, live = true)
+        if (geometry == null && _planner.value.preview == null) {
+          extrasJob?.cancel()
+          extrasRoute = null
+          extrasLive = false
+          _extras.value = RouteExtras()
         }
       }
     }
@@ -199,6 +249,25 @@ class OverworldViewModel :
   private val origin: UserLocation
     get() = lastLocation.value ?: UserLocation(AppModule.defaultStart, 6.0, null, Instant.now(), null)
 
+  private val prefs by lazy { AppModule.context.getSharedPreferences("overworld", Context.MODE_PRIVATE) }
+  private var savedFix: GeographicCoordinate? = null
+
+  /** Where the map opens: the live fix, else where the phone was last seen, else Chhatarpur. */
+  val startPoint: GeographicCoordinate
+    get() =
+        lastLocation.value?.coordinates
+            ?: prefs.getString("last_fix", null)?.split(',')?.mapNotNull { it.toDoubleOrNull() }?.takeIf { it.size == 2 }?.let {
+              GeographicCoordinate(it[0], it[1])
+            }
+            ?: AppModule.defaultStart
+
+  private fun rememberFix(at: GeographicCoordinate) {
+    val last = savedFix
+    if (last != null && metres(last, at) < 250.0) return
+    savedFix = at
+    prefs.edit().putString("last_fix", "${at.lat},${at.lng}").apply()
+  }
+
   /** Directions: fetch the route and show it with time, distance and the main road. */
   fun directions() {
     val place = _planner.value.destination ?: return
@@ -215,6 +284,7 @@ class OverworldViewModel :
                 ?.key
         val preview = RoutePreview(place, route, route.steps.sumOf { it.duration }, route.distance, via)
         _planner.value = _planner.value.copy(routing = false, preview = preview)
+        launch(Dispatchers.Main) { loadExtras(route.geometry, live = false) }
       } catch (e: Exception) {
         Log.w(TAG, "routing failed", e)
         _planner.value = _planner.value.copy(routing = false, error = "Couldn't find a route. Check the connection and try again.")
@@ -224,6 +294,74 @@ class OverworldViewModel :
 
   fun cancelPreview() {
     _planner.value = _planner.value.copy(preview = null)
+    if (!navigationUiState.value.isNavigating()) {
+      extrasJob?.cancel()
+      extrasRoute = null
+      extrasLive = false
+      _extras.value = RouteExtras()
+    }
+  }
+
+  /**
+   * Loads lights and cameras once per route, and incidents plus live travel time now and, while
+   * driving, every 150 seconds from the current position.
+   */
+  private fun loadExtras(route: List<GeographicCoordinate>, live: Boolean) {
+    extrasJob?.cancel()
+    val sameRoute = route == extrasRoute
+    extrasRoute = route
+    extrasLive = live
+    if (!sameRoute) {
+      _extras.value = RouteExtras()
+      extrasLoaded.clear()
+    }
+    val destination = route.last()
+    extrasJob =
+        viewModelScope.launch {
+          // Lights come from the routing server in about a second; cameras from Overpass, which can
+          // be slow or busy, so each arrives on its own.
+          for ((kind, fetch) in listOf(RoadFeatureKind.TRAFFIC_LIGHT to traffic::trafficLights, RoadFeatureKind.SPEED_CAMERA to traffic::speedCameras)) {
+            if (kind in extrasLoaded) continue
+            launch {
+              val found = runCatching { fetch(route) }.getOrNull() ?: return@launch
+              extrasLoaded += kind
+              _extras.update { e -> e.copy(signals = (e.signals.filter { it.kind != kind } + found).sortedBy { it.along ?: Double.MAX_VALUE }) }
+            }
+          }
+          while (true) {
+            val from = navigationUiState.value.location?.coordinates ?: route.first()
+            val incidents = runCatching { traffic.incidents(route) }.getOrDefault(emptyList())
+            val eta = runCatching { traffic.eta(from, destination) }.getOrNull()
+            val left = navigationUiState.value.progress?.distanceRemaining ?: routeLength(route)
+            _extras.value = _extras.value.copy(incidents = incidents, eta = eta ?: _extras.value.eta, etaAtDistance = left)
+            if (!live || !traffic.hasLiveTraffic) break
+            delay(150_000)
+          }
+        }
+  }
+
+  private fun routeLength(route: List<GeographicCoordinate>) = RouteLine(route).length
+
+  /**
+   * Time to go: TomTom's live-traffic time when there is one (scaled down as distance is covered),
+   * otherwise the routing engine's estimate.
+   */
+  fun remainingSeconds(state: NavigationUiState, extras: RouteExtras): Double? {
+    val progress = state.progress ?: return null
+    val eta = extras.eta ?: return progress.durationRemaining
+    if (extras.etaAtDistance <= 0) return progress.durationRemaining
+    return eta.travelSeconds * (progress.distanceRemaining / extras.etaAtDistance).coerceIn(0.0, 1.5)
+  }
+
+  /** The nearest incident or speed camera within 2 km ahead on the route. */
+  fun hazardAhead(state: NavigationUiState, extras: RouteExtras): HazardAhead? {
+    val progress = state.progress ?: return null
+    val length = state.routeGeometry?.let { routeLength(it) } ?: return null
+    val done = length - progress.distanceRemaining
+    return (extras.incidentsOnRoute + extras.signals.filter { it.kind == RoadFeatureKind.SPEED_CAMERA })
+        .mapNotNull { f -> f.along?.let { a -> HazardAhead(f, a - done) } }
+        .filter { it.distance in 0.0..2_000.0 }
+        .minByOrNull { it.distance }
   }
 
   /** Start: drive the previewed route. */

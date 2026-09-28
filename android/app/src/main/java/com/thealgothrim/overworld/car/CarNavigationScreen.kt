@@ -30,13 +30,13 @@ import com.stadiamaps.ferrostar.core.boundingBox
 import com.stadiamaps.ferrostar.core.extensions.progress
 import com.stadiamaps.ferrostar.maplibreui.runtime.NavigationMapState
 import com.stadiamaps.ferrostar.maplibreui.runtime.navigationCameraOptions
-import com.stadiamaps.ferrostar.maplibreui.runtime.rememberNavigationMapState
 import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.SurfaceAreaTracker
 import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.screenSurfaceState
 import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.surfaceStableFractionalPadding
 import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.R
 import com.thealgothrim.overworld.theme.Skin
+import com.thealgothrim.overworld.map.rememberOverworldMapState
 import com.thealgothrim.overworld.map.OverworldCarMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -81,6 +81,7 @@ class CarNavigationScreen(
   private var uiState: NavigationUiState? by mutableStateOf(null)
   private var mapState: NavigationMapState? = null
   private var overviewPadding = PaddingValues()
+  private var overviewedPreview: Any? = null
   private val surfaceAreaTracker = SurfaceAreaTracker { surfaceGestureCallback = it }
 
   init {
@@ -94,6 +95,8 @@ class CarNavigationScreen(
             .launchIn(scope)
     themeStore.theme.onEach { invalidate() }.launchIn(scope)
     themeStore.carGameHud.onEach { invalidate() }.launchIn(scope)
+    // The phone's route preview shows on the car too, with Start and Cancel.
+    viewModel.planner.onEach { invalidate() }.launchIn(scope)
 
     initialDestination?.location?.let {
       viewModel.startNavigation(
@@ -123,7 +126,7 @@ class CarNavigationScreen(
     val cameraOptions =
         navigationCameraOptions()
             .copy(browsingPadding = normalPadding, navigationPadding = trackingPadding, navigationZoom = 16.4)
-    val state = rememberNavigationMapState(navigationCameraOptions = cameraOptions)
+    val state = rememberOverworldMapState(cameraOptions)
     overviewPadding = normalPadding
     mapState = state
 
@@ -191,6 +194,28 @@ class CarNavigationScreen(
 
     // Not navigating: the themed map with Saved and Theme. In game-HUD mode the "Where to?" card is
     // drawn on the map in the theme; otherwise Android Auto shows it as its own message card.
+    val preview = viewModel.planner.value.preview
+    if (preview != null) {
+      if (overviewedPreview !== preview) {
+        overviewedPreview = preview
+        preview.route.geometry.boundingBox()?.let { mapState?.showRouteOverview(boundingBox = it, paddingValues = overviewPadding) }
+      }
+      return NavigationTemplate.Builder()
+          .setActionStrip(
+              ActionStrip.Builder()
+                  .addAction(
+                      Action.Builder()
+                          .setTitle(carContext.getString(R.string.start))
+                          .setFlags(Action.FLAG_PRIMARY)
+                          .setOnClickListener { viewModel.startPreview() }
+                          .build()
+                  )
+                  .addAction(Action.Builder().setTitle(carContext.getString(R.string.cancel)).setOnClickListener { viewModel.cancelPreview() }.build())
+                  .build()
+          )
+          .setMapActionStrip(ActionStrip.Builder().addAction(Action.PAN).build())
+          .build()
+    }
     val idleActions =
         ActionStrip.Builder()
             .addAction(

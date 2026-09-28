@@ -14,6 +14,7 @@ import com.stadiamaps.ferrostar.core.withJsonOptions
 import com.stadiamaps.ferrostar.googleplayservices.FusedNavigationLocationProvider
 import com.thealgothrim.overworld.search.PlaceSearch
 import com.thealgothrim.overworld.search.SavedPlaces
+import com.thealgothrim.overworld.traffic.TrafficService
 import com.thealgothrim.overworld.theme.GameFonts
 import com.thealgothrim.overworld.theme.ThemeStore
 import java.time.Duration
@@ -111,6 +112,8 @@ object AppModule {
   val search: PlaceSearch by lazy { PlaceSearch(httpClient) }
 
   val saved: SavedPlaces by lazy { SavedPlaces(appContext) }
+
+  val traffic: TrafficService by lazy { TrafficService(httpClient) }
 
   val viewModel: OverworldViewModel by lazy { OverworldViewModel() }
 }
