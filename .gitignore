@@ -13,3 +13,6 @@ android/captures/
 # OS
 .DS_Store
 Thumbs.db
+
+# Game screenshots for matching the themes (Rockstar's images, never committed)
+Reference - */

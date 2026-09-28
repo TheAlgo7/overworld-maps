@@ -310,7 +310,8 @@
   ];
   const SCREENS = { compact: [800, 480], wide: [1280, 480] };
 
-  let themeId = THEMES[store.get("ow-theme")] ? store.get("ow-theme") : "metro";
+  const saved = THEMES[store.get("ow-theme")];
+  let themeId = saved && !saved.paused ? saved.id : "metro";
   let screen = SCREENS[store.get("ow-screen")] ? store.get("ow-screen") : "compact";
   let speed = 12, playing = true, follow = true, carZoom = 0;
   let dist = 0, heading = null, seg = 0, lastRouteUpdate = 0, holdUntil = 0;
@@ -426,7 +427,7 @@
     if (!first) { phone.setStyle(styleFor(false)); car.setStyle(styleFor(true)); }
   }
   const nav = document.querySelector(".themes");
-  for (const T of Object.values(THEMES)) {
+  for (const T of Object.values(THEMES).filter((t) => !t.paused)) {
     const b = document.createElement("button");
     b.className = "theme-btn"; b.dataset.theme = T.id;
     const m = T.map;

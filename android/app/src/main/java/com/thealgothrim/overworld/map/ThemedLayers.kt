@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalDensity
@@ -139,7 +140,9 @@ fun ThemedPuck(uiState: NavigationUiState, theme: OverworldTheme, car: Boolean) 
           options = GeoJsonOptions(synchronousUpdate = true),
       )
   val painter =
-      remember(theme.id) { ChevronPainter(theme.puckFill, theme.puckStroke, glow = theme.routeGlow != null) }
+      remember(theme.id) {
+        ChevronPainter(theme.puckFill, theme.puckShade, theme.puckStroke, glow = theme.routeGlow != null)
+      }
   val size = iconSize(if (car) 46.dp else 40.dp)
   SymbolLayer(
       id = "ow-puck",
@@ -154,7 +157,7 @@ fun ThemedPuck(uiState: NavigationUiState, theme: OverworldTheme, car: Boolean) 
   )
 }
 
-/** The waypoint marker: a diamond in the theme's accent. */
+/** The waypoint marker: the theme's blip (four-lobed for Metro Crime, a diamond otherwise). */
 @Composable
 @MaplibreComposable
 fun ThemedDestination(at: GeographicCoordinate, theme: OverworldTheme, id: String = "ow-destination") {
@@ -166,8 +169,12 @@ fun ThemedDestination(at: GeographicCoordinate, theme: OverworldTheme, id: Strin
               )
           )
       )
-  val painter = remember(theme.id) { DiamondPainter(theme.hudAccent, theme.puckStroke) }
-  val size = iconSize(30.dp)
+  val painter =
+      remember(theme.id) {
+        if (theme.blipQuatrefoil) QuatrefoilPainter(theme.blipFill, theme.blipCenter, theme.blipStroke)
+        else DiamondPainter(theme.blipFill, theme.blipStroke)
+      }
+  val size = iconSize(if (theme.blipQuatrefoil) 34.dp else 30.dp)
   SymbolLayer(
       id = id,
       source = source,
@@ -178,14 +185,19 @@ fun ThemedDestination(at: GeographicCoordinate, theme: OverworldTheme, id: Strin
   )
 }
 
-private class ChevronPainter(
+internal class ChevronPainter(
     private val fill: Color,
+    private val shade: Color?,
     private val stroke: Color,
     private val glow: Boolean,
 ) : Painter() {
   override val intrinsicSize: Size = Size.Unspecified
 
   override fun DrawScope.onDraw() {
+    if (shade != null) {
+      drawRadarArrow(shade)
+      return
+    }
     val w = size.width
     val h = size.height
     val path =
@@ -206,6 +218,79 @@ private class ChevronPainter(
     }
     drawPath(path, stroke, style = Stroke(width = base * 1.4f, join = StrokeJoin.Round))
     drawPath(path, fill)
+  }
+
+  /**
+   * The GTA V radar arrow, traced from its radar_centre sprite: a wide arrowhead with a curved
+   * notch at the back, black outline, white left half and grey right half.
+   */
+  private fun DrawScope.drawRadarArrow(shade: Color) {
+    val s = size.minDimension
+    val ox = (size.width - s) / 2f
+    val oy = (size.height - s) / 2f
+    fun p(x: Float, y: Float) = Offset(ox + x * s, oy + y * s)
+    // Kept inside the canvas by half the outline width so nothing clips.
+    val tip = p(0.5f, 0.08f)
+    val right = p(0.9f, 0.91f)
+    val left = p(0.1f, 0.91f)
+    val notch = p(0.5f, 0.69f)
+    val whole =
+        Path().apply {
+          moveTo(tip.x, tip.y)
+          lineTo(right.x, right.y)
+          p(0.62f, 0.69f).let { quadraticTo(it.x, it.y, notch.x, notch.y) }
+          p(0.38f, 0.69f).let { quadraticTo(it.x, it.y, left.x, left.y) }
+          close()
+        }
+    val rightHalf =
+        Path().apply {
+          moveTo(tip.x, tip.y)
+          lineTo(right.x, right.y)
+          p(0.62f, 0.69f).let { quadraticTo(it.x, it.y, notch.x, notch.y) }
+          close()
+        }
+    drawPath(whole, stroke, style = Stroke(width = s * 0.13f, join = StrokeJoin.Miter, miter = 3f))
+    drawPath(whole, fill)
+    drawPath(rightHalf, shade)
+  }
+}
+
+/**
+ * The GTA V waypoint, traced from its radar_waypoint sprite: four pointed petals in the waypoint
+ * colour with black outlines around a dark ring.
+ */
+internal class QuatrefoilPainter(
+    private val fill: Color,
+    private val core: Color,
+    private val stroke: Color,
+) : Painter() {
+  override val intrinsicSize: Size = Size.Unspecified
+
+  override fun DrawScope.onDraw() {
+    val c = Offset(size.width / 2f, size.height / 2f)
+    val s = size.minDimension
+    fun p(x: Float, y: Float) = Offset(c.x + x * s, c.y + y * s)
+    // One petal pointing up; the others are the same shape rotated.
+    val petal =
+        Path().apply {
+          val tip = p(0f, -0.46f)
+          moveTo(tip.x, tip.y)
+          val a = p(0.06f, -0.42f); val b = p(0.14f, -0.35f); val e = p(0.14f, -0.27f)
+          cubicTo(a.x, a.y, b.x, b.y, e.x, e.y)
+          val f = p(0.14f, -0.2f); val g = p(0.1f, -0.15f); val h = p(0.06f, -0.13f)
+          cubicTo(f.x, f.y, g.x, g.y, h.x, h.y)
+          p(-0.06f, -0.13f).let { lineTo(it.x, it.y) }
+          val i = p(-0.1f, -0.15f); val j = p(-0.14f, -0.2f); val k = p(-0.14f, -0.27f)
+          cubicTo(i.x, i.y, j.x, j.y, k.x, k.y)
+          val l = p(-0.14f, -0.35f); val m = p(-0.06f, -0.42f)
+          cubicTo(l.x, l.y, m.x, m.y, tip.x, tip.y)
+          close()
+        }
+    val outline = Stroke(width = s * 0.08f, join = StrokeJoin.Round)
+    for (turn in 0 until 4) rotate(turn * 90f, c) { drawPath(petal, stroke, style = outline) }
+    for (turn in 0 until 4) rotate(turn * 90f, c) { drawPath(petal, fill) }
+    drawCircle(stroke, s * 0.17f, c)
+    drawCircle(core, s * 0.12f, c)
   }
 }
 

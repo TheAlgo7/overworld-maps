@@ -2,13 +2,15 @@
 
 Your real roads drawn like an open-world game map, with turn-by-turn navigation on the phone and on Android Auto. A personal app, built on free map data and free services.
 
-Three original themes (no game artwork, fonts, icons or names):
+Themes. The app draws everything itself: no game artwork, sprites or font files are bundled.
 
-| Theme | Look | In the car |
-|---|---|---|
-| **Metro Crime** | asphalt blocks, pale grey roads, one magenta route | same, wider roads |
-| **Frontier** | parchment, ink roads, double-line highways, hatched forest, railway ties, paper grain | flat parchment, no grain or hatching |
-| **Vice Coast** | night-navy land, sand boulevards, cyan shorelines, coral route with glow | no glow |
+| Theme | Look | In the car | Status |
+|---|---|---|---|
+| **Metro Crime** (GTA V) | the GTA V pause map: near-black land, flat grey roads, grey blocks, ice-pale water, no labels, waypoint-purple route, two-tone radar arrow, four-petal waypoint | same, wider roads | active, matched 2026-09-28 |
+| **Frontier** (RDR2) | parchment, ink roads, double-line highways, hatched forest, railway ties, paper grain | flat parchment, no grain or hatching | next to match |
+| **Vice Coast** (GTA VI) | night-navy land, sand boulevards, cyan shorelines, coral route with glow | no glow | paused (`paused: true` in `themes.js`) until GTA VI's real map UI is public |
+
+**Where the GTA V values come from:** map colours measured from pause-map screenshots (land `#1e1e1e`, blocks `#424242`, roads `#b5b5b5`, water `#bcc7cd` with `#d6dee1` shore); the route and waypoint use the game's documented `HUD_COLOUR_WAYPOINT` `#A44CF2` (dark `#522679`); arrival time uses the health green `#359A47`. The arrow and waypoint shapes are redrawn as vectors from the radar sprites. Reference screenshots live in `Reference - GTA V/` (gitignored). The HUD font is Barlow Condensed as a free stand-in for GTA's commercial Chalet.
 
 ## What's in here
 
@@ -72,6 +74,15 @@ Verified 2026-09-28 on a Galaxy S24 Ultra (Android 16, Android Auto 17.6).
 5. Overworld is in the Android Auto app drawer (nine-dot button). Pick a destination on the phone; turn on **Test drive** to simulate the trip.
 
 If the DHU window sits on "Waiting for phone", stop and start the head unit server again, then relaunch the DHU.
+
+**Test drives from the laptop (debug builds only, works with the phone locked):**
+
+```bat
+adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver -a com.thealgothrim.overworld.DEBUG_DRIVE --es theme metro --ef lat 28.6129 --ef lng 77.2295 --es name "India%sGate"
+adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver -a com.thealgothrim.overworld.DEBUG_STOP
+```
+
+Check map icons (arrow, waypoint) on the real phone or DHU: the emulator's software GPU does not draw runtime-added icons with the OpenGL renderer.
 
 ## Put it in the car (one-time USD 25)
 

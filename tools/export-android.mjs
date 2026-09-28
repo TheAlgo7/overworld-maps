@@ -10,10 +10,13 @@ const root = path.resolve(import.meta.dirname, "..");
 const ctx = { window: {} };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(root, "prototype", "themes.js"), "utf8"), ctx);
-const { THEMES, buildStyle } = ctx.window.Overworld;
+const { THEMES: ALL_THEMES, buildStyle } = ctx.window.Overworld;
+// Paused themes stay in themes.js but don't ship in the app.
+const THEMES = Object.fromEntries(Object.entries(ALL_THEMES).filter(([, t]) => !t.paused));
 
 const app = path.join(root, "android", "app", "src", "main");
 const stylesDir = path.join(app, "assets", "styles");
+fs.rmSync(stylesDir, { recursive: true, force: true });
 fs.mkdirSync(stylesDir, { recursive: true });
 
 for (const t of Object.values(THEMES)) {
@@ -55,7 +58,12 @@ const entries = Object.values(THEMES).map((t) => {
       routeCasing = ${color(r.casing)},
       routeGlow = ${r.glow ? color(r.glow) : "null"},
       puckFill = ${color(t.marker.fill)},
+      puckShade = ${t.marker.shade ? color(t.marker.shade) : "null"},
       puckStroke = ${color(t.marker.stroke)},
+      blipQuatrefoil = ${t.blip?.shape === "quatrefoil"},
+      blipFill = ${color(t.blip?.fill || h.accent)},
+      blipCenter = ${color(t.blip?.center || t.marker.stroke)},
+      blipStroke = ${color(t.blip?.stroke || t.marker.stroke)},
       hudBg = ${color(h.bg)},
       hudFg = ${color(h.fg)},
       hudSub = ${color(h.sub)},

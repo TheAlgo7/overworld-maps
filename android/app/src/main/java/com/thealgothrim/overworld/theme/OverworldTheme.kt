@@ -28,7 +28,14 @@ data class OverworldTheme(
     val routeCasing: Color,
     val routeGlow: Color?,
     val puckFill: Color,
+    /** Right half of the arrow, for the two-tone radar arrow; null draws a single fill. */
+    val puckShade: Color?,
     val puckStroke: Color,
+    /** Waypoint marker: four-lobed blip when true, otherwise a diamond. */
+    val blipQuatrefoil: Boolean,
+    val blipFill: Color,
+    val blipCenter: Color,
+    val blipStroke: Color,
     val hudBg: Color,
     val hudFg: Color,
     val hudSub: Color,

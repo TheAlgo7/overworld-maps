@@ -11,38 +11,48 @@
   // Palettes follow the September 2026 design research (Metro Crime, Frontier, Vice Coast).
   // They are original interpretations: no game artwork, fonts, icons or names.
   const THEMES = {
+    // GTA V. Colours measured 2026-09-28 from Gaurav's screenshots of the game's pause map
+    // ("Game" style) and in-game radar: near-black land, flat grey roads with no outlines,
+    // grey building blocks, no green, pale ice water, no labels, purple GPS route.
     metro: {
       id: "metro",
       name: "Metro Crime",
-      blurb: "Asphalt blocks, pale grey roads, one magenta route. The crime-sandbox pause map.",
-      page: "#111314",
+      blurb: "Near-black land, flat grey roads, ice-pale water, one purple GPS route. The GTA V map.",
+      page: "#111111",
       dark: true,
       map: {
-        land: "#262a2d", residential: "#2b2f32", industrial: "#2e3235",
-        park: "#2f3d31", wood: "#2c3a2f", grass: "#2f3d31", sand: "#3a3a33",
-        water: "#4f7389", waterway: "#4f7389",
-        building: "#34393c", buildingLine: null,
-        rail: "#50565a",
+        land: "#1e1e1e", residential: "#1e1e1e", industrial: "#1e1e1e",
+        park: "#202020", wood: "#202020", grass: "#202020", sand: "#202020",
+        water: "#bcc7cd", waterway: "#bcc7cd",
+        waterLine: "#d6dee1",
+        building: "#424242", buildingLine: null,
+        rail: "#c4cfd5",
         roads: {
-          motorway: { fill: "#d8d8d2", casing: null },
-          major: { fill: "#b9bab5", casing: null },
-          mid: { fill: "#8f9295", casing: null },
-          minor: { fill: "#6a6f72", casing: null },
-          service: { fill: "#565b5e", casing: null },
+          motorway: { fill: "#bcbcbc", casing: null },
+          major: { fill: "#b5b5b5", casing: null },
+          mid: { fill: "#b5b5b5", casing: null },
+          minor: { fill: "#b5b5b5", casing: null },
+          service: { fill: "#9b9d9d", casing: null },
         },
         glow: null,
+        labels: false,
         label: {
           road: "#dcdcd6", roadHalo: "#1c1f21", roadFont: "Noto Sans Regular",
           place: "#f0f0ea", placeHalo: "#16181a", placeFont: "Noto Sans Bold", placeSpacing: 0.08, upper: true,
           water: "#a9c3cf", waterHalo: "#2e4756",
         },
-        route: { line: "#c449c7", casing: "#2e0f30", glow: null },
+        // HUD_COLOUR_WAYPOINT (164, 76, 242) and its dark variant.
+        route: { line: "#a44cf2", casing: "#522679", glow: null },
       },
-      marker: { fill: "#f4f4ef", stroke: "#15181a" },
+      // Radar arrow (radar_centre): white left half, #b3b3b3 right half, black outline.
+      // Waypoint (radar_waypoint): four pointed petals in the waypoint colour, dark ring centre.
+      marker: { fill: "#ffffff", shade: "#b3b3b3", stroke: "#000000" },
+      blip: { shape: "quatrefoil", fill: "#a44cf2", center: "#3a3a3a", stroke: "#000000" },
       hud: {
-        bg: "rgba(20,22,24,0.86)", fg: "#f2f2ee", sub: "#a4a8aa", accent: "#c449c7", good: "#68a94a",
+        // HUD panels: black at ~73%. Health green for arrival, waypoint purple for accents.
+        bg: "rgba(0,0,0,0.73)", fg: "#fefefe", sub: "#b5b5b5", accent: "#a44cf2", good: "#359a47",
         border: "rgba(255,255,255,0.08)", font: "'Barlow Condensed', sans-serif", fontKey: "condensed", weight: 600, upper: true,
-        card: "#5e2560",
+        card: "#522679",
       },
       overlay: null,
     },
@@ -87,6 +97,9 @@
 
     vice: {
       id: "vice",
+      // Paused 2026-09-28: GTA VI's real map UI isn't public yet, so there's nothing to match.
+      // Remove this line to bring it back in the web preview and the app.
+      paused: true,
       name: "Vice Coast",
       blurb: "Night-navy land, sand boulevards, cyan water, one coral route. The beach-city night drive.",
       page: "#0b1520",
@@ -125,7 +138,7 @@
 
   // Road groups over OpenMapTiles transportation classes, drawn bottom to top.
   const GROUPS = [
-    { key: "service", classes: ["service"], minzoom: 14, w: [0, 0, 2.2, 6] },
+    { key: "service", classes: ["service", "track"], minzoom: 14, w: [0, 0, 2.2, 6] },
     { key: "minor", classes: ["minor"], minzoom: 12, w: [0, 0.8, 4, 11] },
     { key: "mid", classes: ["secondary", "tertiary"], minzoom: 9, w: [0.6, 1.8, 6.5, 15] },
     { key: "major", classes: ["trunk", "primary"], minzoom: 6, w: [1, 2.6, 8.5, 19] },
@@ -308,6 +321,7 @@
       paint: { "line-color": R.line, "line-width": ["interpolate", ["linear"], ["zoom"], 10, car ? 4.5 : 3.5, 18, car ? 15 : 12] },
     });
 
+    const firstLabel = layers.length;
     layers.push({
       id: "label-water", type: "symbol", source: "omt", "source-layer": "water_name", minzoom: 11,
       filter: ["match", ["geometry-type"], ["Point", "MultiPoint"], true, false],
@@ -358,6 +372,11 @@
       },
       paint: { "text-color": L.place, "text-halo-color": L.placeHalo, "text-halo-width": 2 },
     });
+    // Label-free themes (the GTA V map shows no names) hide the layers rather than drop them:
+    // the app anchors its route line under "label-water", so that layer must exist.
+    if (m.labels === false) {
+      for (const l of layers.slice(firstLabel)) l.layout = Object.assign({}, l.layout, { visibility: "none" });
+    }
 
     return {
       version: 8,
