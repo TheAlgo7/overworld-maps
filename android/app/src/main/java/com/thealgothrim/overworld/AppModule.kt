@@ -105,7 +105,12 @@ object AppModule {
     core
   }
 
-  val ttsObserver: AndroidTtsObserver by lazy { AndroidTtsObserver(appContext) }
+  /** Spoken turn prompts. Off until turned on (Settings > Voice guidance); the choice is kept. */
+  val ttsObserver: AndroidTtsObserver by lazy {
+    AndroidTtsObserver(appContext).apply {
+      setMuted(!appContext.getSharedPreferences("overworld", Context.MODE_PRIVATE).getBoolean("voice", false))
+    }
+  }
 
   val themeStore: ThemeStore by lazy { ThemeStore(appContext) }
 

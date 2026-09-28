@@ -48,6 +48,7 @@ import org.maplibre.spatialk.geojson.Feature
 import org.maplibre.spatialk.geojson.FeatureCollection
 import org.maplibre.spatialk.geojson.Point
 import uniffi.ferrostar.GeographicCoordinate
+import uniffi.ferrostar.TripState
 
 /** First label layer in every Overworld style; the route is drawn just under it. */
 private const val FIRST_LABEL_LAYER = "label-water"
@@ -68,22 +69,67 @@ internal fun iconSize(size: Dp): Dp {
 private fun widthByZoom(at10: Float, at18: Float) =
     interpolate(linear(), zoom(), 10 to const(at10.dp), 18 to const(at18.dp))
 
+/**
+ * The route while driving: the road still to go in the theme's route colour, starting at the
+ * player marker, and the road already driven left behind as a faded trail, like a breadcrumb in
+ * the games rather than a live route behind the car.
+ */
 fun themedRouteOverlay(theme: OverworldTheme, car: Boolean) =
     RouteOverlayBuilder(
         navigationPath = { uiState: NavigationUiState ->
           val geometry = uiState.routeGeometry
-          if (geometry != null && geometry.size >= 2) ThemedRouteLine(geometry, theme, car)
+          if (geometry != null && geometry.size >= 2) {
+            val ahead = routeAhead(uiState)
+            if (ahead == null) {
+              ThemedRouteLine(geometry, theme, car)
+            } else {
+              RouteTrail(geometry, theme, car)
+              ThemedRouteLine(ahead, theme, car)
+            }
+          }
         }
     )
+
+/** The route from the car's snapped position to the end, or null when not navigating. */
+private fun routeAhead(uiState: NavigationUiState): List<GeographicCoordinate>? {
+  val trip = uiState.tripState as? TripState.Navigating ?: return null
+  val steps = trip.remainingSteps
+  if (steps.isEmpty()) return null
+  val index = trip.currentStepGeometryIndex?.toInt() ?: 0
+  val points = mutableListOf(trip.snappedUserLocation.coordinates)
+  points += steps.first().geometry.drop(index + 1)
+  // Each step starts where the last one ended; skip the repeated point.
+  for (step in steps.drop(1)) points += step.geometry.drop(1)
+  return points.takeIf { it.size >= 2 }
+}
+
+private fun lineJson(points: List<GeographicCoordinate>): String {
+  val coords = points.joinToString(",") { "[${it.lng},${it.lat}]" }
+  return """{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},"geometry":{"type":"LineString","coordinates":[$coords]}}]}"""
+}
+
+/** The whole route, dark and thin: what stays visible of the road already driven. */
+@Composable
+@MaplibreComposable
+private fun RouteTrail(points: List<GeographicCoordinate>, theme: OverworldTheme, car: Boolean) {
+  val json = remember(points) { lineJson(points) }
+  val source = rememberGeoJsonSource(GeoJsonData.JsonString(json))
+  Anchor.Below(FIRST_LABEL_LAYER) {
+    LineLayer(
+        id = "ow-route-trail",
+        source = source,
+        color = const(theme.routeCasing.copy(alpha = 0.55f)),
+        width = widthByZoom(if (car) 3f else 2.5f, if (car) 9f else 7f),
+        cap = const(LineCap.Round),
+        join = const(LineJoin.Round),
+    )
+  }
+}
 
 @Composable
 @MaplibreComposable
 fun ThemedRouteLine(points: List<GeographicCoordinate>, theme: OverworldTheme, car: Boolean) {
-  val json =
-      remember(points) {
-        val coords = points.joinToString(",") { "[${it.lng},${it.lat}]" }
-        """{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},"geometry":{"type":"LineString","coordinates":[$coords]}}]}"""
-      }
+  val json = remember(points) { lineJson(points) }
   val source = rememberGeoJsonSource(GeoJsonData.JsonString(json))
   Anchor.Below(FIRST_LABEL_LAYER) {
     val glow = theme.routeGlow

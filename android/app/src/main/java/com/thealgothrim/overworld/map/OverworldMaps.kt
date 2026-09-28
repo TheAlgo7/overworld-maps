@@ -144,7 +144,8 @@ fun OverworldCarMap(
       val preview = planner.preview
       if (!state.isNavigating() && preview != null) ThemedRouteLine(preview.route.geometry, theme, car = true)
       RoadFeatureLayers(visibleFeatures(extras, details), theme, car = true)
-      state.routeGeometry?.lastOrNull()?.let { ThemedDestination(it, theme) }
+      val end = state.routeGeometry?.lastOrNull() ?: preview?.route?.geometry?.lastOrNull()
+      end?.let { ThemedDestination(it, theme) }
       ThemedPuck(state, theme, car = true)
     }
 

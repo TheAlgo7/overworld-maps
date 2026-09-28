@@ -77,7 +77,7 @@ fun SettingsScreen(
               else "Android Auto shows its own turn and ETA cards, in the theme's colour.",
               value = if (carGameHud) "Game HUD" else "Android Auto",
           ) { store.setCarGameHud(!carGameHud) },
-          Setting("Voice guidance", "Spoken turn instructions while driving.", checked = uiState.isMuted != true) { onMute() },
+          Setting("Voice guidance", "Spoken turn instructions while driving. Off unless you turn it on.", checked = !(uiState.isMuted ?: AppModule.ttsObserver.isMuted)) { onMute() },
           Setting(
               "Test drive",
               "Simulates the trip along the route instead of using GPS. For trying things out without driving.",

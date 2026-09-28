@@ -4,13 +4,19 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -26,19 +32,19 @@ import com.thealgothrim.overworld.theme.OverworldTheme
 import com.thealgothrim.overworld.ui.gta.GtaText
 import com.thealgothrim.overworld.ui.rdr.Rdr
 import com.thealgothrim.overworld.ui.rdr.RdrText
+import com.thealgothrim.overworld.ui.skin.GameIcon
+import com.thealgothrim.overworld.ui.skin.SkinPrimaryButton
+import com.thealgothrim.overworld.ui.skin.SkinSecondaryButton
 import com.thealgothrim.overworld.ui.skin.SkinSpec
 import com.thealgothrim.overworld.ui.skin.SkinText
 import com.thealgothrim.overworld.ui.skin.skinPanel
 import com.thealgothrim.overworld.ui.skin.spec
 
-/** Room kept clear for Android Auto's own buttons: the action strip on top, map buttons on the right. */
-private val TOP_CLEAR = 84.dp
-private val RIGHT_CLEAR = 92.dp
-
 /**
- * The game HUD on the Android Auto screen, placed where Google Maps puts things on a right-hand
- * drive car like the Curvv: turn card and alerts top-right by the driver, time card bottom-right,
- * speed bottom-left, street along the bottom. Android Auto's cards are not sent in this mode.
+ * The game HUD on the Android Auto screen. Ours is the left side, Android Auto's the right: turn
+ * card and road alerts top-left, time card and speedometer bottom-left, street name along the
+ * bottom. Android Auto's buttons, action strip and rail keep the right. Its own cards are not sent
+ * in this mode.
  */
 @Composable
 fun BoxScope.CarGameHud(
@@ -53,43 +59,43 @@ fun BoxScope.CarGameHud(
   val spec = theme.spec
   val progress = uiState.progress
   if (!uiState.isNavigating() || progress == null) {
-    if (preview != null) PreviewCard(spec, preview, extras, Modifier.align(Alignment.TopEnd).padding(top = TOP_CLEAR, end = RIGHT_CLEAR))
-    else IdleCard(spec, Modifier.align(Alignment.TopEnd).padding(top = TOP_CLEAR, end = RIGHT_CLEAR))
+    if (preview != null) PreviewCard(spec, preview, extras, Modifier.align(Alignment.TopStart))
+    else IdleCard(spec, Modifier.align(Alignment.TopStart))
     return
   }
 
-  Column(Modifier.align(Alignment.TopEnd).padding(top = TOP_CLEAR, end = RIGHT_CLEAR), horizontalAlignment = Alignment.End) {
+  Column(Modifier.align(Alignment.TopStart)) {
     TurnCard(spec, uiState)
-    hazard?.let { HazardStrip(spec, it, Modifier.padding(top = 8.dp).widthIn(min = 300.dp, max = 440.dp), textSize = 20.sp, icon = 40.dp) }
+    hazard?.let { HazardStrip(spec, it, Modifier.padding(top = 8.dp).widthIn(min = 300.dp, max = 420.dp), textSize = 20.sp, icon = 40.dp) }
   }
 
-  SpeedBadge(spec, uiState, Modifier.align(Alignment.BottomStart), big = true)
-
-  val street = listOfNotNull(uiState.currentStepRoadName?.takeIf { it.isNotBlank() }, area)
-  if (street.isNotEmpty()) {
-    Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp, end = 280.dp)) {
-      if (spec.gta) {
-        GtaText(street.joinToString("  |  "), 24.sp, align = TextAlign.Center)
-      } else {
-        RdrText(
-            street.joinToString(",  ").uppercase(),
-            20.sp,
-            Modifier.skinPanel(spec, elevated = false).padding(horizontal = 18.dp, vertical = 6.dp),
-            color = Rdr.GreyLight,
-            align = TextAlign.Center,
-            spacing = 1.sp,
-        )
+  Row(Modifier.align(Alignment.BottomStart).fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+    val left = remaining ?: progress.durationRemaining
+    Column(Modifier.widthIn(min = 230.dp).skinPanel(spec).padding(horizontal = 18.dp, vertical = 12.dp)) {
+      SkinText(formatDuration(left).uppercase(), spec.big, 34.sp, spec.trafficColor(extras.eta))
+      SkinText("${arrivalClock(left)}  ·  ${formatDistance(progress.distanceRemaining)}", spec.body, 19.sp, spec.fg)
+      trafficNote(extras.eta)?.let { SkinText(it, spec.body, 16.sp, spec.sub) }
+    }
+    SpeedBadge(spec, uiState, Modifier.padding(start = 12.dp), big = true)
+    Box(Modifier.weight(1f).padding(bottom = 6.dp), contentAlignment = Alignment.Center) {
+      val street = listOfNotNull(uiState.currentStepRoadName?.takeIf { it.isNotBlank() }, area)
+      if (street.isNotEmpty()) {
+        if (spec.gta) {
+          GtaText(street.joinToString("  |  "), 24.sp, align = TextAlign.Center)
+        } else {
+          RdrText(
+              street.joinToString(",  ").uppercase(),
+              20.sp,
+              Modifier.skinPanel(spec, elevated = false).padding(horizontal = 18.dp, vertical = 6.dp),
+              color = Rdr.GreyLight,
+              align = TextAlign.Center,
+              spacing = 1.sp,
+          )
+        }
       }
     }
-  }
-
-  val left = remaining ?: progress.durationRemaining
-  Column(
-      Modifier.align(Alignment.BottomEnd).padding(end = RIGHT_CLEAR).widthIn(min = 260.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 12.dp)
-  ) {
-    SkinText(formatDuration(left).uppercase(), spec.big, 36.sp, spec.trafficColor(extras.eta))
-    SkinText("${formatDistance(progress.distanceRemaining)}  ·  ${arrivalClock(left)}", spec.body, 20.sp, spec.fg)
-    trafficNote(extras.eta)?.let { SkinText(it, spec.body, 16.sp, spec.sub) }
+    // Keeps the street name clear of Android Auto's map buttons on the right.
+    Spacer(Modifier.width(96.dp))
   }
 }
 
@@ -101,8 +107,9 @@ private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState) {
   val next = uiState.remainingSteps?.getOrNull(1)
   val then = next?.visualInstructions?.firstOrNull()?.primaryContent?.takeIf { next.distance < 500 }
 
-  Column(Modifier.widthIn(min = 320.dp, max = 440.dp)) {
-    Row(Modifier.skinPanel(spec).padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+  // The panel and its "Then" strip share one width.
+  Column(Modifier.width(IntrinsicSize.Max).widthIn(min = 300.dp, max = 420.dp)) {
+    Row(Modifier.fillMaxWidth().skinPanel(spec).padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
       Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) { content?.let { ManeuverImage(it, tint = spec.fg) } }
       Spacer(Modifier.width(16.dp))
       Column {
@@ -116,7 +123,7 @@ private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState) {
     }
     then?.let {
       Row(
-          Modifier.background(if (spec.gta) Color(0xF2111111) else Color(0xF2211B16)).padding(horizontal = 18.dp, vertical = 8.dp),
+          Modifier.fillMaxWidth().background(if (spec.gta) Color(0xF2111111) else Color(0xF2211B16)).padding(horizontal = 18.dp, vertical = 8.dp),
           verticalAlignment = Alignment.CenterVertically,
       ) {
         SkinText("Then", spec.body, 18.sp, spec.sub)
@@ -127,31 +134,58 @@ private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState) {
   }
 }
 
-/** Mirrors the phone's route preview, like Google's card: place, time, arrival; Start in the strip. */
+/**
+ * Where the car screen's drawn buttons are, in surface pixels. Android Auto hands map taps to the
+ * app (see passTapsTo); the car screen checks them against these.
+ */
+object CarTapTargets {
+  @Volatile var start: Rect? = null
+  @Volatile var cancel: Rect? = null
+}
+
+/** The phone's route preview on the car, in the theme: place, time, the road's details, Start. */
 @Composable
 private fun PreviewCard(spec: SkinSpec, preview: RoutePreview, extras: RouteExtras, modifier: Modifier) {
   val seconds = extras.eta?.travelSeconds ?: preview.durationSeconds
-  Column(modifier.widthIn(min = 320.dp, max = 460.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 16.dp)) {
-    SkinText(spec.title(preview.place.name), spec.title, if (spec.gta) 28.sp else 32.sp, spec.fg, maxLines = 2, spacing = if (spec.gta) 0.sp else 1.sp)
-    if (preview.place.detail.isNotBlank()) SkinText(preview.place.detail, spec.body, 18.sp, spec.sub, maxLines = 1)
-    Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.Bottom) {
+  DisposableEffect(Unit) {
+    onDispose {
+      CarTapTargets.start = null
+      CarTapTargets.cancel = null
+    }
+  }
+  Column(modifier.width(420.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 16.dp)) {
+    SkinText(spec.title(preview.place.name), spec.title, if (spec.gta) 28.sp else 30.sp, spec.fg, maxLines = 2, spacing = if (spec.gta) 0.sp else 1.sp)
+    Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.Bottom) {
       SkinText(formatDuration(seconds).uppercase(), spec.big, 32.sp, spec.trafficColor(extras.eta))
       Spacer(Modifier.width(10.dp))
       SkinText("${formatDistance(preview.distanceMeters)}  ·  ${arrivalClock(seconds)}", spec.body, 19.sp, spec.fg, Modifier.padding(bottom = 3.dp))
     }
     val facts =
         listOfNotNull(
-            trafficNote(extras.eta),
+            preview.via?.let { "via $it" },
             extras.lightsOnRoute.takeIf { it > 0 }?.let { "$it traffic lights" },
             extras.incidentsOnRoute.size.takeIf { it > 0 }?.let { "$it incident${if (it == 1) "" else "s"}" },
+            trafficNote(extras.eta),
         )
-    if (facts.isNotEmpty()) SkinText(facts.joinToString("  ·  "), spec.body, 17.sp, spec.sub, Modifier.padding(top = 4.dp))
+    if (facts.isNotEmpty()) SkinText(facts.joinToString("  ·  "), spec.body, 17.sp, spec.sub, Modifier.padding(top = 2.dp), maxLines = 2)
+    Row(Modifier.padding(top = 14.dp)) {
+      SkinPrimaryButton(
+          spec, spec.title("Start"), {},
+          Modifier.weight(1f).onGloballyPositioned { CarTapTargets.start = it.boundsInRoot() },
+          icon = GameIcon.NAVIGATE,
+      )
+      Spacer(Modifier.width(10.dp))
+      SkinSecondaryButton(
+          spec, spec.title("Cancel"), {},
+          Modifier.onGloballyPositioned { CarTapTargets.cancel = it.boundsInRoot() },
+      )
+    }
   }
 }
 
 @Composable
 private fun IdleCard(spec: SkinSpec, modifier: Modifier) {
-  Column(modifier.widthIn(max = 440.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 16.dp)) {
+  Column(modifier.widthIn(max = 420.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 16.dp)) {
     SkinText(spec.title("Where to?"), spec.title, if (spec.gta) 28.sp else 32.sp, spec.fg, spacing = if (spec.gta) 0.sp else 1.sp)
     SkinText("Pick a place on your phone, or open Saved.", spec.body, 19.sp, spec.sub, Modifier.padding(top = 4.dp), maxLines = 2)
   }

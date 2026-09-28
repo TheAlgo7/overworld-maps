@@ -292,6 +292,12 @@ class OverworldViewModel :
     }
   }
 
+  /** Voice guidance on or off, remembered for next time (it starts off). */
+  override fun toggleMute() {
+    super.toggleMute()
+    prefs.edit().putBoolean("voice", !AppModule.ttsObserver.isMuted).apply()
+  }
+
   fun cancelPreview() {
     _planner.value = _planner.value.copy(preview = null)
     if (!navigationUiState.value.isNavigating()) {
