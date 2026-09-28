@@ -1,0 +1,5 @@
+// Versions match Ferrostar 0.57.0 so its prebuilt modules line up (AGP 9 builds Kotlin itself).
+plugins {
+    id 'com.android.application' version '9.0.1' apply false
+    id 'org.jetbrains.kotlin.plugin.compose' version '2.3.20' apply false
+}

@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en" data-theme="metro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overworld Maps</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/maplibre-gl.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&family=Chakra+Petch:ital,wght@1,600&family=IM+Fell+English:ital@0;1&display=swap">
+<style>
+  :root {
+    --page: #111314;
+    --ink: #eceeef;
+    --ink-2: #9ea3a6;
+    --line: rgba(255, 255, 255, 0.1);
+    --surface: rgba(255, 255, 255, 0.045);
+    --hud-bg: rgba(17, 19, 20, 0.84);
+    --hud-fg: #f2f3f3;
+    --hud-sub: #a9adb0;
+    --hud-accent: #c449c7;
+    --hud-border: rgba(255, 255, 255, 0.08);
+    --hud-font: 'Barlow Condensed', sans-serif;
+    --hud-weight: 600;
+    --hud-case: uppercase;
+    --aa-card: #5e2560;
+    --mk-fill: #f4f4f4;
+    --mk-stroke: #1a1c1d;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font: 400 15px/1.5 'Barlow', system-ui, sans-serif;
+    transition: background-color 0.5s ease;
+    min-height: 100vh;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+
+  .top {
+    display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+    gap: 20px 32px; padding: 28px 32px 8px; max-width: 1440px; margin: 0 auto;
+  }
+  .brand h1 {
+    margin: 0; font-family: var(--hud-font); font-weight: var(--hud-weight);
+    text-transform: var(--hud-case); font-size: 44px; line-height: 1; letter-spacing: 0.01em;
+  }
+  .brand p { margin: 8px 0 0; color: var(--ink-2); max-width: 46ch; }
+
+  .themes { display: flex; gap: 8px; flex-wrap: wrap; }
+  .theme-btn {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px 10px 10px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    transition: border-color 0.2s, background-color 0.2s;
+  }
+  .theme-btn:hover { border-color: rgba(255, 255, 255, 0.22); }
+  .theme-btn[aria-pressed="true"] { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.45); }
+  .swatch { display: grid; grid-template-columns: repeat(3, 10px); height: 26px; border-radius: 6px; overflow: hidden; }
+  .theme-btn b { font-weight: 600; }
+  .blurb { max-width: 1440px; margin: 0 auto; padding: 6px 32px 0; color: var(--ink-2); min-height: 1.5em; }
+
+  .stage {
+    display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 32px;
+    max-width: 1440px; margin: 0 auto; padding: 22px 32px 8px; align-items: start;
+  }
+  .caption { color: var(--ink-2); font-size: 14px; margin: 12px 4px 0; max-width: 70ch; }
+  .caption b { color: var(--ink); font-weight: 600; }
+
+  /* Phone */
+  .phone {
+    position: relative; width: min(380px, 100%); aspect-ratio: 380 / 800;
+    border: 10px solid #050506; border-radius: 44px; overflow: hidden; background: #000;
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+  .map { position: absolute; inset: 0; }
+  .overlay { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.4s; }
+  html[data-overlay="paper"] .phone .overlay {
+    opacity: 1; mix-blend-mode: multiply;
+    background-image:
+      radial-gradient(ellipse at 50% 45%, transparent 52%, rgba(74, 48, 22, 0.42) 100%),
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .33 0 0 0 0 .23 0 0 0 0 .1 0 0 0 .5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  .hud {
+    position: absolute; font-family: var(--hud-font); font-weight: var(--hud-weight);
+    color: var(--hud-fg); pointer-events: none;
+  }
+  .hud-banner {
+    top: 12px; left: 12px; right: 12px; display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px; border-radius: 16px; background: var(--hud-bg);
+    border: 1px solid var(--hud-border); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  }
+  html[data-theme="frontier"] .hud-banner { box-shadow: inset 0 0 0 3px var(--hud-bg), inset 0 0 0 4px var(--hud-border), 0 8px 24px rgba(0, 0, 0, 0.25); }
+  .hud-banner .icon { width: 46px; height: 46px; flex: none; color: var(--hud-accent); }
+  .hud-banner .dist { font-size: 30px; line-height: 1; text-transform: none; }
+  .hud-banner .text { font-size: 17px; line-height: 1.2; color: var(--hud-sub); margin-top: 3px; text-transform: none; }
+  .hud-street {
+    left: 16px; right: 52px; bottom: 66px; font-size: 22px; line-height: 1.1;
+    text-transform: var(--hud-case); letter-spacing: 0.02em;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8), 0 0 10px rgba(0, 0, 0, 0.5);
+  }
+  html[data-theme="frontier"] .hud-street { color: #33251a; text-shadow: 0 0 6px #efe4c8, 0 0 2px #efe4c8; font-style: italic; }
+  .hud-eta {
+    left: 12px; right: 12px; bottom: 12px; display: flex; justify-content: space-between; align-items: baseline;
+    padding: 10px 16px; border-radius: 14px; background: var(--hud-bg); border: 1px solid var(--hud-border);
+    font-size: 18px;
+  }
+  .hud-eta .big { font-size: 22px; color: var(--hud-accent); }
+  .hud-eta span { color: var(--hud-sub); }
+  .recenter {
+    position: absolute; right: 14px; bottom: 110px; padding: 9px 14px; border-radius: 12px;
+    background: var(--hud-bg); color: var(--hud-fg); border: 1px solid var(--hud-border);
+    font-family: var(--hud-font); font-weight: var(--hud-weight); text-transform: var(--hud-case); font-size: 16px;
+  }
+  .recenter[hidden] { display: none; }
+
+  /* Markers */
+  .puck svg { display: block; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45)); }
+  .puck path { fill: var(--mk-fill); stroke: var(--mk-stroke); stroke-width: 2.4; stroke-linejoin: round; }
+  html[data-theme="vice"] .puck svg { filter: drop-shadow(0 0 6px #27e6ff) drop-shadow(0 0 2px #27e6ff); }
+  .blip { width: 22px; height: 22px; transform: rotate(45deg); background: var(--hud-accent); border: 3px solid var(--mk-stroke); border-radius: 4px; }
+
+  /* Car */
+  .car-viewport { position: relative; width: 100%; overflow: hidden; border-radius: 22px; }
+  .car {
+    position: absolute; top: 0; left: 0; transform-origin: top left;
+    display: flex; background: #000; border: 12px solid #070708; border-radius: 22px; overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+  .aa-rail {
+    flex: none; width: 76px; background: #0f0f10; display: flex; flex-direction: column; align-items: center;
+    gap: 18px; padding: 16px 0; color: #e8eaed; font: 500 17px/1 'Barlow', sans-serif;
+  }
+  .aa-rail .dot { width: 40px; height: 40px; border-radius: 50%; background: #2a2b2d; display: grid; place-items: center; }
+  .aa-rail .dot.on { background: #3a3b3e; }
+  .aa-rail .dot i { width: 16px; height: 16px; border-radius: 4px; background: #9aa0a6; display: block; }
+  .aa-rail .grow { flex: 1; }
+  .car-map-area { position: relative; flex: 1; }
+  .aa { position: absolute; font-family: 'Barlow', sans-serif; color: #fff; }
+  .aa-turn {
+    top: 14px; left: 14px; width: 300px; border-radius: 18px; overflow: hidden;
+    background: var(--aa-card); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  }
+  .aa-turn .row { display: flex; gap: 14px; align-items: center; padding: 16px 18px 12px; }
+  .aa-turn .icon { width: 52px; height: 52px; flex: none; color: #fff; }
+  .aa-turn .dist { font-size: 30px; font-weight: 600; line-height: 1; }
+  .aa-turn .road { font-size: 18px; line-height: 1.2; margin-top: 4px; color: rgba(255, 255, 255, 0.85); }
+  .aa-turn .then { display: flex; align-items: center; gap: 8px; padding: 8px 18px; background: rgba(0, 0, 0, 0.28); font-size: 15px; color: rgba(255, 255, 255, 0.8); }
+  .aa-turn .then .icon { width: 20px; height: 20px; }
+  .aa-eta {
+    left: 14px; bottom: 14px; display: flex; gap: 16px; align-items: baseline; padding: 12px 18px;
+    border-radius: 16px; background: #202124; font-size: 17px; color: #e8eaed; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  }
+  .aa-eta b { font-size: 22px; font-weight: 600; color: #8ee6a3; }
+  .aa-actions { right: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .aa-actions button {
+    width: 52px; height: 52px; border-radius: 50%; border: 0; background: #202124; color: #e8eaed;
+    font: 500 24px/1 'Barlow', sans-serif; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); display: grid; place-items: center;
+  }
+  .aa-actions svg { width: 24px; height: 24px; }
+
+  /* Controls */
+  .controls {
+    max-width: 1440px; margin: 0 auto; padding: 18px 32px 8px;
+    display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center;
+  }
+  .group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .group > label { color: var(--ink-2); font-size: 14px; margin-right: 2px; }
+  .btn {
+    padding: 8px 14px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line);
+    font-weight: 500; font-size: 14px;
+  }
+  .btn:hover { border-color: rgba(255, 255, 255, 0.25); }
+  .btn[aria-pressed="true"] { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.45); }
+  .btn.primary { background: var(--ink); color: var(--page); border-color: var(--ink); font-weight: 600; min-width: 84px; }
+  .scrub { display: flex; align-items: center; gap: 12px; flex: 1 1 320px; min-width: 240px; }
+  .scrub input { flex: 1; accent-color: var(--hud-accent); }
+  .scrub output { color: var(--ink-2); font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  footer {
+    max-width: 1440px; margin: 0 auto; padding: 18px 32px 40px; color: var(--ink-2); font-size: 13px;
+  }
+  footer p { margin: 4px 0; max-width: 110ch; }
+  footer a { color: inherit; }
+
+  .maplibregl-ctrl-attrib.maplibregl-compact { margin: 0 6px 6px 0; background: rgba(255, 255, 255, 0.72); }
+  .phone .maplibregl-ctrl-bottom-right { bottom: 62px; }
+  .car .maplibregl-ctrl-bottom-right { right: 76px; }
+
+  @media (max-width: 1100px) {
+    .stage { grid-template-columns: minmax(0, 1fr); }
+    .phone-wrap { display: flex; flex-direction: column; align-items: center; }
+  }
+  @media (max-width: 640px) {
+    .top, .stage, .controls, footer, .blurb { padding-left: 16px; padding-right: 16px; }
+    .brand h1 { font-size: 36px; }
+    .phone { border-width: 6px; border-radius: 30px; }
+    .car { border-width: 8px; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>Overworld</h1>
+    <p>Your real roads, drawn like a game map. Same theme on the phone and on the Android Auto screen.</p>
+  </div>
+  <nav class="themes" aria-label="Map theme"></nav>
+</header>
+<p class="blurb" id="blurb"></p>
+
+<main class="stage">
+  <section class="phone-wrap">
+    <div class="phone" id="phone">
+      <div id="phone-map" class="map"></div>
+      <div class="overlay"></div>
+      <div class="hud hud-banner">
+        <div class="icon" id="p-icon"></div>
+        <div><div class="dist" id="p-dist"></div><div class="text" id="p-text"></div></div>
+      </div>
+      <div class="hud hud-street" id="p-street"></div>
+      <div class="hud hud-eta"><div class="big" id="p-time"></div><span id="p-km"></span><span id="p-arrive"></span></div>
+      <button class="recenter" id="recenter" hidden>Recenter</button>
+    </div>
+    <p class="caption"><b>Phone.</b> Everything here is the app's own: map style, arrow, banner. Drag the map to explore; it stops following until you recenter.</p>
+  </section>
+
+  <section class="car-wrap">
+    <div class="car-viewport" id="car-viewport">
+      <div class="car" id="car">
+        <aside class="aa-rail" aria-hidden="true">
+          <div id="clock">10:42</div>
+          <div class="dot on"><i style="border-radius:50%"></i></div>
+          <div class="dot"><i></i></div>
+          <div class="dot"><i style="border-radius:2px 8px"></i></div>
+          <div class="grow"></div>
+          <div class="dot"><i style="width:18px;height:18px;border-radius:3px;background:none;box-shadow:inset 0 0 0 3px #9aa0a6"></i></div>
+        </aside>
+        <div class="car-map-area">
+          <div id="car-map" class="map"></div>
+          <div class="aa aa-turn">
+            <div class="row"><div class="icon" id="c-icon"></div><div><div class="dist" id="c-dist"></div><div class="road" id="c-road"></div></div></div>
+            <div class="then" id="c-then-row"><span>Then</span><div class="icon" id="c-then"></div></div>
+          </div>
+          <div class="aa aa-eta"><b id="c-arrive"></b><span id="c-time"></span><span id="c-km"></span></div>
+          <div class="aa aa-actions">
+            <button id="zin" aria-label="Zoom in">+</button>
+            <button id="zout" aria-label="Zoom out">&minus;</button>
+            <button id="zre" aria-label="Recenter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="caption"><b>Android Auto, simulated.</b> The dark rail, the ETA box and the round buttons are drawn by Android Auto itself from the app's turn data, and the app may only tint the turn card. The map underneath is ours, using a calmer car cut of the same theme: wider roads, no texture or glow, fewer labels.</p>
+  </section>
+</main>
+
+<section class="controls">
+  <div class="group">
+    <button class="btn primary" id="play">Pause</button>
+    <button class="btn" id="restart">Restart</button>
+  </div>
+  <div class="scrub">
+    <input type="range" id="scrub" min="0" step="1" aria-label="Position on route">
+    <output id="scrub-out"></output>
+  </div>
+  <div class="group" id="speed">
+    <label>Speed</label>
+    <button class="btn" data-speed="4">4&times;</button>
+    <button class="btn" data-speed="12">12&times;</button>
+    <button class="btn" data-speed="40">40&times;</button>
+  </div>
+  <div class="group" id="screen">
+    <label>Car screen</label>
+    <button class="btn" data-screen="compact">7 inch, 800&times;480</button>
+    <button class="btn" data-screen="wide">10 inch wide, 1920&times;720</button>
+  </div>
+  <div class="group" id="places">
+    <label>Explore on phone</label>
+  </div>
+</section>
+
+<footer>
+  <p>Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, tiles from <a href="https://openfreemap.org">OpenFreeMap</a> (OpenMapTiles schema). Route recorded once from the OSRM demo server: Chhatarpur to India Gate.</p>
+  <p>The three themes are original work inspired by open-world game maps. No game artwork, icons, fonts or names are used.</p>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/maplibre-gl.js"></script>
+<script src="route.js"></script>
+<script src="themes.js"></script>
+<script>
+(function () {
+  const { THEMES, buildStyle, patternImage } = window.Overworld;
+  const R = window.OW_ROUTE;
+  const $ = (id) => document.getElementById(id);
+
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  };
+
+  const PLACES = [
+    { name: "Chhatarpur", c: [77.1749, 28.5068], z: 15.5 },
+    { name: "Hauz Khas Lake", c: [77.1942, 28.5539], z: 15.6 },
+    { name: "Connaught Place", c: [77.2167, 28.6315], z: 15.4 },
+    { name: "India Gate", c: [77.2295, 28.6129], z: 15.2 },
+    { name: "Yamuna at ITO", c: [77.2575, 28.6285], z: 14.2 },
+    { name: "Alwar", c: [76.6346, 27.5530], z: 13.5 },
+  ];
+  const SCREENS = { compact: [800, 480], wide: [1280, 480] };
+
+  let themeId = THEMES[store.get("ow-theme")] ? store.get("ow-theme") : "metro";
+  let screen = SCREENS[store.get("ow-screen")] ? store.get("ow-screen") : "compact";
+  let speed = 12, playing = true, follow = true, carZoom = 0;
+  let dist = 0, heading = null, seg = 0, lastRouteUpdate = 0, holdUntil = 0;
+
+  // ---------- geometry ----------
+  function segmentAt(d) {
+    const cum = R.cum;
+    if (d <= 0) return 0;
+    if (d >= cum[cum.length - 1]) return cum.length - 2;
+    if (!(cum[seg] <= d && d < cum[seg + 1])) {
+      let lo = 0, hi = cum.length - 2;
+      while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (cum[mid] <= d) lo = mid; else hi = mid - 1; }
+      seg = lo;
+    }
+    return seg;
+  }
+  function pointAt(d) {
+    const i = segmentAt(d), a = R.coords[i], b = R.coords[i + 1];
+    const len = R.cum[i + 1] - R.cum[i] || 1;
+    const t = Math.min(1, Math.max(0, (d - R.cum[i]) / len));
+    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  }
+  function bearing(a, b) {
+    const r = Math.PI / 180, y = Math.sin((b[0] - a[0]) * r) * Math.cos(b[1] * r);
+    const x = Math.cos(a[1] * r) * Math.sin(b[1] * r) - Math.sin(a[1] * r) * Math.cos(b[1] * r) * Math.cos((b[0] - a[0]) * r);
+    return (Math.atan2(y, x) / r + 360) % 360;
+  }
+  function lerpAngle(a, b, t) { const d = ((b - a + 540) % 360) - 180; return (a + d * t + 360) % 360; }
+  function remainingLine(d) {
+    const i = segmentAt(d);
+    const coords = [pointAt(d)].concat(R.coords.slice(i + 1));
+    return { type: "FeatureCollection", features: [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coords } }] };
+  }
+
+  // ---------- formatting ----------
+  const fmtDist = (m) => (m < 950 ? `${Math.max(10, Math.round(m / 10) * 10)} m` : `${(m / 1000).toFixed(1)} km`);
+  const fmtClock = (date) => date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
+  function maneuverSVG(kind) {
+    const P = {
+      straight: "M24 42V8M13 19 24 8l11 11",
+      right: "M15 42V26q0-10 10-10h13M29 7l9 9-9 9",
+      left: "M33 42V26q0-10-10-10H10M19 7l-9 9 9 9",
+      "slight-right": "M17 42V29L33 13M22 11h12v12",
+      "slight-left": "M31 42V29L15 13M26 11H14v12",
+      "sharp-right": "M17 42V12l17 18M35 19v12H23",
+      "sharp-left": "M31 42V12L14 30M13 19v12h12",
+      uturn: "M15 42V19q0-11 10-11t10 11v13M27 26l8 8 8-8",
+      roundabout: "M24 42V30M24 30a8 8 0 1 1 5.7-2.3M29 12l8-8M29 4h8v8",
+      arrive: "M14 42V7M14 8h20l-5 7 5 7H14",
+    };
+    return `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"><path d="${P[kind] || P.straight}"/></svg>`;
+  }
+
+  // ---------- maps ----------
+  function styleFor(car) {
+    const s = buildStyle(THEMES[themeId], { car });
+    s.sources.route.data = remainingLine(dist);
+    return s;
+  }
+  function onMissingImage(map) {
+    return (e) => { const img = patternImage(e.id); if (img && !map.hasImage(e.id)) map.addImage(e.id, img); };
+  }
+  const start = R.coords[0];
+  const phone = new maplibregl.Map({
+    container: "phone-map", style: styleFor(false), center: start, zoom: 16, pitch: 50,
+    attributionControl: { compact: true }, maxPitch: 70, fadeDuration: 150,
+  });
+  const car = new maplibregl.Map({
+    container: "car-map", style: styleFor(true), center: start, zoom: 16, pitch: 45,
+    interactive: false, attributionControl: { compact: true }, fadeDuration: 150,
+  });
+  phone.on("styleimagemissing", onMissingImage(phone));
+  car.on("styleimagemissing", onMissingImage(car));
+  // Keep the attribution as the small (i) button so it never covers the HUD.
+  for (const m of [phone, car]) {
+    m.on("load", () => m.getContainer().querySelectorAll(".maplibregl-compact-show").forEach((el) => el.classList.remove("maplibregl-compact-show")));
+  }
+
+  const PUCK = '<svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M20 3 34 35 20 27.5 6 35Z"/></svg>';
+  function puck(size) {
+    const el = document.createElement("div");
+    el.className = "puck"; el.style.width = el.style.height = `${size}px`; el.innerHTML = PUCK;
+    return el;
+  }
+  function blip() { const el = document.createElement("div"); el.className = "blip"; return el; }
+  const end = R.coords[R.coords.length - 1];
+  const phonePuck = new maplibregl.Marker({ element: puck(34), rotationAlignment: "map", pitchAlignment: "map" }).setLngLat(start).addTo(phone);
+  const carPuck = new maplibregl.Marker({ element: puck(40), rotationAlignment: "map", pitchAlignment: "map" }).setLngLat(start).addTo(car);
+  new maplibregl.Marker({ element: blip() }).setLngLat(end).addTo(phone);
+  new maplibregl.Marker({ element: blip() }).setLngLat(end).addTo(car);
+
+  // Stop following when the person moves the phone map themselves.
+  for (const ev of ["dragstart", "zoomstart", "rotatestart", "pitchstart"]) {
+    phone.on(ev, (e) => { if (e.originalEvent) setFollow(false); });
+  }
+  function setFollow(on) { follow = on; $("recenter").hidden = on; }
+  $("recenter").onclick = () => setFollow(true);
+
+  // ---------- theme ----------
+  function applyTheme(id, first) {
+    themeId = id; store.set("ow-theme", id);
+    const T = THEMES[id], H = T.hud, root = document.documentElement;
+    root.dataset.theme = id;
+    root.dataset.overlay = T.overlay || "";
+    const vars = {
+      "--page": T.page, "--hud-bg": H.bg, "--hud-fg": H.fg, "--hud-sub": H.sub, "--hud-accent": H.accent,
+      "--hud-border": H.border, "--hud-font": H.font, "--hud-weight": H.weight, "--hud-case": H.upper ? "uppercase" : "none",
+      "--aa-card": H.card, "--mk-fill": T.marker.fill, "--mk-stroke": T.marker.stroke,
+    };
+    for (const k in vars) root.style.setProperty(k, vars[k]);
+    $("blurb").textContent = T.blurb;
+    document.querySelectorAll(".theme-btn").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.theme === id)));
+    if (!first) { phone.setStyle(styleFor(false)); car.setStyle(styleFor(true)); }
+  }
+  const nav = document.querySelector(".themes");
+  for (const T of Object.values(THEMES)) {
+    const b = document.createElement("button");
+    b.className = "theme-btn"; b.dataset.theme = T.id;
+    const m = T.map;
+    b.innerHTML = `<span class="swatch"><i style="background:${m.land}"></i><i style="background:${m.roads.major.fill}"></i><i style="background:${m.route.line}"></i></span><b>${T.name}</b>`;
+    b.onclick = () => applyTheme(T.id);
+    nav.appendChild(b);
+  }
+  applyTheme(themeId, true);
+
+  // ---------- car screen sizing ----------
+  function layoutCar() {
+    const [w, h] = SCREENS[screen];
+    const vp = $("car-viewport"), el = $("car");
+    const s = Math.min(1.3, vp.clientWidth / w);
+    el.style.width = `${w}px`; el.style.height = `${h}px`; el.style.transform = `scale(${s})`;
+    vp.style.height = `${h * s}px`;
+    car.resize();
+    document.querySelectorAll("#screen .btn").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.screen === screen)));
+  }
+  document.querySelectorAll("#screen .btn").forEach((b) => (b.onclick = () => { screen = b.dataset.screen; store.set("ow-screen", screen); layoutCar(); }));
+  new ResizeObserver(layoutCar).observe($("car-viewport"));
+  layoutCar();
+
+  // ---------- controls ----------
+  const scrub = $("scrub");
+  scrub.max = Math.floor(R.distance);
+  scrub.oninput = () => { dist = +scrub.value; holdUntil = 0; };
+  $("play").onclick = () => { playing = !playing; $("play").textContent = playing ? "Pause" : "Drive"; };
+  $("restart").onclick = () => { dist = 0; heading = null; holdUntil = 0; setFollow(true); };
+  function setSpeed(v) { speed = v; document.querySelectorAll("#speed .btn").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.speed === v))); }
+  document.querySelectorAll("#speed .btn").forEach((b) => (b.onclick = () => setSpeed(+b.dataset.speed)));
+  setSpeed(12);
+  const places = $("places");
+  for (const p of PLACES) {
+    const b = document.createElement("button");
+    b.className = "btn"; b.textContent = p.name;
+    b.onclick = () => { setFollow(false); phone.flyTo({ center: p.c, zoom: p.z, pitch: 0, bearing: 0, duration: 1600 }); };
+    places.appendChild(b);
+  }
+  $("zin").onclick = () => (carZoom = Math.min(2, carZoom + 0.5));
+  $("zout").onclick = () => (carZoom = Math.max(-2.5, carZoom - 0.5));
+  $("zre").onclick = () => (carZoom = 0);
+
+  // ---------- guidance text ----------
+  let lastKey = "";
+  function updateGuidance(d, now) {
+    const steps = R.steps;
+    let n = steps.findIndex((s) => s.at > d + 1);
+    if (n < 0) n = steps.length - 1;
+    const next = steps[n], after = steps[n + 1];
+    const cur = steps[Math.max(0, n - 1)];
+    const toNext = Math.max(0, next.at - d);
+    const leftM = Math.max(0, R.distance - d);
+    const leftS = R.duration * (leftM / R.distance);
+    const arrive = fmtClock(new Date(now + leftS * 1000));
+    const mins = `${Math.max(1, Math.round(leftS / 60))} min`;
+    const key = [n, fmtDist(toNext), mins, arrive, themeId].join("|");
+    if (key === lastKey) return;
+    lastKey = key;
+    const road = next.road || (next.icon === "arrive" ? R.to : "");
+    $("p-icon").innerHTML = $("c-icon").innerHTML = maneuverSVG(next.icon);
+    $("p-dist").textContent = $("c-dist").textContent = fmtDist(toNext);
+    $("p-text").textContent = next.text;
+    $("c-road").textContent = road || next.text;
+    $("p-street").textContent = cur.road || R.from;
+    $("c-then-row").style.display = after && after.at - next.at < 600 ? "flex" : "none";
+    if (after) $("c-then").innerHTML = maneuverSVG(after.icon);
+    $("p-time").textContent = mins;
+    $("c-time").textContent = mins;
+    $("p-km").textContent = $("c-km").textContent = fmtDist(leftM);
+    $("p-arrive").textContent = arrive;
+    $("c-arrive").textContent = arrive;
+    $("clock").textContent = fmtClock(new Date(now));
+  }
+
+  // ---------- drive loop ----------
+  const BASE_MPS = 11.1; // about 40 km/h, a fair Delhi average
+  let last = performance.now();
+  function frame(t) {
+    const dt = Math.min(0.1, (t - last) / 1000); last = t;
+    if (playing && !holdUntil) {
+      dist += BASE_MPS * speed * dt;
+      if (dist >= R.distance) { dist = R.distance; holdUntil = t + 2500; }
+    } else if (holdUntil && t > holdUntil) { dist = 0; heading = null; holdUntil = 0; }
+    scrub.value = Math.round(dist);
+    $("scrub-out").textContent = `${(dist / 1000).toFixed(1)} of ${(R.distance / 1000).toFixed(1)} km`;
+
+    const pos = pointAt(dist);
+    const ahead = pointAt(Math.min(R.distance, dist + 30));
+    const target = dist < R.distance - 5 ? bearing(pos, ahead) : heading || 0;
+    heading = heading === null ? target : lerpAngle(heading, target, Math.min(1, dt * 4));
+
+    phonePuck.setLngLat(pos).setRotation(heading);
+    carPuck.setLngLat(pos).setRotation(heading);
+    if (follow) {
+      const h = phone.getContainer().clientHeight;
+      phone.jumpTo({ center: pos, bearing: heading, zoom: 16.4, pitch: 52, padding: { top: h * 0.38, bottom: 0, left: 0, right: 0 } });
+    }
+    const cw = car.getContainer().clientWidth, ch = car.getContainer().clientHeight;
+    car.jumpTo({ center: pos, bearing: heading, zoom: 16.1 + carZoom, pitch: 45, padding: { top: ch * 0.28, bottom: 0, left: Math.min(330, cw * 0.4), right: 0 } });
+
+    if (t - lastRouteUpdate > 250) {
+      lastRouteUpdate = t;
+      const data = remainingLine(dist);
+      for (const m of [phone, car]) { const src = m.getSource("route"); if (src) src.setData(data); }
+    }
+    updateGuidance(dist, Date.now());
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  window.__ow = {
+    phone, car, setTheme: applyTheme,
+    seek: (d) => { dist = d; heading = null; },
+    pause: () => { playing = false; $("play").textContent = "Drive"; },
+    explore: (c, z) => { setFollow(false); phone.jumpTo({ center: c, zoom: z, pitch: 0, bearing: 0 }); },
+  };
+})();
+</script>
+</body>
+</html>
