@@ -55,7 +55,7 @@ data class OverworldTheme(
 val HudFont.family: FontFamily
   get() =
       when (this) {
-        HudFont.CONDENSED -> FontFamily(Font(R.font.barlow_condensed_semibold, FontWeight.SemiBold))
+        HudFont.CONDENSED -> GameFonts.condensed
         HudFont.SERIF -> FontFamily(Font(R.font.im_fell_english, FontWeight.Normal))
         HudFont.TECH ->
             FontFamily(

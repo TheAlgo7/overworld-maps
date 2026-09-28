@@ -31,6 +31,10 @@ android {
         compose true
         buildConfig true
     }
+    sourceSets {
+        // Personal-use game fonts live in src/local (gitignored). Missing files fall back to free fonts.
+        main { assets.srcDirs += 'src/local/assets' }
+    }
     packagingOptions {
         resources {
             excludes += '/META-INF/{AL2.0,LGPL2.1}'

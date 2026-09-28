@@ -42,6 +42,32 @@ class PlaceSearch(private val http: OkHttpClient) {
         parse(fetch(url)).firstOrNull()?.copy(coordinate = at)
       }
 
+  /**
+   * The neighbourhood around a point, for the HUD's "Street | Area" line. Asks for the nearest
+   * place node; Delhi's OSM districts are often compass words ("South"), so those are skipped.
+   */
+  suspend fun areaAt(at: GeographicCoordinate): String? =
+      withContext(Dispatchers.IO) {
+        val body = fetch("$base/reverse?lat=${at.lat}&lon=${at.lng}&lang=en&limit=1&osm_tag=place")
+        val p =
+            JSONObject(body).optJSONArray("features")?.optJSONObject(0)?.optJSONObject("properties")
+                ?: return@withContext null
+        val kind = p.optString("osm_value")
+        val name = p.optString("name")
+        val district = p.optString("district").takeUnless { it.lowercase() in GENERIC_AREAS }
+        when {
+          kind in NEIGHBOURHOOD_KINDS && name.isNotBlank() -> name
+          !district.isNullOrBlank() -> district
+          else -> listOf("locality", "city").map { p.optString(it) }.firstOrNull { it.isNotBlank() }
+        }
+      }
+
+  private companion object {
+    val NEIGHBOURHOOD_KINDS = setOf("suburb", "neighbourhood", "quarter", "village", "town", "hamlet")
+    val GENERIC_AREAS =
+        setOf("north", "south", "east", "west", "central", "north west", "north east", "south west", "south east", "new delhi", "shahdara")
+  }
+
   private fun fetch(url: String): String =
       http.newCall(Request.Builder().url(url).build()).execute().use { response ->
         if (!response.isSuccessful) error("Search failed (${response.code})")

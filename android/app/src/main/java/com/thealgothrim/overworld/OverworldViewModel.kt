@@ -16,7 +16,10 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +30,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import uniffi.ferrostar.GeographicCoordinate
+import uniffi.ferrostar.TripState
 import uniffi.ferrostar.UserLocation
 import uniffi.ferrostar.Waypoint
 import uniffi.ferrostar.WaypointKind
@@ -62,6 +66,16 @@ class OverworldViewModel :
 
   private var searchJob: Job? = null
 
+  private val _area = MutableStateFlow<String?>(null)
+  /** Neighbourhood around the driver, refreshed about every 45 s while navigating. */
+  val area: StateFlow<String?> = _area.asStateFlow()
+
+  private val _arrived = MutableSharedFlow<String>(extraBufferCapacity = 1)
+  /** Emits the destination name once when a trip reaches its end (not when the driver ends it). */
+  val arrived: SharedFlow<String> = _arrived.asSharedFlow()
+
+  private var destinationName: String? = null
+
   /** Shows the user's position on the map even before a trip starts. */
   override val navigationUiState: StateFlow<NavigationUiState> =
       combine(super.navigationUiState, lastLocation) { state, location ->
@@ -79,6 +93,32 @@ class OverworldViewModel :
             else flowOf(null)
           }
           .collect { if (it != null) lastLocation.value = it }
+    }
+    viewModelScope.launch {
+      var lastLookup = 0L
+      navigationUiState.collect { state ->
+        val at = state.location?.coordinates ?: return@collect
+        val now = System.currentTimeMillis()
+        if (state.isNavigating() && now - lastLookup > 45_000) {
+          lastLookup = now
+          launch { runCatching { AppModule.search.areaAt(at) }.getOrNull()?.let { _area.value = it } }
+        }
+      }
+    }
+    viewModelScope.launch {
+      var announced = false
+      navigationUiState.map { it.tripState }.collect { trip ->
+        when (trip) {
+          is TripState.Complete ->
+              if (!announced) {
+                announced = true
+                _arrived.tryEmit(destinationName ?: "your destination")
+                stopNavigation()
+              }
+          is TripState.Navigating -> announced = false
+          else -> Unit
+        }
+      }
     }
   }
 
@@ -164,6 +204,8 @@ class OverworldViewModel :
         val route = routes.first()
         if (_testDrive.value) locationProvider.enableSimulationOn(route)
         setDestination(name)
+        destinationName = name
+        _area.value = null
         if (navigationUiState.value.isNavigating()) core.replaceRoute(route = route)
         else core.startNavigation(route = route)
         _planner.value = PlannerState()

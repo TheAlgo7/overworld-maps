@@ -10,6 +10,10 @@ Themes. The app draws everything itself: no game artwork, sprites or font files 
 | **Frontier** (RDR2) | parchment, ink roads, double-line highways, hatched forest, railway ties, paper grain | flat parchment, no grain or hatching | next to match |
 | **Vice Coast** (GTA VI) | night-navy land, sand boulevards, cyan shorelines, coral route with glow | no glow | paused (`paused: true` in `themes.js`) until GTA VI's real map UI is public |
 
+**GTA V phone UI (Metro Crime only):** planning is a GTA interaction menu (Pricedown header, white selected row, tick boxes, description box, key-prompt buttons). Driving shows the in-game HUD: help-text turn instruction, money-counter ETA, "Go to **place**." objective, waypoint distance with health/armour-style bars (trip progress, next turn), "Street | Area", an N badge that orbits as the map turns, a trip menu behind the M prompt, and an ARRIVED banner. Frontier keeps the plain UI until its RDR2 pass.
+
+**Game fonts:** Pricedown, Chalet London 1960 and Chalet Comprime Cologne load from `android/app/src/local/assets/fonts/` (gitignored, personal use only). Without them the app falls back to Passion One, Barlow and Barlow Condensed.
+
 **Where the GTA V values come from:** map colours measured from pause-map screenshots (land `#1e1e1e`, blocks `#424242`, roads `#b5b5b5`, water `#bcc7cd` with `#d6dee1` shore); the route and waypoint use the game's documented `HUD_COLOUR_WAYPOINT` `#A44CF2` (dark `#522679`); arrival time uses the health green `#359A47`. The arrow and waypoint shapes are redrawn as vectors from the radar sprites. Reference screenshots live in `Reference - GTA V/` (gitignored). The HUD font is Barlow Condensed as a free stand-in for GTA's commercial Chalet.
 
 ## What's in here

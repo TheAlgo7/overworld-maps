@@ -27,7 +27,10 @@ import com.stadiamaps.ferrostar.maplibreui.runtime.NavigationMapState
 import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.SurfaceAreaTracker
 import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.screenSurfaceState
 import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.surfaceStableFractionalPadding
+import androidx.compose.ui.text.style.TextAlign
+import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.theme.OverworldTheme
+import com.thealgothrim.overworld.ui.gta.GtaText
 import com.thealgothrim.overworld.theme.StyleCache
 import com.thealgothrim.overworld.theme.family
 import com.thealgothrim.overworld.theme.style
@@ -47,6 +50,7 @@ fun OverworldPhoneMap(
     pickedDestination: GeographicCoordinate?,
     attributionPadding: PaddingValues,
     onLongPress: (GeographicCoordinate) -> Unit,
+    attributionAlignment: Alignment = Alignment.TopEnd,
 ) {
   val context = LocalContext.current
   val baseStyle = remember(theme.id) { BaseStyle.Json(StyleCache.json(context, theme, car = false)) }
@@ -62,7 +66,7 @@ fun OverworldPhoneMap(
                       padding = attributionPadding,
                       isLogoEnabled = false,
                       isAttributionEnabled = true,
-                      attributionAlignment = Alignment.TopEnd,
+                      attributionAlignment = attributionAlignment,
                       isCompassEnabled = false,
                       isScaleBarEnabled = false,
                   )
@@ -122,6 +126,17 @@ fun OverworldCarMap(
       uiState.currentStepRoadName
           ?.takeIf { it.isNotBlank() && uiState.isNavigating() }
           ?.let { road ->
+            if (theme.id == "metro") {
+              // GTA V's "Street | Area" line: outlined white text straight on the map, no box.
+              val area by AppModule.viewModel.area.collectAsState()
+              GtaText(
+                  listOfNotNull(road, area).joinToString("  |  "),
+                  20.sp,
+                  modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp),
+                  align = TextAlign.Center,
+              )
+              return@let
+            }
             Text(
                 text = theme.display(road),
                 color = theme.hudFg,

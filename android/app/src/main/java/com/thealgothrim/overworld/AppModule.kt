@@ -13,6 +13,7 @@ import com.stadiamaps.ferrostar.core.location.toAndroidLocation
 import com.stadiamaps.ferrostar.core.withJsonOptions
 import com.stadiamaps.ferrostar.googleplayservices.FusedNavigationLocationProvider
 import com.thealgothrim.overworld.search.PlaceSearch
+import com.thealgothrim.overworld.theme.GameFonts
 import com.thealgothrim.overworld.theme.ThemeStore
 import java.time.Duration
 import java.time.Instant
@@ -45,6 +46,7 @@ object AppModule {
 
   fun init(context: Context) {
     if (!::appContext.isInitialized) appContext = context.applicationContext
+    GameFonts.init(appContext)
   }
 
   val context: Context

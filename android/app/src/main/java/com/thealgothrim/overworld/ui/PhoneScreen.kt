@@ -52,6 +52,13 @@ import com.thealgothrim.overworld.map.OverworldPhoneMap
 import com.thealgothrim.overworld.search.Place
 import com.thealgothrim.overworld.theme.OverworldTheme
 import com.thealgothrim.overworld.theme.THEMES
+import com.thealgothrim.overworld.ui.gta.GtaBigMessage
+import com.thealgothrim.overworld.ui.gta.GtaDriveHud
+import com.thealgothrim.overworld.ui.gta.GtaPlanner
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.launch
 import org.maplibre.compose.camera.CameraPosition
@@ -78,6 +85,24 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
     )
   }
 
+  val gta = theme.id == "metro"
+  val area by viewModel.area.collectAsState()
+  var arrivedAt by remember { mutableStateOf<String?>(null) }
+  LaunchedEffect(Unit) {
+    viewModel.arrived.collect {
+      arrivedAt = it
+      delay(5_000)
+      arrivedAt = null
+    }
+  }
+  val toggleOverview: () -> Unit = {
+    if (mapState.isTrackingUser) {
+      uiState.routeGeometry?.boundingBox()?.let {
+        mapState.showRouteOverview(boundingBox = it, paddingValues = PaddingValues(64.dp))
+      }
+    } else mapState.recenter(isNavigating = true)
+  }
+
   Box(Modifier.fillMaxSize().background(theme.page)) {
     OverworldPhoneMap(
         theme = theme,
@@ -85,13 +110,46 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
         mapState = mapState,
         cameraOptions = cameraOptions,
         pickedDestination = planner.destination?.coordinate,
-        attributionPadding = PaddingValues(top = if (navigating) 150.dp else 110.dp, end = 12.dp),
+        attributionPadding =
+            when {
+              gta && navigating -> PaddingValues(top = 130.dp, end = 12.dp)
+              gta -> PaddingValues(bottom = 80.dp, end = 12.dp)
+              navigating -> PaddingValues(top = 150.dp, end = 12.dp)
+              else -> PaddingValues(top = 110.dp, end = 12.dp)
+            },
+        attributionAlignment = if (gta && !navigating) Alignment.BottomEnd else Alignment.TopEnd,
         onLongPress = viewModel::dropPin,
     )
     if (theme.paperOverlay) PaperOverlay()
 
     Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(12.dp)) {
-      if (navigating) {
+      if (gta && navigating) {
+        GtaDriveHud(
+            theme = theme,
+            uiState = uiState,
+            area = area,
+            mapBearing = { mapState.cameraState.position.bearing },
+            following = mapState.isTrackingUser,
+            onMute = viewModel::toggleMute,
+            onOverview = toggleOverview,
+            onTheme = AppModule.themeStore::cycle,
+            onEnd = viewModel::stopNavigation,
+        )
+      } else if (gta) {
+        GtaPlanner(
+            theme = theme,
+            planner = planner,
+            testDrive = testDrive,
+            here = uiState.location?.coordinates,
+            onQuery = viewModel::onQueryChange,
+            onChoose = viewModel::choose,
+            onClear = viewModel::clearDestination,
+            onGo = viewModel::go,
+            onTestDrive = viewModel::setTestDrive,
+            onTheme = AppModule.themeStore::cycle,
+            onLocate = { scope.launch { mapState.recenter(isNavigating = false) } },
+        )
+      } else if (navigating) {
         TurnBanner(theme, uiState, Modifier.align(Alignment.TopCenter))
         Column(Modifier.align(Alignment.BottomCenter)) {
           uiState.currentStepRoadName?.takeIf { it.isNotBlank() }?.let { road ->
@@ -111,13 +169,7 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
               onEnd = viewModel::stopNavigation,
               onTheme = AppModule.themeStore::cycle,
               onMute = viewModel::toggleMute,
-              onOverview = {
-                if (mapState.isTrackingUser) {
-                  uiState.routeGeometry?.boundingBox()?.let {
-                    mapState.showRouteOverview(boundingBox = it, paddingValues = PaddingValues(64.dp))
-                  }
-                } else mapState.recenter(isNavigating = true)
-              },
+              onOverview = toggleOverview,
           )
         }
       } else {
@@ -132,6 +184,24 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
             onTestDrive = viewModel::setTestDrive,
             onTheme = AppModule.themeStore::select,
             onLocate = { scope.launch { mapState.recenter(isNavigating = false) } },
+        )
+      }
+    }
+
+    // Arrival: GTA's "mission passed" banner for Metro Crime, a plain card elsewhere.
+    GtaBigMessage(
+        visible = gta && arrivedAt != null,
+        title = "ARRIVED",
+        subtitle = arrivedAt.orEmpty(),
+        modifier = Modifier.align(Alignment.Center),
+    )
+    if (!gta) {
+      arrivedAt?.let {
+        Text(
+            "Arrived at $it",
+            color = theme.hudFg,
+            style = theme.hudText(24.sp),
+            modifier = Modifier.align(Alignment.Center).hudCard(theme).padding(horizontal = 20.dp, vertical = 14.dp),
         )
       }
     }

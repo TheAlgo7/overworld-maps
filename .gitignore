@@ -16,3 +16,6 @@ Thumbs.db
 
 # Game screenshots for matching the themes (Rockstar's images, never committed)
 Reference - */
+
+# Personal-use game fonts (Pricedown, Chalet): bundled in local builds only, never committed
+android/app/src/local/
