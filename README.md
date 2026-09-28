@@ -59,14 +59,19 @@ The phone app works fully like this. Use **Test drive** to simulate a trip witho
 
 ## Try Android Auto on the laptop (no car needed)
 
-1. Phone: Settings > Connected devices > **Android Auto** > scroll down, tap **Version** 10 times to unlock developer settings.
-2. In Android Auto's three-dot menu: **Developer settings** > turn on **Unknown sources**, then **Start head unit server**.
-3. Laptop, phone on USB:
-   ```bash
+Verified 2026-09-28 on a Galaxy S24 Ultra (Android 16, Android Auto 17.6).
+
+1. Phone: Settings > Connected devices > **Android Auto** > scroll down, tap **Version** 10 times to unlock developer mode.
+2. Android Auto's ⋮ menu > **Developer settings** > turn on **Unknown sources**.
+3. Go back to the **main** Android Auto page, ⋮ menu > **Start head unit server**. (It is in that menu, not in the Developer settings list.)
+4. Laptop, phone on USB. Run the DHU from a console window; it quits if its console has no input:
+   ```bat
    adb forward tcp:5277 tcp:5277
-   "%LOCALAPPDATA%\Android\Sdk\extras\google\auto\desktop-head-unit.exe"
+   cd /d "%LOCALAPPDATA%\Android\Sdk\extras\google\auto" && desktop-head-unit.exe
    ```
-4. Overworld appears in the launcher on that window. Pick a destination on the phone. Typing `autodrive` in the DHU console simulates driving.
+5. Overworld is in the Android Auto app drawer (nine-dot button). Pick a destination on the phone; turn on **Test drive** to simulate the trip.
+
+If the DHU window sits on "Waiting for phone", stop and start the head unit server again, then relaunch the DHU.
 
 ## Put it in the car (one-time USD 25)
 
@@ -82,7 +87,8 @@ Android Auto will not show a sideloaded navigation app in a real car ([Google's 
 - Map labels use OpenFreeMap's Noto Sans glyphs. Themed map-label fonts need self-generated glyph files.
 - No offline maps yet (OpenFreeMap has no India extract download; Protomaps PMTiles would be the route).
 - Android refuses the background location service if a trip starts while the app isn't on screen. The app then keeps navigating while the phone or car screen shows it, instead of crashing.
-- The car screen has been verified in Google's car-app test host and the phone on an emulator; it still needs a first run on the real head unit.
+- MapLibre renders with **OpenGL**, not its default Vulkan: the Snapdragon Vulkan driver on the S24 Ultra failed to compile MapLibre's shaders and only the background drew (see `app/build.gradle`).
+- Verified on the real phone and on Android Auto through the Desktop Head Unit (themed map, tinted turn card, metric ETA, live theme switching). Not yet in the real car, which needs the Play step above.
 
 ## Credits
 

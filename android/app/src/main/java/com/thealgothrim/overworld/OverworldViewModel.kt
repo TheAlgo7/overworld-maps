@@ -1,6 +1,9 @@
 package com.thealgothrim.overworld
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.util.Log
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewModelScope
 import com.stadiamaps.ferrostar.core.DefaultNavigationViewModel
 import com.stadiamaps.ferrostar.core.NavigationUiState
@@ -67,6 +70,8 @@ class OverworldViewModel :
           .stateIn(viewModelScope, SharingStarted.Eagerly, NavigationUiState.empty())
 
   init {
+    // The car can start before the phone screen ever asks, so read the current grant directly.
+    refreshLocationPermission()
     viewModelScope.launch {
       hasLocationPermission
           .flatMapLatest { granted ->
@@ -79,6 +84,13 @@ class OverworldViewModel :
 
   fun setLocationPermission(granted: Boolean) {
     hasLocationPermission.value = granted
+  }
+
+  fun refreshLocationPermission() {
+    val context = AppModule.context
+    hasLocationPermission.value =
+        listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            .any { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
   }
 
   fun setTestDrive(on: Boolean) {

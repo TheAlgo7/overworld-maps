@@ -23,6 +23,7 @@ class OverworldCarSession : Session() {
     // Voice prompts must work even if the phone app was never opened this session.
     AppModule.ttsObserver.start()
     AppModule.ferrostarCore.spokenInstructionObserver = AppModule.ttsObserver
+    AppModule.viewModel.refreshLocationPermission()
     val destination = NavigationIntentParser().parse(intent)
     return CarNavigationScreen(carContext, initialDestination = destination)
   }

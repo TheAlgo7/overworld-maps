@@ -134,6 +134,8 @@ fun OverworldCarMap(
                     ),
                 modifier =
                     Modifier.align(Alignment.BottomCenter)
+                        // Sits above the OpenStreetMap credit line in the corner.
+                        .padding(bottom = 18.dp)
                         .background(theme.hudBg, RoundedCornerShape(12.dp))
                         .padding(horizontal = 14.dp, vertical = 6.dp),
             )

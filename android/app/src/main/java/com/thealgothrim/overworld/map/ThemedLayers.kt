@@ -1,5 +1,6 @@
 package com.thealgothrim.overworld.map
 
+import android.util.DisplayMetrics
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -14,6 +15,8 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.stadiamaps.ferrostar.core.NavigationUiState
@@ -47,6 +50,19 @@ import uniffi.ferrostar.GeographicCoordinate
 
 /** First label layer in every Overworld style; the route is drawn just under it. */
 private const val FIRST_LABEL_LAYER = "label-water"
+
+/**
+ * MapLibre reads an icon's pixel ratio from the bitmap's density, which Android sets to the phone
+ * screen's density, while MapLibre Compose draws the bitmap at the current display's density. On
+ * the Android Auto surface those differ (car ~1x, phone ~3x) and icons came out a third of the
+ * size. Scale the requested size so the icon lands at the intended dp on either display.
+ */
+@Composable
+private fun iconSize(size: Dp): Dp {
+  val local = LocalDensity.current.density
+  val bitmap = DisplayMetrics.DENSITY_DEVICE_STABLE / DisplayMetrics.DENSITY_DEFAULT.toFloat()
+  return size * (bitmap / local)
+}
 
 private fun widthByZoom(at10: Float, at18: Float) =
     interpolate(linear(), zoom(), 10 to const(at10.dp), 18 to const(at18.dp))
@@ -124,7 +140,7 @@ fun ThemedPuck(uiState: NavigationUiState, theme: OverworldTheme, car: Boolean) 
       )
   val painter =
       remember(theme.id) { ChevronPainter(theme.puckFill, theme.puckStroke, glow = theme.routeGlow != null) }
-  val size = if (car) 46.dp else 40.dp
+  val size = iconSize(if (car) 46.dp else 40.dp)
   SymbolLayer(
       id = "ow-puck",
       source = source,
@@ -151,10 +167,11 @@ fun ThemedDestination(at: GeographicCoordinate, theme: OverworldTheme, id: Strin
           )
       )
   val painter = remember(theme.id) { DiamondPainter(theme.hudAccent, theme.puckStroke) }
+  val size = iconSize(30.dp)
   SymbolLayer(
       id = id,
       source = source,
-      iconImage = image(painter, size = DpSize(30.dp, 30.dp), drawAsSdf = false),
+      iconImage = image(painter, size = DpSize(size, size), drawAsSdf = false),
       iconAnchor = const(SymbolAnchor.Center),
       iconAllowOverlap = const(true),
       iconIgnorePlacement = const(true),

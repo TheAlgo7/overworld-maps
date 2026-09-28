@@ -40,6 +40,13 @@ android {
 
 def ferrostar = '0.57.0'
 
+// MapLibre's default Android build renders with Vulkan, and the Snapdragon Vulkan driver on
+// Gaurav's Galaxy S24 Ultra fails to compile its shaders (only the background drew). Use the
+// OpenGL build of the same version instead.
+configurations.configureEach {
+    exclude group: 'org.maplibre.gl', module: 'android-sdk'
+}
+
 dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
 
@@ -65,6 +72,7 @@ dependencies {
     implementation "com.stadiamaps.ferrostar:ui-maplibre-car-app:$ferrostar"
 
     implementation 'org.maplibre.compose:maplibre-compose-android:0.13.0'
+    implementation 'org.maplibre.gl:android-sdk-opengl:13.0.2'
     implementation 'io.github.rallista:car-app-compose:0.0.2'
     implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0'
 
