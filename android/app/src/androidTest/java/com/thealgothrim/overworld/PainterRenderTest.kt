@@ -37,7 +37,7 @@ class PainterRenderTest {
 
   @Test
   fun iconsDrawSomething() {
-    val t = THEMES.first { it.id == "metro" }
+    val t = THEMES.first { it.id == "gta5" }
     val arrow = render(ChevronPainter(t.puckFill, t.puckShade, t.puckStroke, glow = false), 120, "arrow")
     val blip = render(QuatrefoilPainter(t.blipFill, t.blipCenter, t.blipStroke), 120, "blip")
     android.util.Log.i("PainterRenderTest", "arrow opaque px=$arrow blip opaque px=$blip")

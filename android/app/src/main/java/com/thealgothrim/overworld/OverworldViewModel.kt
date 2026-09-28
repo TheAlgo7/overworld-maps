@@ -30,10 +30,21 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import uniffi.ferrostar.GeographicCoordinate
+import uniffi.ferrostar.Route
 import uniffi.ferrostar.TripState
 import uniffi.ferrostar.UserLocation
 import uniffi.ferrostar.Waypoint
 import uniffi.ferrostar.WaypointKind
+
+/** A route shown before driving, like Google Maps' directions preview. */
+data class RoutePreview(
+    val place: Place,
+    val route: Route,
+    val durationSeconds: Double,
+    val distanceMeters: Double,
+    /** The road the route spends longest on, for "via ...". */
+    val via: String?,
+)
 
 /** What the phone shows around the map when not navigating. */
 data class PlannerState(
@@ -43,6 +54,7 @@ data class PlannerState(
     val destination: Place? = null,
     val routing: Boolean = false,
     val error: String? = null,
+    val preview: RoutePreview? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
@@ -184,30 +196,60 @@ class OverworldViewModel :
     _planner.value = PlannerState()
   }
 
-  fun go() {
+  private val origin: UserLocation
+    get() = lastLocation.value ?: UserLocation(AppModule.defaultStart, 6.0, null, Instant.now(), null)
+
+  /** Directions: fetch the route and show it with time, distance and the main road. */
+  fun directions() {
     val place = _planner.value.destination ?: return
-    startNavigation(place.coordinate, place.name)
+    _planner.value = _planner.value.copy(routing = true, error = null)
+    viewModelScope.launch(Dispatchers.IO) {
+      try {
+        val route =
+            core.getRoutes(origin, listOf(Waypoint(coordinate = place.coordinate, kind = WaypointKind.BREAK))).first()
+        val via =
+            route.steps
+                .filter { !it.roadName.isNullOrBlank() }
+                .groupBy { it.roadName!! }
+                .maxByOrNull { (_, steps) -> steps.sumOf { it.distance } }
+                ?.key
+        val preview = RoutePreview(place, route, route.steps.sumOf { it.duration }, route.distance, via)
+        _planner.value = _planner.value.copy(routing = false, preview = preview)
+      } catch (e: Exception) {
+        Log.w(TAG, "routing failed", e)
+        _planner.value = _planner.value.copy(routing = false, error = "Couldn't find a route. Check the connection and try again.")
+      }
+    }
   }
 
+  fun cancelPreview() {
+    _planner.value = _planner.value.copy(preview = null)
+  }
+
+  /** Start: drive the previewed route. */
+  fun startPreview() {
+    val preview = _planner.value.preview ?: return
+    begin(preview.route, preview.place)
+    _planner.value = PlannerState()
+  }
+
+  private fun begin(route: Route, place: Place) {
+    if (_testDrive.value) locationProvider.enableSimulationOn(route)
+    setDestination(place.name)
+    destinationName = place.name
+    _area.value = null
+    AppModule.saved.addRecent(place)
+    if (navigationUiState.value.isNavigating()) core.replaceRoute(route = route) else core.startNavigation(route = route)
+  }
+
+  /** Straight to driving, without a preview (used by the car and by saved-place shortcuts there). */
   fun startNavigation(destination: GeographicCoordinate, name: String?) {
     _planner.value = _planner.value.copy(routing = true, error = null)
     viewModelScope.launch(Dispatchers.IO) {
-      val origin =
-          lastLocation.value
-              ?: UserLocation(AppModule.defaultStart, 6.0, null, Instant.now(), null)
       try {
-        val routes =
-            core.getRoutes(
-                origin,
-                listOf(Waypoint(coordinate = destination, kind = WaypointKind.BREAK)),
-            )
-        val route = routes.first()
-        if (_testDrive.value) locationProvider.enableSimulationOn(route)
-        setDestination(name)
-        destinationName = name
-        _area.value = null
-        if (navigationUiState.value.isNavigating()) core.replaceRoute(route = route)
-        else core.startNavigation(route = route)
+        val route =
+            core.getRoutes(origin, listOf(Waypoint(coordinate = destination, kind = WaypointKind.BREAK))).first()
+        begin(route, Place(name ?: "Destination", "", destination))
         _planner.value = PlannerState()
       } catch (e: Exception) {
         Log.w(TAG, "routing failed", e)

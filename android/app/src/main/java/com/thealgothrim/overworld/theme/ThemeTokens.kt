@@ -5,8 +5,9 @@ import androidx.compose.ui.graphics.Color
 
 val THEMES: List<OverworldTheme> = listOf(
   OverworldTheme(
-      id = "metro",
-      name = "Metro Crime",
+      id = "gta5",
+      name = "GTA V",
+      skin = Skin.GTA,
       blurb = "Near-black land, flat grey roads, ice-pale water, one purple GPS route. The GTA V map.",
       dark = true,
       font = HudFont.CONDENSED,
@@ -34,8 +35,9 @@ val THEMES: List<OverworldTheme> = listOf(
       paperOverlay = false,
   ),
   OverworldTheme(
-      id = "frontier",
-      name = "Frontier",
+      id = "rdr2",
+      name = "Red Dead 2",
+      skin = Skin.RDR,
       blurb = "Parchment and ink: the RDR2 map. Ink roads, dotted railways, pencil landmarks, a red GPS route.",
       dark = false,
       font = HudFont.SERIF,

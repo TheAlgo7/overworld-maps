@@ -13,7 +13,7 @@ import uniffi.ferrostar.GeographicCoordinate
  *   adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver \
  *     -a com.thealgothrim.overworld.DEBUG_DRIVE --ef lat 28.6129 --ef lng 77.2295 --es name "India Gate"
  *   adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver \
- *     -a com.thealgothrim.overworld.DEBUG_DRIVE --es theme frontier
+ *     -a com.thealgothrim.overworld.DEBUG_DRIVE --es theme rdr2
  *   adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver \
  *     -a com.thealgothrim.overworld.DEBUG_STOP
  */

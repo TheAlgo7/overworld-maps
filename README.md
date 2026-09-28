@@ -2,21 +2,17 @@
 
 Your real roads drawn like an open-world game map, with turn-by-turn navigation on the phone and on Android Auto. A personal app, built on free map data and free services.
 
-Themes. The app draws everything itself: no game artwork, sprites or font files are bundled.
+Themes (a personal build, so they carry the games' names; rename before any public release):
 
-| Theme | Look | In the car | Status |
-|---|---|---|---|
-| **Metro Crime** (GTA V) | the GTA V pause map: near-black land, flat grey roads, grey blocks, ice-pale water, no labels, waypoint-purple route, two-tone radar arrow, four-petal waypoint | same, wider roads | active, matched 2026-09-28 |
-| **Frontier** (RDR2) | parchment, ink roads, double-line highways, hatched forest, railway ties, paper grain | flat parchment, no grain or hatching | next to match |
-| **Vice Coast** (GTA VI) | night-navy land, sand boulevards, cyan shorelines, coral route with glow | no glow | paused (`paused: true` in `themes.js`) until GTA VI's real map UI is public |
+| Theme | Look | Status |
+|---|---|---|
+| **GTA V** (`gta5`) | the pause map: near-black land, flat grey roads, grey blocks, ice-pale water, no labels, waypoint-purple route; GTA menus and HUD | active |
+| **Red Dead 2** (`rdr2`) | parchment and ink: ink roads, dotted railways, pencil landmarks, hatched forest, paper grain, red route; Red Dead menus and HUD | active |
+| **GTA VI** (`gta6`) | night-navy land, sand boulevards, coral route | paused until GTA VI's real map UI is public |
 
-**GTA V phone UI (Metro Crime only):** planning is a GTA interaction menu (Pricedown header, white selected row, tick boxes, description box, key-prompt buttons). Driving shows the in-game HUD: help-text turn instruction, money-counter ETA, "Go to **place**." objective, waypoint distance with health/armour-style bars (trip progress, next turn), "Street | Area", an N badge that orbits as the map turns, a trip menu behind the M prompt, and an ARRIVED banner. Frontier keeps the plain UI until its RDR2 pass.
+**Layout = Google Maps, look = the game.** Phone: search bar with a settings button on top, Home / Work / Saved chips, compass and locate buttons on the right, a place sheet (Directions, Save as Home / Work / star), a route preview (time, distance, via, arrival, Start), then driving with a turn banner on top, sound and overview buttons on the right, re-centre and street name, and a bottom sheet (end, time to go, distance, arrival, more). Settings is the game's pause menu: theme, car screen style, voice, test drive, Home, Work, clear recents, about. Arrival times use a 12-hour clock.
 
-**RDR2 (Frontier):** map palette from Lee Martin's RDR2 map analysis (parchment `#dec29b`, ink `#40423d`, water `#9e9985`), navigation colours from the game's `colors.xml` (GPS route and waypoint `#CC0000`, objective `#FEF390`, player `#D5D3D2`). All roads in ink, dashed service roads and footpaths, railways as ink lines with light dots, ink-outlined buildings, no road names, and map lettering in four fonts: Merriweather Black for cities (very wide spacing), Raleway Black for districts, Crimson Bold Italic for water, Homemade Apple pencil handwriting for parks and landmarks. Shops and services show as the game's black-disc blips (local builds). The player pointer and waypoint are redrawn from `blip_code_center` and `blip_code_waypoint`. The phone UI is RDR2's: ink-band help text, pause-menu planner with the rough selection box, cores for trip progress and next turn, "Ride to **place**." objective, key prompts, ARRIVED banner.
-
-**Car screen:** by default the car shows the game HUD (help box with the next turn, time to go and arrival, street and area) drawn on the map, and Android Auto's own turn and ETA cards are not sent. Turn data still goes to the car's instrument cluster, and voice works as normal. Switch back with **Car screen: Android Auto** in the menu; the cards then use the theme's colour. This mode suits personal installs only: Play review requires the standard cards.
-
-**Game fonts and icons:** Pricedown, Chalet London 1960, Chalet Comprime Cologne, RDR Lino and Hapna Slab load from `android/app/src/local/assets/fonts/`, and the RDR2 POI blips from `src/local/assets/sprites-local/` (built by `tools/make_sprite.py` from `Reference - RDR2/blips`). All gitignored, personal use only. Without them the app falls back to free fonts and plain patterns. Map lettering uses SDF glyphs built by `tools/make_glyphs.py` from OFL fonts in `tools/fonts/`.
+**Android Auto (built for the Tata Curvv's 10.25-inch 1920x720 HARMAN screen):** the same placement as Google Maps there: turn card top-left, time/arrival/distance card bottom-left, street name bottom-centre, Android Auto's own buttons on the right. Idle shows a themed "Where to?" card with **Saved** (Home, Work, starred and recent places, one tap to drive) and **Theme**. Red Dead's paper texture shows in the car too. To preview on the laptop: `desktop-head-unit.exe -c config	ata_curvv.ini` (preset in `tools/dhu/`, copy it to the SDK's `extras\googleuto\config`).
 
 **Where the GTA V values come from:** map colours measured from pause-map screenshots (land `#1e1e1e`, blocks `#424242`, roads `#b5b5b5`, water `#bcc7cd` with `#d6dee1` shore); the route and waypoint use the game's documented `HUD_COLOUR_WAYPOINT` `#A44CF2` (dark `#522679`); arrival time uses the health green `#359A47`. The arrow and waypoint shapes are redrawn as vectors from the radar sprites. Reference screenshots live in `Reference - GTA V/` (gitignored). The HUD font is Barlow Condensed as a free stand-in for GTA's commercial Chalet.
 
@@ -86,7 +82,7 @@ If the DHU window sits on "Waiting for phone", stop and start the head unit serv
 **Test drives from the laptop (debug builds only, works with the phone locked):**
 
 ```bat
-adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver -a com.thealgothrim.overworld.DEBUG_DRIVE --es theme metro --ef lat 28.6129 --ef lng 77.2295 --es name "India%sGate"
+adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver -a com.thealgothrim.overworld.DEBUG_DRIVE --es theme gta5 --ef lat 28.6129 --ef lng 77.2295 --es name "India%sGate"
 adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver -a com.thealgothrim.overworld.DEBUG_STOP
 ```
 

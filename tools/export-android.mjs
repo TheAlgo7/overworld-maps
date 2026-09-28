@@ -50,6 +50,7 @@ const entries = Object.values(THEMES).map((t) => {
   return `  OverworldTheme(
       id = ${esc(t.id)},
       name = ${esc(t.name)},
+      skin = Skin.${(t.skin || "gta").toUpperCase()},
       blurb = ${esc(t.blurb)},
       dark = ${t.dark},
       font = HudFont.${h.fontKey.toUpperCase()},

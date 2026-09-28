@@ -36,6 +36,7 @@ import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.screenSurfaceState
 import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.surfaceStableFractionalPadding
 import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.R
+import com.thealgothrim.overworld.theme.Skin
 import com.thealgothrim.overworld.map.OverworldCarMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -153,7 +154,7 @@ class CarNavigationScreen(
             // Turn data still reaches the car's own cluster display through NavigationManager.
             if (!themeStore.carGameHud.value) {
               metricRoutingInfo(carContext, tripState)?.let { setNavigationInfo(it) }
-              val timeColor = if (theme.id == "frontier") CarColor.YELLOW else CarColor.GREEN
+              val timeColor = if (theme.skin == Skin.RDR) CarColor.YELLOW else CarColor.GREEN
               tripState.progress()?.let { setDestinationTravelEstimate(it.toMetricTravelEstimate(timeColor)) }
             }
           }
@@ -188,23 +189,30 @@ class CarNavigationScreen(
           .build()
     }
 
-    // Not navigating: the themed map, a hint, and (parked only, no trip running) a theme switch.
+    // Not navigating: the themed map with Saved and Theme. In game-HUD mode the "Where to?" card is
+    // drawn on the map in the theme; otherwise Android Auto shows it as its own message card.
+    val idleActions =
+        ActionStrip.Builder()
+            .addAction(
+                Action.Builder()
+                    .setTitle(carContext.getString(R.string.saved))
+                    .setOnClickListener { screenManager.push(SavedPlacesScreen(carContext)) }
+                    .build()
+            )
+            .addAction(
+                Action.Builder()
+                    .setTitle(carContext.getString(R.string.next_theme))
+                    .setOnClickListener { themeStore.cycle() }
+                    .build()
+            )
+            .build()
     return NavigationTemplate.Builder()
-        .setNavigationInfo(
-            MessageInfo.Builder(theme.name)
-                .setText(carContext.getString(R.string.car_idle_hint))
-                .build()
-        )
-        .setActionStrip(
-            ActionStrip.Builder()
-                .addAction(
-                    Action.Builder()
-                        .setTitle(carContext.getString(R.string.next_theme))
-                        .setOnClickListener { themeStore.cycle() }
-                        .build()
-                )
-                .build()
-        )
+        .apply {
+          if (!themeStore.carGameHud.value) {
+            setNavigationInfo(MessageInfo.Builder(theme.name).setText(carContext.getString(R.string.car_idle_hint)).build())
+          }
+        }
+        .setActionStrip(idleActions)
         .setMapActionStrip(ActionStrip.Builder().addAction(Action.PAN).build())
         .build()
   }

@@ -8,15 +8,16 @@
   const OFM = "https://tiles.openfreemap.org";
   const NAME = ["coalesce", ["get", "name_en"], ["get", "name:latin"], ["get", "name"]];
 
-  // Palettes follow the September 2026 design research (Metro Crime, Frontier, Vice Coast).
-  // They are original interpretations: no game artwork, fonts, icons or names.
+  // Palettes follow the September 2026 design research (GTA V, Red Dead 2, GTA VI).
+  // A personal build: named after the games. Rename before any public release.
   const THEMES = {
     // GTA V. Colours measured 2026-09-28 from Gaurav's screenshots of the game's pause map
     // ("Game" style) and in-game radar: near-black land, flat grey roads with no outlines,
     // grey building blocks, no green, pale ice water, no labels, purple GPS route.
-    metro: {
-      id: "metro",
-      name: "Metro Crime",
+    gta5: {
+      id: "gta5",
+      skin: "gta",
+      name: "GTA V",
       blurb: "Near-black land, flat grey roads, ice-pale water, one purple GPS route. The GTA V map.",
       page: "#111111",
       dark: true,
@@ -60,9 +61,10 @@
     // RDR2. Cartography palette from Lee Martin's RDR2 map analysis (parchment, ink, water,
     // contour, pencil); navigation colours from the game's colors.xml: user waypoint and GPS
     // route COLOR_RED #CC0000, objective COLOR_YELLOW #FEF390, player COLOR_GREYLIGHT #D5D3D2.
-    frontier: {
-      id: "frontier",
-      name: "Frontier",
+    rdr2: {
+      id: "rdr2",
+      skin: "rdr",
+      name: "Red Dead 2",
       blurb: "Parchment and ink: the RDR2 map. Ink roads, dotted railways, pencil landmarks, a red GPS route.",
       page: "#1b1611",
       dark: false,
@@ -82,7 +84,7 @@
           service: { fill: "#55524a", casing: null, dash: [2.2, 1.4] },
         },
         trails: { color: "#40423d", dash: [1.6, 1.6] },
-        patterns: { wood: "hatch", park: "stipple" },
+        patterns: { wood: "hatch", park: "stipple" }, patternsInCar: true, railDotsInCar: true,
         glow: null,
         roadLabels: false,
         pois: true,
@@ -107,12 +109,13 @@
       overlay: "paper",
     },
 
-    vice: {
-      id: "vice",
+    gta6: {
+      id: "gta6",
+      skin: "gta",
       // Paused 2026-09-28: GTA VI's real map UI isn't public yet, so there's nothing to match.
       // Remove this line to bring it back in the web preview and the app.
       paused: true,
-      name: "Vice Coast",
+      name: "GTA VI",
       blurb: "Night-navy land, sand boulevards, cyan water, one coral route. The beach-city night drive.",
       page: "#0b1520",
       dark: true,
@@ -245,7 +248,7 @@
     });
     layers.push({ id: "park", type: "fill", source: "omt", "source-layer": "park", paint: { "fill-color": m.park } });
 
-    if (m.patterns && !car) {
+    if (m.patterns && (!car || m.patternsInCar)) {
       layers.push({
         id: "pattern-wood", type: "fill", source: "omt", "source-layer": "landcover",
         filter: ["match", ["get", "class"], ["wood", "forest"], true, false],
@@ -294,7 +297,7 @@
       id: "rail", type: "line", source: "omt", "source-layer": "transportation", minzoom: 11, filter: railFilter,
       paint: { "line-color": m.rail, "line-width": ["interpolate", ["linear"], ["zoom"], 11, dotted ? 1.2 : 0.6, 18, dotted ? 5 : 2] },
     });
-    if (dotted && !car) {
+    if (dotted && (!car || m.railDotsInCar)) {
       // RDR2 railways: a thick ink line with light dots running along it.
       layers.push({
         id: "rail-dots", type: "line", source: "omt", "source-layer": "transportation", minzoom: 13, filter: railFilter,

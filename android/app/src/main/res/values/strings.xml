@@ -2,5 +2,6 @@
     <string name="app_name">Overworld</string>
     <string name="end_trip">End</string>
     <string name="next_theme">Theme</string>
-    <string name="car_idle_hint">Pick a destination on your phone</string>
+    <string name="saved">Saved</string>
+    <string name="car_idle_hint">Pick a place on your phone, or open Saved</string>
 </resources>

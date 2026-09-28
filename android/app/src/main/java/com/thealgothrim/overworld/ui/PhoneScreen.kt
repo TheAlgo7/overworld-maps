@@ -1,99 +1,95 @@
 package com.thealgothrim.overworld.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.stadiamaps.ferrostar.core.boundingBox
 import com.stadiamaps.ferrostar.maplibreui.runtime.NavigationCameraMode
 import com.stadiamaps.ferrostar.maplibreui.runtime.navigationCameraOptions
 import com.stadiamaps.ferrostar.maplibreui.runtime.rememberNavigationMapState
 import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.OverworldViewModel
-import com.thealgothrim.overworld.PlannerState
 import com.thealgothrim.overworld.map.OverworldPhoneMap
-import com.thealgothrim.overworld.search.Place
-import com.thealgothrim.overworld.theme.OverworldTheme
-import com.thealgothrim.overworld.theme.THEMES
+import com.thealgothrim.overworld.theme.Skin
 import com.thealgothrim.overworld.ui.gta.GtaBigMessage
-import com.thealgothrim.overworld.ui.gta.GtaDriveHud
-import com.thealgothrim.overworld.ui.gta.GtaPlanner
 import com.thealgothrim.overworld.ui.rdr.RdrBigMessage
-import com.thealgothrim.overworld.ui.rdr.RdrDriveHud
-import com.thealgothrim.overworld.ui.rdr.RdrPlanner
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import kotlinx.coroutines.delay
+import com.thealgothrim.overworld.ui.skin.spec
+import kotlin.math.abs
 import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.spatialk.geojson.Position
 
+/**
+ * The phone app, laid out like Google Maps (search bar and settings on top, map buttons on the
+ * right, sheets at the bottom, turn banner while driving) and dressed in the chosen game's HUD.
+ */
 @Composable
 fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
   val theme by AppModule.themeStore.theme.collectAsState()
+  val spec = theme.spec
   val uiState by viewModel.navigationUiState.collectAsState()
   val planner by viewModel.planner.collectAsState()
+  val saved by AppModule.saved.state.collectAsState()
   val testDrive by viewModel.testDrive.collectAsState()
+  val area by viewModel.area.collectAsState()
   val cameraOptions = navigationCameraOptions()
   val mapState = rememberNavigationMapState(navigationCameraOptions = cameraOptions)
   val scope = rememberCoroutineScope()
   val navigating = uiState.isNavigating()
 
+  var settingsOpen by rememberSaveable { mutableStateOf(false) }
+  var searchOpen by remember { mutableStateOf(false) }
+  var arrivedAt by remember { mutableStateOf<String?>(null) }
+  val rotated by remember { derivedStateOf { abs(mapState.cameraState.position.bearing) > 1.0 } }
+
+  // Back steps out one level at a time, like Google Maps.
+  BackHandler(settingsOpen) { settingsOpen = false }
+  BackHandler(!settingsOpen && searchOpen) {
+    searchOpen = false
+    viewModel.onQueryChange("")
+  }
+  BackHandler(!settingsOpen && !searchOpen && planner.preview != null) { viewModel.cancelPreview() }
+  BackHandler(!settingsOpen && !searchOpen && planner.preview == null && planner.destination != null) {
+    viewModel.clearDestination()
+  }
+
   LaunchedEffect(navigating) { if (navigating) mapState.recenter(isNavigating = true) }
   LaunchedEffect(planner.destination) {
     val d = planner.destination ?: return@LaunchedEffect
+    if (planner.preview != null) return@LaunchedEffect
     mapState.cameraMode = NavigationCameraMode.FREE
     mapState.cameraState.animateTo(
         CameraPosition(target = Position(d.coordinate.lng, d.coordinate.lat), zoom = 15.0),
         duration = 900.milliseconds,
     )
   }
-
-  val gta = theme.id == "metro"
-  val rdr = theme.id == "frontier"
-  val game = gta || rdr
-  val area by viewModel.area.collectAsState()
-  val carGameHud by AppModule.themeStore.carGameHud.collectAsState()
-  var arrivedAt by remember { mutableStateOf<String?>(null) }
+  LaunchedEffect(planner.preview) {
+    val bounds = planner.preview?.route?.geometry?.boundingBox() ?: return@LaunchedEffect
+    mapState.showRouteOverview(
+        boundingBox = bounds,
+        paddingValues = PaddingValues(start = 56.dp, end = 56.dp, top = 170.dp, bottom = 300.dp),
+    )
+  }
   LaunchedEffect(Unit) {
     viewModel.arrived.collect {
       arrivedAt = it
@@ -101,10 +97,18 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
       arrivedAt = null
     }
   }
+
+  val locate: () -> Unit = { mapState.recenter(isNavigating = navigating) }
+  val northUp: () -> Unit = {
+    scope.launch {
+      mapState.cameraMode = NavigationCameraMode.FREE
+      mapState.cameraState.animateTo(mapState.cameraState.position.copy(bearing = 0.0, tilt = 0.0), duration = 400.milliseconds)
+    }
+  }
   val toggleOverview: () -> Unit = {
     if (mapState.isTrackingUser) {
       uiState.routeGeometry?.boundingBox()?.let {
-        mapState.showRouteOverview(boundingBox = it, paddingValues = PaddingValues(64.dp))
+        mapState.showRouteOverview(boundingBox = it, paddingValues = PaddingValues(start = 56.dp, end = 56.dp, top = 220.dp, bottom = 260.dp))
       }
     } else mapState.recenter(isNavigating = true)
   }
@@ -116,294 +120,77 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
         mapState = mapState,
         cameraOptions = cameraOptions,
         pickedDestination = planner.destination?.coordinate,
-        attributionPadding =
-            when {
-              game && navigating -> PaddingValues(top = 130.dp, end = 12.dp)
-              game -> PaddingValues(bottom = 80.dp, end = 12.dp)
-              navigating -> PaddingValues(top = 150.dp, end = 12.dp)
-              else -> PaddingValues(top = 110.dp, end = 12.dp)
-            },
-        attributionAlignment = if (game && !navigating) Alignment.BottomEnd else Alignment.TopEnd,
-        onLongPress = viewModel::dropPin,
+        previewRoute = planner.preview?.route?.geometry,
+        attributionPadding = PaddingValues(top = if (navigating) 250.dp else 200.dp, end = 12.dp),
+        onLongPress = {
+          searchOpen = false
+          viewModel.dropPin(it)
+        },
     )
     if (theme.paperOverlay) PaperOverlay()
 
-    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(12.dp)) {
-      if (gta && navigating) {
-        GtaDriveHud(
-            theme = theme,
-            uiState = uiState,
-            area = area,
-            mapBearing = { mapState.cameraState.position.bearing },
-            following = mapState.isTrackingUser,
-            onMute = viewModel::toggleMute,
-            onOverview = toggleOverview,
-            onTheme = AppModule.themeStore::cycle,
-            onEnd = viewModel::stopNavigation,
-        )
-      } else if (gta) {
-        GtaPlanner(
-            theme = theme,
-            planner = planner,
-            testDrive = testDrive,
-            here = uiState.location?.coordinates,
-            onQuery = viewModel::onQueryChange,
-            onChoose = viewModel::choose,
-            onClear = viewModel::clearDestination,
-            onGo = viewModel::go,
-            onTestDrive = viewModel::setTestDrive,
-            onTheme = AppModule.themeStore::cycle,
-            onLocate = { scope.launch { mapState.recenter(isNavigating = false) } },
-            carGameHud = carGameHud,
-            onCarHud = AppModule.themeStore::setCarGameHud,
-        )
-      } else if (rdr && navigating) {
-        RdrDriveHud(
-            theme = theme,
-            uiState = uiState,
-            area = area,
-            mapBearing = { mapState.cameraState.position.bearing },
-            following = mapState.isTrackingUser,
-            onMute = viewModel::toggleMute,
-            onOverview = toggleOverview,
-            onTheme = AppModule.themeStore::cycle,
-            onEnd = viewModel::stopNavigation,
-        )
-      } else if (rdr) {
-        RdrPlanner(
-            theme = theme,
-            planner = planner,
-            testDrive = testDrive,
-            here = uiState.location?.coordinates,
-            onQuery = viewModel::onQueryChange,
-            onChoose = viewModel::choose,
-            onClear = viewModel::clearDestination,
-            onGo = viewModel::go,
-            onTestDrive = viewModel::setTestDrive,
-            onTheme = AppModule.themeStore::cycle,
-            onLocate = { scope.launch { mapState.recenter(isNavigating = false) } },
-            carGameHud = carGameHud,
-            onCarHud = AppModule.themeStore::setCarGameHud,
-        )
-      } else if (navigating) {
-        TurnBanner(theme, uiState, Modifier.align(Alignment.TopCenter))
-        Column(Modifier.align(Alignment.BottomCenter)) {
-          uiState.currentStepRoadName?.takeIf { it.isNotBlank() }?.let { road ->
-            Text(
-                theme.display(road),
-                color = theme.hudFg,
-                style = theme.hudText(24.sp, shadow = true),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = 6.dp, bottom = 8.dp),
+    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+      when {
+        navigating ->
+            NavigationLayer(
+                spec = spec,
+                uiState = uiState,
+                area = area,
+                following = mapState.isTrackingUser,
+                onRecenter = locate,
+                onOverview = toggleOverview,
+                onMute = viewModel::toggleMute,
+                onEnd = viewModel::stopNavigation,
+                onSettings = { settingsOpen = true },
             )
-          }
-          TripBar(
-              theme = theme,
-              uiState = uiState,
-              following = mapState.isTrackingUser,
-              onEnd = viewModel::stopNavigation,
-              onTheme = AppModule.themeStore::cycle,
-              onMute = viewModel::toggleMute,
-              onOverview = toggleOverview,
-          )
-        }
-      } else {
-        Planner(
-            theme = theme,
-            planner = planner,
-            testDrive = testDrive,
-            onQuery = viewModel::onQueryChange,
-            onChoose = viewModel::choose,
-            onClear = viewModel::clearDestination,
-            onGo = viewModel::go,
-            onTestDrive = viewModel::setTestDrive,
-            onTheme = AppModule.themeStore::select,
-            onLocate = { scope.launch { mapState.recenter(isNavigating = false) } },
-        )
+        planner.preview != null ->
+            PreviewLayer(
+                spec = spec,
+                preview = planner.preview!!,
+                testDrive = testDrive,
+                onBack = viewModel::cancelPreview,
+                onStart = viewModel::startPreview,
+            )
+        else ->
+            BrowseLayer(
+                spec = spec,
+                planner = planner,
+                saved = saved,
+                here = uiState.location?.coordinates,
+                searchOpen = searchOpen,
+                onSearchOpen = { searchOpen = it },
+                rotated = rotated,
+                onQuery = viewModel::onQueryChange,
+                onChoose = {
+                  searchOpen = false
+                  viewModel.choose(it)
+                },
+                onClear = viewModel::clearDestination,
+                onDirections = viewModel::directions,
+                onSettings = { settingsOpen = true },
+                onLocate = locate,
+                onNorthUp = northUp,
+            )
       }
     }
 
-    // Arrival: GTA's "mission passed" banner for Metro Crime, a plain card elsewhere.
-    GtaBigMessage(
-        visible = gta && arrivedAt != null,
-        title = "ARRIVED",
-        subtitle = arrivedAt.orEmpty(),
-        modifier = Modifier.align(Alignment.Center),
-    )
-    RdrBigMessage(
-        visible = rdr && arrivedAt != null,
-        title = "ARRIVED",
-        subtitle = arrivedAt.orEmpty(),
-        modifier = Modifier.align(Alignment.Center),
-    )
-    if (!game) {
-      arrivedAt?.let {
-        Text(
-            "Arrived at $it",
-            color = theme.hudFg,
-            style = theme.hudText(24.sp),
-            modifier = Modifier.align(Alignment.Center).hudCard(theme).padding(horizontal = 20.dp, vertical = 14.dp),
-        )
-      }
-    }
-  }
-}
-
-@Composable
-private fun Planner(
-    theme: OverworldTheme,
-    planner: PlannerState,
-    testDrive: Boolean,
-    onQuery: (String) -> Unit,
-    onChoose: (Place) -> Unit,
-    onClear: () -> Unit,
-    onGo: () -> Unit,
-    onTestDrive: (Boolean) -> Unit,
-    onTheme: (String) -> Unit,
-    onLocate: () -> Unit,
-) {
-  val focus = LocalFocusManager.current
-  Box(Modifier.fillMaxSize()) {
-    Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()) {
-      Row(
-          Modifier.fillMaxWidth().hudCard(theme).padding(horizontal = 16.dp, vertical = 14.dp),
-          verticalAlignment = Alignment.CenterVertically,
-      ) {
-        BasicTextField(
-            value = planner.query,
-            onValueChange = onQuery,
-            singleLine = true,
-            textStyle = uiText(18.sp).copy(color = theme.hudFg),
-            cursorBrush = SolidColor(theme.hudAccent),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
-            modifier = Modifier.weight(1f),
-            decorationBox = { inner ->
-              if (planner.query.isEmpty()) {
-                Text("Where to?", color = theme.hudSub, style = uiText(18.sp))
-              }
-              inner()
-            },
-        )
-        if (planner.searching) Text("…", color = theme.hudSub, style = uiText(18.sp))
-      }
-      if (planner.results.isNotEmpty()) {
-        LazyColumn(
-            Modifier.padding(top = 8.dp).fillMaxWidth().heightIn(max = 340.dp).hudCard(theme)
-        ) {
-          items(planner.results) { place ->
-            Column(
-                Modifier.fillMaxWidth()
-                    .clickable {
-                      focus.clearFocus()
-                      onChoose(place)
-                    }
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-            ) {
-              Text(place.name, color = theme.hudFg, style = uiText(17.sp, FontWeight.Medium), maxLines = 1)
-              if (place.detail.isNotBlank()) {
-                Text(
-                    place.detail,
-                    color = theme.hudSub,
-                    style = uiText(14.sp),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-              }
-            }
-          }
-        }
-      }
+    val arrivedVisible = arrivedAt != null
+    if (theme.skin == Skin.GTA) {
+      GtaBigMessage(arrivedVisible, "ARRIVED", arrivedAt.orEmpty(), Modifier.align(Alignment.Center))
+    } else {
+      RdrBigMessage(arrivedVisible, "ARRIVED", arrivedAt.orEmpty(), Modifier.align(Alignment.Center))
     }
 
-    // While typing a search, the results own the screen.
-    val searching = planner.destination == null && planner.query.isNotBlank()
-    if (!searching) Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-      Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.End) {
-        HudButton(theme, "Locate", onLocate, Modifier.width(96.dp))
-      }
-      Column(Modifier.fillMaxWidth().hudCard(theme).padding(16.dp)) {
-        planner.destination?.let { d ->
-          Text(d.name, color = theme.hudFg, style = theme.hudText(26.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-          if (d.detail.isNotBlank()) {
-            Text(d.detail, color = theme.hudSub, style = uiText(14.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
-          }
-          planner.error?.let { Text(it, color = theme.hudAccent, style = uiText(14.sp), modifier = Modifier.padding(top = 6.dp)) }
-          Row(
-              Modifier.fillMaxWidth().padding(top = 12.dp),
-              horizontalArrangement = Arrangement.spacedBy(8.dp),
-          ) {
-            HudButton(theme, "Cancel", onClear, Modifier.weight(1f))
-            HudButton(theme, if (planner.routing) "Routing" else "Go", onGo, Modifier.weight(2f), strong = true)
-          }
-          Spacer(Modifier.size(14.dp))
-        }
-        if (planner.destination == null) {
-          Text(
-              "Search above, or long-press the map to drop a pin.",
-              color = theme.hudSub,
-              style = uiText(14.sp),
-              modifier = Modifier.padding(bottom = 12.dp),
-          )
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-          Column(Modifier.weight(1f)) {
-            Text("Test drive", color = theme.hudFg, style = uiText(16.sp, FontWeight.Medium))
-            Text("Simulates the trip instead of using GPS", color = theme.hudSub, style = uiText(13.sp))
-          }
-          Switch(
-              checked = testDrive,
-              onCheckedChange = onTestDrive,
-              colors =
-                  SwitchDefaults.colors(
-                      checkedTrackColor = theme.hudAccent,
-                      checkedThumbColor = contrastOn(theme.hudAccent),
-                      uncheckedTrackColor = theme.hudFg.copy(alpha = 0.12f),
-                      uncheckedThumbColor = theme.hudSub,
-                      uncheckedBorderColor = theme.hudBorder,
-                  ),
-          )
-        }
-        Row(
-            Modifier.fillMaxWidth().padding(top = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-          THEMES.forEach { t -> ThemeChip(t, selected = t.id == theme.id, current = theme, onClick = { onTheme(t.id) }, modifier = Modifier.weight(1f)) }
-        }
-      }
+    if (settingsOpen) {
+      SettingsScreen(
+          theme = theme,
+          uiState = uiState,
+          testDrive = testDrive,
+          saved = saved,
+          onTestDrive = viewModel::setTestDrive,
+          onMute = viewModel::toggleMute,
+          onClose = { settingsOpen = false },
+      )
     }
-  }
-}
-
-@Composable
-private fun ThemeChip(
-    t: OverworldTheme,
-    selected: Boolean,
-    current: OverworldTheme,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-  val shape = RoundedCornerShape(12.dp)
-  Column(
-      modifier
-          .background(if (selected) current.hudFg.copy(alpha = 0.1f) else current.hudFg.copy(alpha = 0.03f), shape)
-          .border(if (selected) 2.dp else 1.dp, if (selected) current.hudFg.copy(alpha = 0.7f) else current.hudBorder, shape)
-          .clickable(onClick = onClick)
-          .padding(10.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
-  ) {
-    Row(Modifier.size(width = 48.dp, height = 22.dp)) {
-      Box(Modifier.weight(1f).fillMaxSize().background(t.land, RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp)))
-      Box(Modifier.weight(1f).fillMaxSize().background(t.hudFg))
-      Box(Modifier.weight(1f).fillMaxSize().background(t.routeLine, RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp)))
-    }
-    Text(
-        t.name,
-        color = current.hudFg,
-        style = uiText(13.sp, FontWeight.Medium),
-        maxLines = 1,
-        modifier = Modifier.padding(top = 6.dp),
-    )
   }
 }

@@ -37,7 +37,9 @@ class CarScreenSmokeTest {
     val appContext = instrumentation.targetContext
     AppModule.init(appContext)
     val store = AppModule.themeStore
-    main { store.select("metro") }
+    main { store.select("gta5") }
+    // Android Auto card mode first: the idle message and the turn card come from the host.
+    main { store.setCarGameHud(false) }
 
     val screen = main {
       val carContext = TestCarContext.createCarContext(appContext)
@@ -49,10 +51,10 @@ class CarScreenSmokeTest {
     // Idle: themed message, a theme switch, and pan on the map.
     val idle = main { screen.onGetTemplate() } as NavigationTemplate
     val message = idle.navigationInfo as MessageInfo
-    assertEquals("Metro Crime", message.title.toString())
-    val themeAction = idle.actionStrip!!.actions.first()
+    assertEquals("GTA V", message.title.toString())
+    val themeAction = idle.actionStrip!!.actions[1]
     main { themeAction.onClickDelegate!!.sendClick(NoopCallback) }
-    assertEquals("frontier", store.theme.value.id)
+    assertEquals("rdr2", store.theme.value.id)
 
     // A real trip: Valhalla route, simulated driving, started with the phone app open.
     appContext.startActivity(
@@ -85,8 +87,14 @@ class CarScreenSmokeTest {
         "turn card: ${routing.currentStep?.cue} in ${routing.currentDistance}; ETA ${driving.destinationTravelEstimate?.remainingTimeSeconds}s",
     )
 
+    // Game HUD mode: the host cards are not sent while driving (the HUD is drawn on the map).
+    main { store.setCarGameHud(true) }
+    val gameHud = main { screen.onGetTemplate() } as NavigationTemplate
+    assertEquals(null, gameHud.navigationInfo)
+    assertEquals(null, gameHud.destinationTravelEstimate)
+
     AppModule.viewModel.stopNavigation()
-    main { store.select("metro") }
+    main { store.select("gta5") }
   }
 
   private object NoopCallback : androidx.car.app.OnDoneCallback

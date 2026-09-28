@@ -15,10 +15,14 @@ import kotlinx.coroutines.flow.asStateFlow
 
 enum class HudFont { CONDENSED, SERIF, TECH }
 
+/** Which game's interface the app wears: GTA menus and HUD, or Red Dead's. */
+enum class Skin { GTA, RDR }
+
 /** One map identity. The values come from prototype/themes.js via tools/export-android.mjs. */
 data class OverworldTheme(
     val id: String,
     val name: String,
+    val skin: Skin,
     val blurb: String,
     val dark: Boolean,
     val font: HudFont,
@@ -111,7 +115,13 @@ class ThemeStore(context: Context) {
     private const val KEY = "theme"
     private const val KEY_CAR_HUD = "car_game_hud"
 
-    fun byId(id: String?): OverworldTheme = THEMES.firstOrNull { it.id == id } ?: THEMES.first()
+    /** Ids before the 2026-09-28 rename. */
+    private val LEGACY = mapOf("metro" to "gta5", "frontier" to "rdr2", "vice" to "gta6")
+
+    fun byId(id: String?): OverworldTheme {
+      val key = LEGACY[id] ?: id
+      return THEMES.firstOrNull { it.id == key } ?: THEMES.first()
+    }
   }
 }
 
