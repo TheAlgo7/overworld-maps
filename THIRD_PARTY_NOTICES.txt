@@ -34,3 +34,24 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 USED WITHIN THIS PROJECT
 
 * Mapbox Directions Icons https://github.com/mapbox/directions-icons (Public Domain/CC0)
+
+
+FONTS
+
+Barlow, Barlow Condensed, Chakra Petch, IM FELL English, Passion One, Crimson Text,
+Merriweather and Raleway: SIL Open Font License 1.1, see licenses/OFL.txt.
+
+Homemade Apple: Copyright (c) 2010 by Font Diner, Inc. Apache License 2.0,
+see licenses/Apache-2.0.txt. Used as MapLibre glyph ranges built by tools/make_glyphs.py.
+
+The game fonts some personal builds use (Pricedown, Chalet, RDR Lino, RDR Catalogue,
+Hapna Slab Serif) are commercial or Rockstar Games property. They are not in this
+repository and are not licensed by it; see README.md.
+
+
+MAP DATA AND SERVICES
+
+Map data (c) OpenStreetMap contributors, Open Database License (ODbL),
+https://www.openstreetmap.org/copyright. Tiles: OpenFreeMap (https://openfreemap.org),
+OpenMapTiles schema. Routing: Valhalla on the FOSSGIS server. Search: Photon by komoot.
+Speed cameras: Overpass API. Live traffic (optional, your own key): TomTom.
