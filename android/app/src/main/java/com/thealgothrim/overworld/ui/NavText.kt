@@ -68,10 +68,3 @@ internal fun relativeBearing(from: GeographicCoordinate?, to: GeographicCoordina
   val bearing = Math.toDegrees(atan2(y, x))
   return ((bearing - mapBearing + 360) % 360).toFloat()
 }
-
-/**
- * The arrow to show for a turn. "End of road" (a T-junction) draws the crossing road as a thin
- * hollow bar that reads as a glitch at card size; Google shows a plain turn there, so do we.
- */
-fun uniffi.ferrostar.VisualInstructionContent.forDisplay(): uniffi.ferrostar.VisualInstructionContent =
-    if (maneuverType == uniffi.ferrostar.ManeuverType.END_OF_ROAD) copy(maneuverType = uniffi.ferrostar.ManeuverType.TURN) else this

@@ -26,7 +26,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.stadiamaps.ferrostar.composeui.views.components.maneuver.ManeuverImage
 import com.stadiamaps.ferrostar.core.NavigationUiState
 import com.thealgothrim.overworld.HazardAhead
 import com.thealgothrim.overworld.RouteExtras
@@ -117,7 +116,7 @@ private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardA
   // One card, like Google's: the turn, then "Then", then any alert, split by hairlines.
   Column(modifier.width(IntrinsicSize.Max).widthIn(min = 300.dp, max = 420.dp).skinPanel(spec)) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-      Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) { content?.let { ManeuverImage(it.forDisplay(), tint = spec.fg) } }
+      Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) { content?.let { TurnArrow(it, uiState.remainingSteps?.firstOrNull()?.drivingSide, spec.fg) } }
       Spacer(Modifier.width(18.dp))
       Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (uiState.isCalculatingNewRoute == true) {
@@ -133,7 +132,7 @@ private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardA
       Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         SkinText("Then", spec.body, 18.sp, spec.sub)
         Spacer(Modifier.width(10.dp))
-        Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) { ManeuverImage(it.forDisplay(), tint = spec.fg) }
+        Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) { TurnArrow(it, next?.drivingSide, spec.fg) }
       }
     }
     hazard?.let {

@@ -29,7 +29,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.stadiamaps.ferrostar.composeui.views.components.maneuver.ManeuverImage
 import com.stadiamaps.ferrostar.core.NavigationUiState
 import com.thealgothrim.overworld.HazardAhead
 import com.thealgothrim.overworld.RouteExtras
@@ -223,7 +222,7 @@ private fun TurnBanner(spec: SkinSpec, uiState: NavigationUiState, hazard: Hazar
         verticalAlignment = Alignment.CenterVertically,
     ) {
       Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
-        content?.let { ManeuverImage(it.forDisplay(), tint = if (spec.gta) Gta.White else Rdr.White) }
+        content?.let { TurnArrow(it, uiState.remainingSteps?.firstOrNull()?.drivingSide, if (spec.gta) Gta.White else Rdr.White) }
       }
       Spacer(Modifier.width(14.dp))
       Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -240,7 +239,7 @@ private fun TurnBanner(spec: SkinSpec, uiState: NavigationUiState, hazard: Hazar
       Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         SkinText("Then", spec.body, 15.sp, spec.sub)
         Spacer(Modifier.width(8.dp))
-        Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) { ManeuverImage(it.forDisplay(), tint = spec.fg) }
+        Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) { TurnArrow(it, next?.drivingSide, spec.fg) }
       }
     }
     hazard?.let {
