@@ -7,8 +7,10 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewModelScope
 import com.stadiamaps.ferrostar.core.DefaultNavigationViewModel
+import com.stadiamaps.ferrostar.core.InvalidStatusCodeException
 import com.stadiamaps.ferrostar.core.NavigationUiState
 import com.stadiamaps.ferrostar.core.annotation.valhalla.valhallaExtendedOSRMAnnotationPublisher
+import com.stadiamaps.ferrostar.core.isNavigating
 import com.stadiamaps.ferrostar.core.location.toUserLocation
 import com.thealgothrim.overworld.search.Place
 import com.thealgothrim.overworld.traffic.metres
@@ -38,6 +40,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import uniffi.ferrostar.GeographicCoordinate
 import uniffi.ferrostar.Route
 import uniffi.ferrostar.TripState
@@ -204,12 +207,23 @@ class OverworldViewModel :
     viewModelScope.launch {
       navigationUiState.map { it.routeGeometry }.collect { geometry ->
         if (geometry != null && geometry.size >= 2 && (geometry != extrasRoute || !extrasLive)) loadExtras(geometry, live = true)
-        if (geometry == null && _planner.value.preview == null) {
+        // Ferrostar reports no route as an empty list, not null. Without this the last trip's
+        // lights and incidents stayed on the map, and its live traffic was re-fetched every
+        // 150 s for as long as the app lived.
+        if (geometry.isNullOrEmpty() && _planner.value.preview == null) {
           extrasJob?.cancel()
           extrasRoute = null
           extrasLive = false
           _extras.value = RouteExtras()
         }
+      }
+    }
+    viewModelScope.launch {
+      // Ferrostar applies GPS fixes on a background thread. A fix being applied at the moment the
+      // trip is ended writes "navigating" back over the stop, with no route left: the trip came back
+      // after End. A trip always has a route, so a navigating state without one is that leftover.
+      core.state.collect { state ->
+        if (state.tripState is TripState.Navigating && state.routeGeometry.isEmpty()) core.stopNavigation()
       }
     }
     viewModelScope.launch {
@@ -332,7 +346,7 @@ class OverworldViewModel :
         launch(Dispatchers.Main) { loadExtras(route.geometry, live = false) }
       } catch (e: Exception) {
         Log.w(TAG, "routing failed", e)
-        _planner.value = _planner.value.copy(routing = false, error = "Couldn't find a route. Check the connection and try again.")
+        _planner.value = _planner.value.copy(routing = false, error = routeError(e))
       }
     }
   }
@@ -431,14 +445,18 @@ class OverworldViewModel :
     _planner.value = PlannerState()
   }
 
+  /** Main thread only, like everything else that starts or stops Ferrostar. */
   private fun begin(given: Route, place: Place) {
     val route = given.safeForCar()
-    if (_testDrive.value) locationProvider.enableSimulationOn(route)
+    // Set both ways: a test drive ended from the notification's Stop never turned the simulator
+    // off, and the next real trip would then have been driven by it.
+    if (_testDrive.value) locationProvider.enableSimulationOn(route) else locationProvider.disableSimulation()
     setDestination(place.name)
     destinationName = place.name
     _area.value = null
     AppModule.saved.addRecent(place)
-    if (navigationUiState.value.isNavigating()) core.replaceRoute(route = route) else core.startNavigation(route = route)
+    // The core's own state, not the UI's copy, which reaches the main thread a moment later.
+    if (core.state.value.isNavigating()) core.replaceRoute(route = route) else core.startNavigation(route = route)
   }
 
   /**
@@ -456,13 +474,33 @@ class OverworldViewModel :
                     listOf(Waypoint(coordinate = destination, kind = WaypointKind.BREAK)),
                 )
                 .first()
-        begin(route, Place(name ?: "Destination", "", destination))
-        _planner.value = PlannerState()
+        withContext(Dispatchers.Main) {
+          begin(route, Place(name ?: "Destination", "", destination))
+          _planner.value = PlannerState()
+        }
       } catch (e: Exception) {
         Log.w(TAG, "routing failed", e)
         _planner.value =
-            _planner.value.copy(routing = false, error = "Couldn't find a route. Check the connection and try again.")
+            _planner.value.copy(routing = false, error = routeError(e))
       }
+    }
+  }
+
+  /**
+   * A place asked for by name from outside the app, like "Hey Google, navigate to India Gate" in
+   * Android Auto: the best search match near here, then straight to driving.
+   */
+  fun navigateToQuery(query: String) {
+    viewModelScope.launch {
+      val place =
+          runCatching { AppModule.search.search(query, currentCoordinate).firstOrNull() }
+              .onFailure { Log.w(TAG, "search for \"$query\" failed", it) }
+              .getOrNull()
+      if (place == null) {
+        _planner.value = _planner.value.copy(error = "Couldn't find \"$query\".")
+        return@launch
+      }
+      startNavigation(place.coordinate, place.name)
     }
   }
 
@@ -471,6 +509,14 @@ class OverworldViewModel :
     core.stopNavigation()
     setDestination(null)
   }
+
+  /** What went wrong with a route request, in words: the routing server refusing isn't the connection. */
+  private fun routeError(e: Exception): String =
+      when ((e as? InvalidStatusCodeException)?.statusCode) {
+        400 -> "No drivable route to there."
+        429 -> "The route server is busy. Try again in a minute."
+        else -> "Couldn't find a route. Check the connection and try again."
+      }
 
   companion object {
     private const val TAG = "OverworldViewModel"

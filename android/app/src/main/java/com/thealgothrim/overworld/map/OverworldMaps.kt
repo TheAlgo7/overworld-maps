@@ -28,7 +28,7 @@ import com.stadiamaps.ferrostar.maplibreui.runtime.NavigationCameraOptions
 import com.stadiamaps.ferrostar.maplibreui.runtime.NavigationMapState
 import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.SurfaceAreaTracker
 import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.screenSurfaceState
-import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.surfaceStableFractionalPadding
+import com.thealgothrim.overworld.car.safeStablePadding
 import androidx.compose.ui.text.style.TextAlign
 import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.RouteExtras
@@ -118,13 +118,13 @@ fun OverworldCarMap(
       surfaceArea?.visibleArea?.let { area ->
         with(density) {
           PaddingValues(
-              start = area.left.toDp(),
+              start = area.left.coerceAtLeast(0).toDp(),
               top = 0.dp,
               end = (surfaceSize.width - area.right).coerceAtLeast(0).toDp(),
               bottom = (surfaceSize.height - area.bottom).coerceAtLeast(0).toDp(),
           )
         }
-      } ?: surfaceStableFractionalPadding(surfaceArea?.compositeArea)
+      } ?: safeStablePadding(surfaceArea?.compositeArea)
   val details by AppModule.themeStore.details.collectAsState()
   val extras by AppModule.viewModel.extras.collectAsState()
   val trafficTiles = AppModule.traffic.flowTilesUrl?.takeIf { details.traffic }

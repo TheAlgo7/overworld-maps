@@ -70,6 +70,7 @@ It is a personal project, built first for one car: a Tata Curvv with a 10.25-inc
 - **Road alerts.** Traffic lights on the route, speed cameras ahead, and accidents, road works and closures that run along the route (not side streets it crosses), with how much time the traffic adds.
 - **Speed-limit signs for each world**, turning red at 5 km/h over.
 - **Google Maps layout, game look.** Search, Home, Work and Saved, a place sheet, a route preview, a Layers sheet with theme cards. Settings is the game's pause menu.
+- **Navigation requests in the car.** When Android Auto hands Overworld a destination ("navigate to India Gate", or an address from a message), it drives there, by place name or by coordinates, even with a trip already running.
 - **Made for Indian roads.** Metric, a 12-hour clock, and turn arrows for left-hand traffic: roundabouts circle clockwise and U-turns curl right.
 - **Costs nothing to run.** OpenFreeMap tiles, public routing and search, and an optional free TomTom key for traffic.
 
@@ -158,7 +159,9 @@ adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver -a com.
 adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver -a com.thealgothrim.overworld.DEBUG_STOP
 ```
 
-The drive starts where the phone is. Add `--ef from_lat 28.6315 --ef from_lng 77.2167` to start somewhere else, here on Connaught Place's Outer Circle, a good test for roundabouts.
+The drive starts where the phone is. Add `--ef from_lat 28.6315 --ef from_lng 77.2167` to start somewhere else, here on Connaught Place's Outer Circle, a good test for roundabouts. `--es query "India%sGate"` drives to a place by name, the way a request from Android Auto arrives, and `--ez test false` makes it a real trip on the phone's GPS. `-a com.thealgothrim.overworld.DEBUG_STATE` logs what the app holds (trip, simulator, route extras, voice) under the `DebugDrive` tag.
+
+**Tests** (`android/app/src/androidTest`, need a phone or emulator with internet): real Delhi and Chandigarh routes run through Android Auto's builders step by step, navigation requests in every link form, trips stopped as they start, and the car screen itself. Run them on an emulator, since `connectedDebugAndroidTest` uninstalls the app afterwards and a phone would lose its saved places. Put the emulator in Delhi first (`adb emu geo fix 77.2167 28.6315`); by default it thinks it's in California.
 
 Map icons and labels don't draw on the emulator's default software GPU. Start it on the computer's GPU: `emulator -avd <name> -gpu host`.
 

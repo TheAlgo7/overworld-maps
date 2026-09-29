@@ -3,8 +3,6 @@ package com.thealgothrim.overworld
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
-import android.speech.tts.TextToSpeech
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -14,17 +12,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import com.stadiamaps.ferrostar.core.AndroidTtsStatusListener
 import com.thealgothrim.overworld.ui.PhoneScreen
-import java.util.Locale
 import uniffi.ferrostar.createFerrostarLogger
 
-class MainActivity : ComponentActivity(), AndroidTtsStatusListener {
+class MainActivity : ComponentActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     AppModule.init(this)
-    AppModule.ttsObserver.statusObserver = this
     AppModule.ferrostarCore.spokenInstructionObserver = AppModule.ttsObserver
     createFerrostarLogger()
 
@@ -60,22 +55,8 @@ class MainActivity : ComponentActivity(), AndroidTtsStatusListener {
 
   override fun onStart() {
     super.onStart()
-    AppModule.ttsObserver.start()
+    // Voice prompts are shared with the car and live as long as the app (see AppModule), so they
+    // are started here but never shut down with this screen.
+    AppModule.startVoice()
   }
-
-  override fun onDestroy() {
-    super.onDestroy()
-    AppModule.ttsObserver.shutdown()
-  }
-
-  override fun onTtsInitialized(tts: TextToSpeech?, status: Int) {
-    // Indian English voice when the phone has one, otherwise the default English voice.
-    tts?.language = Locale.Builder().setLanguage("en").setRegion("IN").build()
-  }
-
-  override fun onTtsSpeakError(utteranceId: String, status: Int) {
-    Log.e("Overworld", "TTS error $status for $utteranceId")
-  }
-
-  override fun onTtsShutdownAndRelease() {}
 }

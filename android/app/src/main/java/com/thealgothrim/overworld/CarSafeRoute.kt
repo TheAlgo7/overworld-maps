@@ -18,7 +18,8 @@ import uniffi.ferrostar.VisualInstructionContent
  *
  * So an exit number stays only on steps that are all enter-and-exit. Enter-and-exit steps without a
  * number become "leave the roundabout", which is what they mean when the count is unknown. Our own
- * HUD draws the same arrow for both (see ui/TurnArrow.kt) and never shows the number.
+ * HUD draws the same arrow for both (see ui/TurnArrow.kt) and never shows the number. Android Auto
+ * also throws on exit number 0, so a 0 counts as no number.
  */
 internal fun Route.safeForCar(): Route {
   val safe = steps.map { it.safeForCar() }
@@ -27,7 +28,8 @@ internal fun Route.safeForCar(): Route {
 
 private fun RouteStep.safeForCar(): RouteStep {
   val types = visualInstructions.map { it.primaryContent.maneuverType }
-  val numbered = roundaboutExitNumber != null && types.isNotEmpty() && types.all { it in ENTER_AND_EXIT }
+  val exit = roundaboutExitNumber?.toInt() ?: 0
+  val numbered = exit >= 1 && types.isNotEmpty() && types.all { it in ENTER_AND_EXIT }
   if (numbered) return this
   if (roundaboutExitNumber == null && types.none { it in ENTER_AND_EXIT }) return this
   return copy(

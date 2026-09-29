@@ -16,6 +16,14 @@ import uniffi.ferrostar.GeographicCoordinate
  *     -a com.thealgothrim.overworld.DEBUG_DRIVE --es theme rdr2
  *   adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver \
  *     -a com.thealgothrim.overworld.DEBUG_STOP
+ *
+ * A place by name, the way Android Auto's "navigate to India Gate" arrives:
+ *   adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver \
+ *     -a com.thealgothrim.overworld.DEBUG_DRIVE --es query "India%sGate"
+ *
+ * What the app holds right now (trip, simulator, route extras), in logcat under DebugDrive:
+ *   adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver \
+ *     -a com.thealgothrim.overworld.DEBUG_STATE
  */
 class DebugDriveReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
@@ -23,11 +31,25 @@ class DebugDriveReceiver : BroadcastReceiver() {
     val vm = AppModule.viewModel
     when (intent.action) {
       "com.thealgothrim.overworld.DEBUG_STOP" -> vm.stopNavigation()
+      "com.thealgothrim.overworld.DEBUG_STATE" -> {
+        val ui = vm.navigationUiState.value
+        val extras = vm.extras.value
+        Log.i(
+            "DebugDrive",
+            "navigating=${ui.isNavigating()} to=${ui.destination} route=${ui.routeGeometry?.size ?: 0}pts " +
+                "core=${AppModule.ferrostarCore.state.value.tripState::class.simpleName} " +
+                "simulating=${AppModule.locationProvider.isSimulating.value} testDrive=${vm.testDrive.value} " +
+                "extras: ${extras.signals.size} signals, ${extras.incidents.size} incidents, " +
+                "${extras.trafficSpans.size} traffic spans, eta=${extras.eta?.travelSeconds} " +
+                "voice=${AppModule.ttsObserver.tts != null} muted=${AppModule.ttsObserver.isMuted}",
+        )
+      }
       "com.thealgothrim.overworld.DEBUG_DRIVE" -> {
         intent.getStringExtra("theme")?.let { AppModule.themeStore.select(it) }
         if (intent.hasExtra("lat") && intent.hasExtra("lng")) {
           val to = GeographicCoordinate(intent.getFloatExtra("lat", 0f).toDouble(), intent.getFloatExtra("lng", 0f).toDouble())
-          vm.setTestDrive(true)
+          // --ez test false: a real trip from the phone's GPS position instead of a simulated one.
+          vm.setTestDrive(intent.getBooleanExtra("test", true))
           // "%s" for spaces, the same convention as `adb shell input text`.
           // Optional start ("from_lat"/"from_lng"), so a drive can begin anywhere, not where the phone is.
           val from =
@@ -36,6 +58,11 @@ class DebugDriveReceiver : BroadcastReceiver() {
               else null
           vm.startNavigation(to, intent.getStringExtra("name")?.replace("%s", " "), from)
           Log.i("DebugDrive", "test drive to $to")
+        }
+        intent.getStringExtra("query")?.replace("%s", " ")?.let { query ->
+          vm.setTestDrive(true)
+          vm.navigateToQuery(query)
+          Log.i("DebugDrive", "test drive to \"$query\"")
         }
       }
     }

@@ -63,7 +63,8 @@ class CarScreenSmokeTest {
     )
     Thread.sleep(4000)
     AppModule.viewModel.setTestDrive(true)
-    AppModule.viewModel.startNavigation(GeographicCoordinate(28.6129, 77.2295), "India Gate")
+    // From Connaught Place, wherever the device thinks it is (an emulator says California).
+    AppModule.viewModel.startNavigation(GeographicCoordinate(28.6129, 77.2295), "India Gate", from = GeographicCoordinate(28.6315, 77.2167))
     val deadline = System.currentTimeMillis() + 30_000
     while (!AppModule.viewModel.navigationUiState.value.isNavigating() && System.currentTimeMillis() < deadline) {
       Thread.sleep(250)

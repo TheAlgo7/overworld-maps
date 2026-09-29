@@ -8,6 +8,7 @@
             <intent-filter>
                 <action android:name="com.thealgothrim.overworld.DEBUG_DRIVE" />
                 <action android:name="com.thealgothrim.overworld.DEBUG_STOP" />
+                <action android:name="com.thealgothrim.overworld.DEBUG_STATE" />
             </intent-filter>
         </receiver>
     </application>

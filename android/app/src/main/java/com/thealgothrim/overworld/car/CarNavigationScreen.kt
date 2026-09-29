@@ -26,7 +26,6 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import com.rallista.car.app.compose.ComposableScreen
-import com.stadiamaps.ferrostar.car.app.intent.NavigationDestination
 import com.stadiamaps.ferrostar.car.app.navigation.NavigationManagerBridge
 import com.stadiamaps.ferrostar.car.app.navigation.TurnByTurnNotificationManager
 import com.stadiamaps.ferrostar.car.app.template.icons.InterfaceCarIcons
@@ -37,7 +36,6 @@ import com.stadiamaps.ferrostar.maplibreui.runtime.NavigationMapState
 import com.stadiamaps.ferrostar.maplibreui.runtime.navigationCameraOptions
 import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.SurfaceAreaTracker
 import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.screenSurfaceState
-import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.surfaceStableFractionalPadding
 import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.R
 import com.thealgothrim.overworld.theme.Skin
@@ -53,16 +51,14 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import uniffi.ferrostar.DrivingSide
 
 /**
  * The Android Auto screen. Android Auto draws the turn card, ETA and buttons from the template;
  * this screen draws the themed map under them and tints the turn card with the theme colour.
  * Destinations are chosen on the phone; the car shows the trip.
  */
-class CarNavigationScreen(
-    carContext: CarContext,
-    initialDestination: NavigationDestination? = null,
-) : ComposableScreen(carContext) {
+class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext) {
 
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
   private val viewModel = AppModule.viewModel
@@ -79,6 +75,9 @@ class CarNavigationScreen(
           viewModel = viewModel,
           context = carContext,
           notificationManager = notificationManager,
+          // India drives on the left; Ferrostar assumes the right when a step doesn't say, which
+          // would spin roundabouts the wrong way on the car's own cluster display.
+          backupDrivingSide = DrivingSide.LEFT,
           onStopNavigation = { viewModel.stopNavigation() },
           // The Desktop Head Unit's "autodrive" command turns on the simulator.
           onAutoDriveEnabled = { viewModel.enableAutoDrive() },
@@ -111,13 +110,6 @@ class CarNavigationScreen(
     viewModel.planner.onEach { invalidate() }.launchIn(scope)
     carContext.onBackPressedDispatcher.addCallback(this, cancelPreviewOnBack)
 
-    initialDestination?.location?.let {
-      viewModel.startNavigation(
-          uniffi.ferrostar.GeographicCoordinate(it.latitude, it.longitude),
-          initialDestination.displayName,
-      )
-    }
-
     // The themed preview card's Start and Cancel, pressed through map taps (a little slack around them).
     passTapsTo { x, y ->
       val hit = { r: androidx.compose.ui.geometry.Rect? -> r?.inflate(12f)?.contains(Offset(x, y)) == true }
@@ -148,9 +140,9 @@ class CarNavigationScreen(
   override fun content() {
     val theme by themeStore.theme.collectAsState()
     val surfaceArea by screenSurfaceState(surfaceAreaTracker)
-    val normalPadding = surfaceStableFractionalPadding(surfaceArea?.compositeArea)
+    val normalPadding = safeStablePadding(surfaceArea?.compositeArea)
     // Keep the arrow in the lower part of the visible map while driving.
-    val trackingPadding = surfaceStableFractionalPadding(surfaceArea?.compositeArea, top = 0.45f)
+    val trackingPadding = safeStablePadding(surfaceArea?.compositeArea, top = 0.45f)
     val cameraOptions =
         navigationCameraOptions()
             .copy(browsingPadding = normalPadding, navigationPadding = trackingPadding, navigationZoom = 16.4)
@@ -168,8 +160,8 @@ class CarNavigationScreen(
         surfaceArea?.visibleArea?.let { area ->
           with(density) {
             PaddingValues(
-                start = area.left.toDp() + 48.dp + hudStart,
-                top = area.top.toDp() + 48.dp,
+                start = area.left.coerceAtLeast(0).toDp() + 48.dp + hudStart,
+                top = area.top.coerceAtLeast(0).toDp() + 48.dp,
                 end = (surfaceSize.width - area.right).coerceAtLeast(0).toDp() + 48.dp,
                 bottom = (surfaceSize.height - area.bottom).coerceAtLeast(0).toDp() + 48.dp,
             )

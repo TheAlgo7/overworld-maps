@@ -1,9 +1,12 @@
 package com.thealgothrim.overworld
 
 import android.content.Context
+import android.speech.tts.TextToSpeech
+import android.util.Log
 import com.stadiamaps.ferrostar.composeui.notification.DefaultForegroundNotificationBuilder
 import com.stadiamaps.ferrostar.core.AlternativeRouteProcessor
 import com.stadiamaps.ferrostar.core.AndroidTtsObserver
+import com.stadiamaps.ferrostar.core.AndroidTtsStatusListener
 import com.stadiamaps.ferrostar.core.CorrectiveAction
 import com.stadiamaps.ferrostar.core.FerrostarCore
 import com.stadiamaps.ferrostar.core.RouteDeviationHandler
@@ -20,6 +23,7 @@ import com.thealgothrim.overworld.theme.GameFonts
 import com.thealgothrim.overworld.theme.ThemeStore
 import java.time.Duration
 import java.time.Instant
+import java.util.Locale
 import okhttp3.OkHttpClient
 import uniffi.ferrostar.CourseFiltering
 import uniffi.ferrostar.GeographicCoordinate
@@ -111,11 +115,33 @@ object AppModule {
     core
   }
 
-  /** Spoken turn prompts. Off until turned on (Settings > Voice guidance); the choice is kept. */
+  /**
+   * Spoken turn prompts. Off until turned on (Settings > Voice guidance); the choice is kept. The
+   * phone and the car share it, so it lives as long as the app: shutting it down with the phone
+   * screen silenced the car's prompts until Android Auto was reconnected.
+   */
   val ttsObserver: AndroidTtsObserver by lazy {
-    AndroidTtsObserver(appContext).apply {
+    AndroidTtsObserver(appContext, statusObserver = TtsVoice).apply {
       setMuted(!appContext.getSharedPreferences("overworld", Context.MODE_PRIVATE).getBoolean("voice", false))
     }
+  }
+
+  /** Starts the voice engine once; later calls (every phone or car screen start) do nothing. */
+  fun startVoice() {
+    if (ttsObserver.tts == null) ttsObserver.start()
+  }
+
+  /** Indian English when the phone has it, otherwise the default English voice. */
+  private object TtsVoice : AndroidTtsStatusListener {
+    override fun onTtsInitialized(tts: TextToSpeech?, status: Int) {
+      tts?.language = Locale.Builder().setLanguage("en").setRegion("IN").build()
+    }
+
+    override fun onTtsSpeakError(utteranceId: String, status: Int) {
+      Log.e("Overworld", "TTS error $status for $utteranceId")
+    }
+
+    override fun onTtsShutdownAndRelease() {}
   }
 
   val themeStore: ThemeStore by lazy { ThemeStore(appContext) }

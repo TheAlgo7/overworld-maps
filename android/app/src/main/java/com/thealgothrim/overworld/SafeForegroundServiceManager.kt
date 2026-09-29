@@ -15,11 +15,15 @@ import com.stadiamaps.ferrostar.core.service.ForegroundNotificationBuilder
 import com.stadiamaps.ferrostar.core.service.ForegroundServiceManager
 
 /**
- * Ferrostar's FerrostarForegroundServiceManager (BSD 3-Clause, Stadia Maps) with one change: if
- * Android refuses the location foreground service (Android 12+ does when the app is not in an
- * eligible foreground state, for example a trip started from a car intent with the phone asleep),
- * it logs and carries on instead of crashing the app. Navigation still runs while the phone or
- * the Android Auto screen is showing the app.
+ * Ferrostar's FerrostarForegroundServiceManager (BSD 3-Clause, Stadia Maps) with two changes:
+ * - If Android refuses the location foreground service (Android 12+ does when the app is not in an
+ *   eligible foreground state, for example a trip started from a car intent with the phone asleep),
+ *   it logs and carries on instead of crashing the app. Navigation still runs while the phone or
+ *   the Android Auto screen is showing the app.
+ * - A trip ended while the service is still starting no longer crashes the app. The service only
+ *   calls startForeground() once it is bound, and Android kills an app whose
+ *   startForegroundService() service goes away before that. So the stop waits for the binding,
+ *   promotes the service, then stops it.
  */
 class SafeForegroundServiceManager(
     context: Context,
@@ -31,6 +35,10 @@ class SafeForegroundServiceManager(
   private var receiverRegistered = false
   private var service: FerrostarForegroundService? = null
   private var stopNavigating: (() -> Unit)? = null
+  /** startForegroundService() went through and the service has not been stopped since. */
+  private var started = false
+  /** Stopped before the service was bound: stop it as soon as it has been promoted. */
+  private var stopWhenConnected = false
 
   private val stopReceiver =
       object : BroadcastReceiver() {
@@ -44,18 +52,26 @@ class SafeForegroundServiceManager(
     stopService()
     stopNavigating = stopNavigation
     isRequested = true
+    // A new trip while the last one's stop is still waiting: keep the service it is starting.
+    stopWhenConnected = false
     notificationBuilder.channelId = CHANNEL_ID
 
     val intent = Intent(context, FerrostarForegroundService::class.java)
     try {
-      context.startForegroundService(intent)
       context.registerReceiver(
           stopReceiver,
           IntentFilter(ForegroundNotificationBuilder.STOP_NAVIGATION_INTENT),
           Context.RECEIVER_EXPORTED,
       )
       receiverRegistered = true
-      context.bindService(intent, this, Context.BIND_AUTO_CREATE)
+      if (!started) {
+        context.startForegroundService(intent)
+        started = true
+        context.bindService(intent, this, Context.BIND_AUTO_CREATE)
+      } else {
+        // Still bound from the trip that was stopped too early: the pending connection promotes it.
+        service?.let { promote(it) }
+      }
     } catch (e: Exception) {
       Log.w(TAG, "Location service refused; navigating without it", e)
     }
@@ -68,9 +84,19 @@ class SafeForegroundServiceManager(
       runCatching { context.unregisterReceiver(stopReceiver) }
       receiverRegistered = false
     }
+    if (started && service == null) {
+      stopWhenConnected = true
+      return
+    }
+    tearDown()
+  }
+
+  private fun tearDown() {
     runCatching { context.unbindService(this) }
     service?.stop()
     service = null
+    started = false
+    stopWhenConnected = false
     context.stopService(Intent(context, FerrostarForegroundService::class.java))
   }
 
@@ -81,17 +107,23 @@ class SafeForegroundServiceManager(
 
   override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
     val connected = (binder as? FerrostarForegroundService.LocalBinder)?.service ?: return
-    if (!isRequested) return
+    if (!started) return
     connected.notificationBuilder = notificationBuilder
-    try {
-      connected.start()
-      service = connected
-    } catch (e: Exception) {
-      Log.w(TAG, "Could not promote the location service to foreground", e)
-      runCatching { context.unbindService(this) }
-      context.stopService(Intent(context, FerrostarForegroundService::class.java))
-    }
+    if (!promote(connected)) return
+    if (stopWhenConnected) tearDown()
   }
+
+  /** startForeground(), which Android requires of a service started with startForegroundService(). */
+  private fun promote(connected: FerrostarForegroundService): Boolean =
+      try {
+        connected.start()
+        service = connected
+        true
+      } catch (e: Exception) {
+        Log.w(TAG, "Could not promote the location service to foreground", e)
+        tearDown()
+        false
+      }
 
   override fun onServiceDisconnected(name: ComponentName?) {
     service?.stop()
