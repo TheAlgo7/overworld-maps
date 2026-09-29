@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
@@ -103,7 +104,7 @@ class RoadFeaturePainter(private val kind: RoadFeatureKind, private val skin: Sk
     drawCircle(fill, s * 0.40f, c)
     // Glyphs are drawn on a 24-unit grid inside the badge.
     val g = s * 0.62f
-    translate(c.x - g / 2f, c.y - g / 2f) { drawRoadGlyph(kind, glyph, g) }
+    translate(c.x - g / 2f, c.y - g / 2f) { drawRoadGlyph(kind, glyph, g, cut = fill) }
   }
 
   private fun DrawScope.drawTrafficLight() {
@@ -121,25 +122,45 @@ class RoadFeaturePainter(private val kind: RoadFeatureKind, private val skin: Sk
 }
 
 /** The glyph for a road-feature kind on a [s]-sized square, in [color]. Shared with the HUD alert. */
-fun DrawScope.drawRoadGlyph(kind: RoadFeatureKind, color: Color, s: Float) {
+fun DrawScope.drawRoadGlyph(kind: RoadFeatureKind, color: Color, s: Float, cut: Color = Color(0xFF1B1A1A)) {
   val u = s / 24f
   fun p(x: Float, y: Float) = Offset(x * u, y * u)
   val stroke = Stroke(width = 2.2f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
-  fun carFront(cx: Float, cy: Float, scale: Float) {
-    // Front view of a car: roof, windscreen, body, wheels.
-    val k = scale
-    val body = Path().apply {
-      moveTo((cx - 7f * k) * u, (cy + 1f * k) * u)
-      lineTo((cx - 5.5f * k) * u, (cy - 4.5f * k) * u)
-      lineTo((cx + 5.5f * k) * u, (cy - 4.5f * k) * u)
-      lineTo((cx + 7f * k) * u, (cy + 1f * k) * u)
-      lineTo((cx + 7.5f * k) * u, (cy + 5f * k) * u)
-      lineTo((cx - 7.5f * k) * u, (cy + 5f * k) * u)
+  fun carFront(cx: Float, cy: Float, k: Float, outlined: Boolean = false) {
+    // Front view of a car: cabin with a windscreen, body with headlights, two wheels. The window
+    // and lights are cut out in the badge colour so the shape reads as a car even when small.
+    fun q(x: Float, y: Float) = Offset((cx + x * k) * u, (cy + y * k) * u)
+    val silhouette = Path().apply {
+      moveTo(q(-4.6f, -5f).x, q(-4.6f, -5f).y)
+      lineTo(q(4.6f, -5f).x, q(4.6f, -5f).y)
+      lineTo(q(6.4f, -0.6f).x, q(6.4f, -0.6f).y)
+      lineTo(q(7.8f, 0f).x, q(7.8f, 0f).y)
+      lineTo(q(7.8f, 4.6f).x, q(7.8f, 4.6f).y)
+      lineTo(q(-7.8f, 4.6f).x, q(-7.8f, 4.6f).y)
+      lineTo(q(-7.8f, 0f).x, q(-7.8f, 0f).y)
+      lineTo(q(-6.4f, -0.6f).x, q(-6.4f, -0.6f).y)
       close()
     }
-    drawPath(body, color)
-    drawRect(color, p(cx - 7f * k, cy + 5f * k), Size(3f * k * u, 2.5f * k * u))
-    drawRect(color, p(cx + 4f * k, cy + 5f * k), Size(3f * k * u, 2.5f * k * u))
+    val wheels = listOf(q(-7.2f, 4f), q(4.2f, 4f))
+    if (outlined) {
+      // A gap around the front car so it stands clear of the cars queued behind it.
+      drawPath(silhouette, cut, style = Stroke(width = 3.2f * u * k, join = StrokeJoin.Round))
+      wheels.forEach { drawRoundRect(cut, it - Offset(0.8f * u * k, 0f), Size(4.6f * u * k, 4.2f * u * k), androidx.compose.ui.geometry.CornerRadius(1.2f * u * k)) }
+    }
+    wheels.forEach { drawRoundRect(color, it, Size(3f * u * k, 3.2f * u * k), androidx.compose.ui.geometry.CornerRadius(0.8f * u * k)) }
+    drawPath(silhouette, color, style = Fill)
+    drawPath(silhouette, color, style = Stroke(width = 0.8f * u * k, join = StrokeJoin.Round))
+    val screen = Path().apply {
+      moveTo(q(-3.5f, -3.7f).x, q(-3.5f, -3.7f).y)
+      lineTo(q(3.5f, -3.7f).x, q(3.5f, -3.7f).y)
+      lineTo(q(4.8f, -1.1f).x, q(4.8f, -1.1f).y)
+      lineTo(q(-4.8f, -1.1f).x, q(-4.8f, -1.1f).y)
+      close()
+    }
+    drawPath(screen, cut)
+    drawCircle(cut, 1.25f * u * k, q(-5f, 2f))
+    drawCircle(cut, 1.25f * u * k, q(5f, 2f))
+    drawRoundRect(cut, q(-2.2f, 1.4f), Size(4.4f * u * k, 1.2f * u * k), androidx.compose.ui.geometry.CornerRadius(0.5f * u * k))
   }
   when (kind) {
     RoadFeatureKind.ACCIDENT -> {
@@ -172,9 +193,10 @@ fun DrawScope.drawRoadGlyph(kind: RoadFeatureKind, color: Color, s: Float) {
       drawLine(color, p(18f, 13f), p(18f, 20f), 2f * u, StrokeCap.Round)
     }
     RoadFeatureKind.JAM -> {
-      // Cars queued: one in front, one behind.
-      carFront(8.5f, 9.5f, 0.55f)
-      carFront(14f, 15.5f, 0.75f)
+      // Cars bunched up: two behind, one in front standing clear of them.
+      carFront(7.2f, 8.6f, 0.52f)
+      carFront(16.8f, 8.6f, 0.52f)
+      carFront(12f, 15f, 0.78f, outlined = true)
     }
     RoadFeatureKind.BROKEN_DOWN -> {
       carFront(10f, 13f, 0.8f)

@@ -129,8 +129,7 @@ fun BoxScope.NavigationLayer(
 
   // ---- top: turn banner, then map buttons on the right
   Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
-    TurnBanner(spec, uiState)
-    hazard?.let { HazardStrip(spec, it, Modifier.padding(top = 8.dp)) }
+    TurnBanner(spec, uiState, hazard)
     Spacer(Modifier.height(12.dp))
     Column(Modifier.align(Alignment.End), verticalArrangement = Arrangement.spacedBy(10.dp)) {
       SkinRoundButton(spec, if (uiState.isMuted == true) GameIcon.SOUND_OFF else GameIcon.SOUND_ON, onMute)
@@ -142,7 +141,6 @@ fun BoxScope.NavigationLayer(
   // ---- bottom: re-centre + street, then the trip sheet
   Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
     Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
-      if (following) SpeedBadge(spec, uiState, Modifier.align(Alignment.BottomStart))
       MapCredit(spec, Modifier.align(Alignment.BottomEnd))
       if (!following) {
         Row(
@@ -154,14 +152,20 @@ fun BoxScope.NavigationLayer(
           SkinText(spec.title("Re-centre"), spec.title, 16.sp, spec.fg)
         }
       }
-      val street = listOfNotNull(uiState.currentStepRoadName?.takeIf { it.isNotBlank() }, area)
-      if (street.isNotEmpty() && following) {
-        // Centred in the room right of the speedometer and limit sign, never over them.
-        val place = Modifier.align(Alignment.Center).padding(start = 112.dp)
-        if (spec.gta) {
-          GtaText(street.joinToString("  |  "), 21.sp, place, align = TextAlign.Center)
-        } else {
-          RdrText(street.joinToString(",  ").uppercase(), 16.sp, place, color = Rdr.GreyLight, align = TextAlign.Center, spacing = 1.sp)
+      if (following) {
+        // Speed (when there is one) on the left, the street centred in whatever room is left.
+        Row(Modifier.align(Alignment.BottomStart).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+          SpeedBadge(spec, uiState)
+          val street = listOfNotNull(uiState.currentStepRoadName?.takeIf { it.isNotBlank() }, area)
+          Box(Modifier.weight(1f).padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
+            if (street.isNotEmpty()) {
+              if (spec.gta) {
+                GtaText(street.joinToString("  |  "), 21.sp, align = TextAlign.Center)
+              } else {
+                RdrText(street.joinToString(",  ").uppercase(), 16.sp, color = Rdr.GreyLight, align = TextAlign.Center, spacing = 1.sp)
+              }
+            }
+          }
         }
       }
     }
@@ -205,23 +209,24 @@ private fun SheetIconButton(spec: SkinSpec, icon: GameIcon, onClick: () -> Unit,
 
 /** The turn banner, in the game's HUD box. Adds a "Then" strip when the next turn follows quickly. */
 @Composable
-private fun TurnBanner(spec: SkinSpec, uiState: NavigationUiState) {
+private fun TurnBanner(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardAhead?) {
   val content = uiState.visualInstruction?.primaryContent
   val distance = uiState.progress?.distanceToNextManeuver?.let(::formatDistance).orEmpty()
   val road = content?.text?.trim().orEmpty()
   val next = uiState.remainingSteps?.getOrNull(1)
   val then = next?.visualInstructions?.firstOrNull()?.primaryContent?.takeIf { next.distance < 500 }
 
-  Column(Modifier.fillMaxWidth()) {
+  // One card, like Google's: the turn, then "Then", then any alert, split by hairlines.
+  Column(Modifier.fillMaxWidth().skinPanel(spec)) {
     Row(
-        Modifier.fillMaxWidth().skinPanel(spec).padding(horizontal = 16.dp, vertical = 14.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
       Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
         content?.let { ManeuverImage(it, tint = if (spec.gta) Gta.White else Rdr.White) }
       }
       Spacer(Modifier.width(14.dp))
-      Column(Modifier.weight(1f)) {
+      Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         if (uiState.isCalculatingNewRoute == true) {
           SkinText(spec.title("Rerouting"), spec.title, 26.sp, spec.fg)
         } else {
@@ -231,14 +236,16 @@ private fun TurnBanner(spec: SkinSpec, uiState: NavigationUiState) {
       }
     }
     then?.let {
-      Row(
-          Modifier.widthIn(min = 120.dp).background(if (spec.gta) Color(0xF2111111) else Color(0xF2211B16)).padding(horizontal = 14.dp, vertical = 8.dp),
-          verticalAlignment = Alignment.CenterVertically,
-      ) {
+      CardDivider(spec)
+      Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         SkinText("Then", spec.body, 15.sp, spec.sub)
         Spacer(Modifier.width(8.dp))
         Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) { ManeuverImage(it, tint = spec.fg) }
       }
+    }
+    hazard?.let {
+      CardDivider(spec)
+      HazardRow(spec, it, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp))
     }
   }
 }

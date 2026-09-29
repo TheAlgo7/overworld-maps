@@ -130,6 +130,11 @@ class CarNavigationScreen(
 
     lifecycle.addObserver(
         object : DefaultLifecycleObserver {
+          // Ferrostar posts a turn notification only while this screen is hidden (Android Auto shows
+          // it as a pop-up over Spotify and the like), but never takes it back: coming back to the
+          // map left a stale "Continue for 1.5 kilometers" pop-up over our own turn card.
+          override fun onStart(owner: LifecycleOwner) = notificationManager.clear()
+
           override fun onDestroy(owner: LifecycleOwner) {
             navigationManagerBridge.stop()
             observeJob?.cancel()

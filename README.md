@@ -26,7 +26,7 @@ Themes (a personal build, so they carry the games' names; rename before any publ
 | `tools/export-android.mjs` | Writes the app's style files and `ThemeTokens.kt` from `themes.js` |
 | `tools/make_sprite.py` | Builds Red Dead's hatch and stipple patterns and map blips |
 | `tools/make_glyphs.py` | Builds Red Dead's map-label fonts as MapLibre SDF glyphs |
-| `tools/make_icon.py` | Builds the app icon (GTA-style map of India Gate, purple route and arrow) |
+| `tools/make_icon.py` | Builds the adaptive app icon from the approved artwork in `tools/icon/` (silver-to-parchment O route, ivory arrow) |
 | `tools/build-install.ps1` | Builds the debug APK and installs it |
 | `tools/make_route.py` | Re-records the prototype's demo route |
 
