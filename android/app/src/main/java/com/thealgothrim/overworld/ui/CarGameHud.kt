@@ -71,17 +71,18 @@ fun BoxScope.CarGameHud(
 
   Row(Modifier.align(Alignment.BottomStart).fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
     val left = remaining ?: progress.durationRemaining
-    // Time card and speed panel share one height, so they sit as a pair.
-    Row(Modifier.height(IntrinsicSize.Min)) {
+    // The speed and limit sign stand on the time card's bottom line, like everything along the
+    // bottom of the car screen.
+    Row(verticalAlignment = Alignment.Bottom) {
       Column(
-          Modifier.fillMaxHeight().widthIn(min = 230.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 14.dp),
+          Modifier.widthIn(min = 230.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 14.dp),
           verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
       ) {
         SkinText(formatDuration(left).uppercase(), spec.big, 34.sp, spec.trafficColor(extras.eta))
         SkinText("${arrivalClock(left)}  ·  ${formatDistance(progress.distanceRemaining)}", spec.body, 19.sp, spec.fg)
         trafficNote(extras.eta)?.let { SkinText(it, spec.body, 16.sp, spec.sub) }
       }
-      SpeedBadge(spec, uiState, Modifier.padding(start = 12.dp).fillMaxHeight(), big = true)
+      SpeedBadge(spec, uiState, Modifier.padding(start = 12.dp), big = true)
     }
     Box(Modifier.weight(1f).padding(bottom = 6.dp), contentAlignment = Alignment.Center) {
       val street = listOfNotNull(uiState.currentStepRoadName?.takeIf { it.isNotBlank() }, area)
@@ -116,7 +117,7 @@ private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardA
   // One card, like Google's: the turn, then "Then", then any alert, split by hairlines.
   Column(modifier.width(IntrinsicSize.Max).widthIn(min = 300.dp, max = 420.dp).skinPanel(spec)) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-      Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) { content?.let { ManeuverImage(it, tint = spec.fg) } }
+      Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) { content?.let { ManeuverImage(it.forDisplay(), tint = spec.fg) } }
       Spacer(Modifier.width(18.dp))
       Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (uiState.isCalculatingNewRoute == true) {
@@ -132,7 +133,7 @@ private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardA
       Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         SkinText("Then", spec.body, 18.sp, spec.sub)
         Spacer(Modifier.width(10.dp))
-        Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) { ManeuverImage(it, tint = spec.fg) }
+        Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) { ManeuverImage(it.forDisplay(), tint = spec.fg) }
       }
     }
     hazard?.let {

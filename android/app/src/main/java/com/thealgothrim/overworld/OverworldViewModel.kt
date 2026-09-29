@@ -18,6 +18,7 @@ import com.thealgothrim.overworld.traffic.RouteLine
 import com.thealgothrim.overworld.traffic.TrafficEta
 import com.thealgothrim.overworld.traffic.TrafficSpan
 import java.time.Instant
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -133,6 +134,13 @@ class OverworldViewModel :
   private var extrasLive = false
   private val extrasLoaded = mutableSetOf<RoadFeatureKind>()
 
+  private val _estimatedKmh = MutableStateFlow<Int?>(null)
+  /**
+   * Speed worked out from movement when the location has none (a test drive's simulated trip),
+   * so the speed and limit warning still show. Real GPS fixes carry their own speed.
+   */
+  val estimatedKmh: StateFlow<Int?> = _estimatedKmh.asStateFlow()
+
   /** Shows the user's position on the map even before a trip starts. */
   override val navigationUiState: StateFlow<NavigationUiState> =
       combine(super.navigationUiState, lastLocation) { state, location ->
@@ -155,6 +163,32 @@ class OverworldViewModel :
               rememberFix(it.coordinates)
             }
           }
+    }
+    viewModelScope.launch {
+      var last: Pair<GeographicCoordinate, Long>? = null
+      var smooth: Double? = null
+      navigationUiState.collect { state ->
+        val location = state.location
+        if (location == null || location.speed != null || !state.isNavigating()) {
+          _estimatedKmh.value = null
+          last = null
+          smooth = null
+          return@collect
+        }
+        val now = System.currentTimeMillis()
+        val prev = last
+        if (prev == null) {
+          last = location.coordinates to now
+          return@collect
+        }
+        val seconds = (now - prev.second) / 1000.0
+        if (seconds < 0.8) return@collect
+        val kmh = metres(prev.first, location.coordinates) / seconds * 3.6
+        last = location.coordinates to now
+        if (kmh > 250) return@collect
+        smooth = smooth?.let { it * 0.6 + kmh * 0.4 } ?: kmh
+        _estimatedKmh.value = smooth?.roundToInt()
+      }
     }
     viewModelScope.launch {
       var lastLookup = 0L

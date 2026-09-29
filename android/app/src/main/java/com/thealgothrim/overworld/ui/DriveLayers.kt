@@ -223,7 +223,7 @@ private fun TurnBanner(spec: SkinSpec, uiState: NavigationUiState, hazard: Hazar
         verticalAlignment = Alignment.CenterVertically,
     ) {
       Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
-        content?.let { ManeuverImage(it, tint = if (spec.gta) Gta.White else Rdr.White) }
+        content?.let { ManeuverImage(it.forDisplay(), tint = if (spec.gta) Gta.White else Rdr.White) }
       }
       Spacer(Modifier.width(14.dp))
       Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -240,7 +240,7 @@ private fun TurnBanner(spec: SkinSpec, uiState: NavigationUiState, hazard: Hazar
       Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         SkinText("Then", spec.body, 15.sp, spec.sub)
         Spacer(Modifier.width(8.dp))
-        Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) { ManeuverImage(it, tint = spec.fg) }
+        Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) { ManeuverImage(it.forDisplay(), tint = spec.fg) }
       }
     }
     hazard?.let {
