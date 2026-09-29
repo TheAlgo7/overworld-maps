@@ -84,6 +84,7 @@ fun OverworldPhoneMap(
     // Directions preview: the route before driving, drawn the same way as the live route.
     if (!state.isNavigating() && previewRoute != null && previewRoute.size >= 2) {
       ThemedRouteLine(previewRoute, theme, car = false)
+      RouteTrafficLine(previewRoute, extras.trafficSpans, theme, car = false)
     }
     RoadFeatureLayers(visibleFeatures(extras, details), theme, car = false)
     val end = state.routeGeometry?.lastOrNull() ?: previewRoute?.lastOrNull() ?: pickedDestination
@@ -142,7 +143,10 @@ fun OverworldCarMap(
         showDefaultPuck = false,
     ) { state ->
       val preview = planner.preview
-      if (!state.isNavigating() && preview != null) ThemedRouteLine(preview.route.geometry, theme, car = true)
+      if (!state.isNavigating() && preview != null) {
+        ThemedRouteLine(preview.route.geometry, theme, car = true)
+        RouteTrafficLine(preview.route.geometry, extras.trafficSpans, theme, car = true)
+      }
       RoadFeatureLayers(visibleFeatures(extras, details), theme, car = true)
       val end = state.routeGeometry?.lastOrNull() ?: preview?.route?.geometry?.lastOrNull()
       end?.let { ThemedDestination(it, theme) }
@@ -196,5 +200,5 @@ fun OverworldCarMap(
 fun visibleFeatures(extras: RouteExtras, details: MapDetails): List<RoadFeature> =
     buildList {
       if (details.signals) addAll(extras.signals)
-      if (details.incidents) addAll(extras.incidents)
+      if (details.incidents) addAll(extras.markedIncidents)
     }

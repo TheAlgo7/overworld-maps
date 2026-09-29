@@ -26,7 +26,7 @@ for (const t of Object.values(THEMES)) {
     // The app draws the route itself (themed, below the labels), so drop the web route.
     delete style.sources.route;
     style.layers = style.layers.filter((l) => l.source !== "route");
-    if (style.layers.some((l) => l.paint && l.paint["fill-pattern"])) {
+    if (style.layers.some((l) => (l.paint && l.paint["fill-pattern"]) || l.id === "poi-blips")) {
       style.sprite = "asset://sprites/overworld";
     }
     const file = path.join(stylesDir, `${t.id}${car ? "-car" : ""}.json`);

@@ -48,6 +48,12 @@ data class RoadFeature(
     val along: Double? = null,
 )
 
+/** A stretch of the route in traffic, in metres along it. [level]: 1 slow, 2 heavy, 3 closed. */
+data class TrafficSpan(val from: Double, val to: Double, val level: Int)
+
+/** Live traffic for one route: travel time and the stretches in traffic. */
+data class RouteTraffic(val eta: TrafficEta, val spans: List<TrafficSpan>)
+
 /** Travel time with live traffic for the rest of a trip. */
 data class TrafficEta(val travelSeconds: Double, val delaySeconds: Double, val noTrafficSeconds: Double) {
   /** 0 = clear, 1 = some traffic, 2 = heavy, the way Google colours the time. */
@@ -55,8 +61,8 @@ data class TrafficEta(val travelSeconds: Double, val delaySeconds: Double, val n
     get() {
       val ratio = if (noTrafficSeconds > 0) delaySeconds / noTrafficSeconds else 0.0
       return when {
-        ratio < 0.12 -> 0
-        ratio < 0.35 -> 1
+        ratio < 0.15 -> 0
+        ratio < 0.5 -> 1
         else -> 2
       }
     }
@@ -198,34 +204,84 @@ class TrafficService(private val http: OkHttpClient) {
           val inc = list.getJSONObject(i)
           val props = inc.optJSONObject("properties") ?: return@mapNotNull null
           val kind = incidentKind(props.optInt("iconCategory")) ?: return@mapNotNull null
-          val at = firstCoordinate(inc.optJSONObject("geometry")) ?: return@mapNotNull null
+          val points = coordinates(inc.optJSONObject("geometry"))
+          val at = points.firstOrNull() ?: return@mapNotNull null
           val events = props.optJSONArray("events")
           val description = events?.optJSONObject(0)?.optString("description")?.takeIf { it.isNotBlank() }
-          val (along, off) = line.project(at)
           RoadFeature(
               kind = kind,
               at = at,
               description = description,
               delaySeconds = props.optDouble("delay", 0.0).takeUnless { it.isNaN() } ?: 0.0,
               magnitude = props.optInt("magnitudeOfDelay"),
-              along = along.takeIf { off < 80.0 },
+              along = alongRoute(line, points),
           )
         }
       }
 
-  suspend fun eta(from: GeographicCoordinate, to: GeographicCoordinate): TrafficEta? =
+  /**
+   * Live traffic for exactly this route (not TomTom's own): TomTom rebuilds it from points along
+   * it and returns the travel time with traffic and the stretches in queues, which the map colours
+   * on the route line like Google does. One request covers both.
+   */
+  suspend fun routeTraffic(route: List<GeographicCoordinate>): RouteTraffic? =
       withContext(Dispatchers.IO) {
-        if (!hasLiveTraffic) return@withContext null
+        if (!hasLiveTraffic || route.size < 2) return@withContext null
+        val line = RouteLine(route)
+        val support = JSONArray(line.spaced(150).map { JSONObject().put("latitude", it.lat).put("longitude", it.lng) })
+        fun point(p: GeographicCoordinate) = String.format(Locale.US, "%.6f,%.6f", p.lat, p.lng)
         val url =
-            "https://api.tomtom.com/routing/1/calculateRoute/${from.lat},${from.lng}:${to.lat},${to.lng}/json" +
-                "?key=$tomtomKey&traffic=true&travelMode=car&routeType=fastest&computeTravelTimeFor=all"
-        val body = get(url) ?: return@withContext null
-        val summary = JSONObject(body).optJSONArray("routes")?.optJSONObject(0)?.optJSONObject("summary") ?: return@withContext null
-        TrafficEta(
-            travelSeconds = summary.optDouble("travelTimeInSeconds"),
-            delaySeconds = summary.optDouble("trafficDelayInSeconds", 0.0),
-            noTrafficSeconds = summary.optDouble("noTrafficTravelTimeInSeconds", summary.optDouble("travelTimeInSeconds")),
-        ).takeUnless { it.travelSeconds.isNaN() }
+            "https://api.tomtom.com/routing/1/calculateRoute/${point(route.first())}:${point(route.last())}/json" +
+                "?key=$tomtomKey&traffic=true&sectionType=traffic&computeTravelTimeFor=all&routeType=fastest&travelMode=car"
+        val body =
+            try {
+              val request = Request.Builder().url(url).post(JSONObject().put("supportingPoints", support).toString().toRequestBody(JSON)).build()
+              http.newCall(request).execute().use { r ->
+                if (r.isSuccessful) r.body.string() else null.also { Log.w(TAG, "route traffic -> ${r.code}") }
+              }
+            } catch (e: Exception) {
+              Log.w(TAG, "route traffic failed", e)
+              null
+            } ?: return@withContext null
+        val found = JSONObject(body).optJSONArray("routes")?.optJSONObject(0) ?: return@withContext null
+        val summary = found.optJSONObject("summary") ?: return@withContext null
+        val travel = summary.optDouble("travelTimeInSeconds")
+        if (travel.isNaN()) return@withContext null
+        val free = summary.optDouble("noTrafficTravelTimeInSeconds", travel)
+        // trafficDelayInSeconds only counts the queues (it reads 0 in an ordinary rush hour); the
+        // traffic you feel is the gap to the empty-road time.
+        val queues = summary.optDouble("trafficDelayInSeconds", 0.0)
+        val eta = TrafficEta(travelSeconds = travel, delaySeconds = maxOf(travel - free, queues, 0.0), noTrafficSeconds = free)
+
+        // Section indices count TomTom's points across all legs.
+        val points = buildList {
+          val legs = found.optJSONArray("legs") ?: JSONArray()
+          for (l in 0 until legs.length()) {
+            val pts = legs.getJSONObject(l).optJSONArray("points") ?: continue
+            for (i in 0 until pts.length()) pts.getJSONObject(i).let { add(GeographicCoordinate(it.getDouble("latitude"), it.getDouble("longitude"))) }
+          }
+        }
+        val sections = found.optJSONArray("sections") ?: JSONArray()
+        val spans =
+            (0 until sections.length()).mapNotNull { i ->
+              val sec = sections.getJSONObject(i)
+              if (sec.optString("sectionType") != "TRAFFIC") return@mapNotNull null
+              val start = points.getOrNull(sec.optInt("startPointIndex", -1)) ?: return@mapNotNull null
+              val end = points.getOrNull(sec.optInt("endPointIndex", -1)) ?: return@mapNotNull null
+              val from = line.project(start).first
+              val to = line.project(end).first
+              if (to - from < 20.0) return@mapNotNull null
+              val magnitude = sec.optInt("magnitudeOfDelay")
+              val speed = sec.optDouble("effectiveSpeedInKmh", 99.0)
+              val level =
+                  when {
+                    magnitude >= 4 || sec.optString("simpleCategory") == "ROAD_CLOSURE" -> 3
+                    magnitude == 3 || speed < 12 -> 2
+                    else -> 1
+                  }
+              TrafficSpan(from, to, level)
+            }
+        RouteTraffic(eta, spans)
       }
 
   private fun get(url: String): String? =
@@ -251,11 +307,25 @@ class TrafficService(private val http: OkHttpClient) {
         else -> null
       }
 
-  private fun firstCoordinate(geometry: JSONObject?): GeographicCoordinate? {
-    geometry ?: return null
-    val coords = geometry.optJSONArray("coordinates") ?: return null
-    val first = if (geometry.optString("type") == "Point") coords else coords.optJSONArray(0) ?: return null
-    return GeographicCoordinate(first.getDouble(1), first.getDouble(0))
+  private fun coordinates(geometry: JSONObject?): List<GeographicCoordinate> {
+    val coords = geometry?.optJSONArray("coordinates") ?: return emptyList()
+    if (geometry.optString("type") == "Point") return listOf(GeographicCoordinate(coords.getDouble(1), coords.getDouble(0)))
+    return (0 until coords.length()).mapNotNull { i ->
+      coords.optJSONArray(i)?.let { GeographicCoordinate(it.getDouble(1), it.getDouble(0)) }
+    }
+  }
+
+  /**
+   * Metres along the route where an incident starts, or null when it is not on the route. A
+   * stretch (a jam, a closed road) counts only when it runs along the route, so a closed side
+   * street at a junction the route merely crosses is left out.
+   */
+  private fun alongRoute(line: RouteLine, points: List<GeographicCoordinate>): Double? {
+    if (points.isEmpty()) return null
+    if (points.size == 1) return line.project(points[0]).takeIf { it.second < 40.0 }?.first
+    val samples = List(5) { i -> points[(i * (points.size - 1)) / 4] }.distinct()
+    val hits = samples.map { line.project(it) }.filter { it.second < 35.0 }
+    return if (hits.size * 10 >= samples.size * 6) hits.minOf { it.first } else null
   }
 
   private companion object {
@@ -381,6 +451,43 @@ class RouteLine(private val points: List<GeographicCoordinate>) {
     }
     return boxes
   }
+
+  /** At most [n] points spread evenly by distance, always keeping both ends. */
+  fun spaced(n: Int): List<GeographicCoordinate> {
+    if (points.size <= n) return points
+    val gap = length / (n - 1)
+    val out = mutableListOf(points.first())
+    var next = gap
+    for (i in 1 until points.size - 1) {
+      if (cumulative[i] >= next) {
+        out += points[i]
+        next += gap
+      }
+    }
+    out += points.last()
+    return out
+  }
+
+  /** The point [distance] metres along the route. */
+  fun at(distance: Double): GeographicCoordinate {
+    if (points.size < 2) return points.first()
+    val d = distance.coerceIn(0.0, length)
+    var i = 0
+    while (i < points.size - 2 && cumulative[i + 1] < d) i++
+    val span = cumulative[i + 1] - cumulative[i]
+    val t = if (span <= 0) 0.0 else (d - cumulative[i]) / span
+    val a = points[i]
+    val b = points[i + 1]
+    return GeographicCoordinate(a.lat + (b.lat - a.lat) * t, a.lng + (b.lng - a.lng) * t)
+  }
+
+  /** The route between [from] and [to] metres along it. */
+  fun slice(from: Double, to: Double): List<GeographicCoordinate> =
+      buildList {
+        add(at(from))
+        for (i in points.indices) if (cumulative[i] > from && cumulative[i] < to) add(points[i])
+        add(at(to))
+      }
 
   /** [minLon, minLat, maxLon, maxLat], trimmed from the start of the route to stay under [maxAreaKm2]. */
   fun boundingBox(maxAreaKm2: Double, pad: Double): List<Double> {

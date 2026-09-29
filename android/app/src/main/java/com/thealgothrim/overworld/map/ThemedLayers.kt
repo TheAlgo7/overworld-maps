@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.stadiamaps.ferrostar.core.NavigationUiState
 import com.stadiamaps.ferrostar.maplibreui.routeline.RouteOverlayBuilder
 import com.thealgothrim.overworld.theme.OverworldTheme
+import com.thealgothrim.overworld.theme.Skin
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.maplibre.compose.expressions.dsl.asNumber
@@ -49,6 +50,12 @@ import org.maplibre.spatialk.geojson.FeatureCollection
 import org.maplibre.spatialk.geojson.Point
 import uniffi.ferrostar.GeographicCoordinate
 import uniffi.ferrostar.TripState
+import com.thealgothrim.overworld.AppModule
+import com.thealgothrim.overworld.traffic.RouteLine
+import com.thealgothrim.overworld.traffic.TrafficSpan
+import androidx.compose.runtime.collectAsState
+import org.maplibre.compose.expressions.dsl.case
+import org.maplibre.compose.expressions.dsl.switch
 
 /** First label layer in every Overworld style; the route is drawn just under it. */
 private const val FIRST_LABEL_LAYER = "label-water"
@@ -70,22 +77,19 @@ private fun widthByZoom(at10: Float, at18: Float) =
     interpolate(linear(), zoom(), 10 to const(at10.dp), 18 to const(at18.dp))
 
 /**
- * The route while driving: the road still to go in the theme's route colour, starting at the
- * player marker, and the road already driven left behind as a faded trail, like a breadcrumb in
- * the games rather than a live route behind the car.
+ * The route while driving is only the road still to go, starting at the player marker. The road
+ * already driven disappears, the way the waypoint route does in GTA V and on the RDR2 minimap.
  */
 fun themedRouteOverlay(theme: OverworldTheme, car: Boolean) =
     RouteOverlayBuilder(
         navigationPath = { uiState: NavigationUiState ->
           val geometry = uiState.routeGeometry
           if (geometry != null && geometry.size >= 2) {
-            val ahead = routeAhead(uiState)
-            if (ahead == null) {
-              ThemedRouteLine(geometry, theme, car)
-            } else {
-              RouteTrail(geometry, theme, car)
-              ThemedRouteLine(ahead, theme, car)
-            }
+            ThemedRouteLine(routeAhead(uiState) ?: geometry, theme, car)
+            val extras by AppModule.viewModel.extras.collectAsState()
+            val length = remember(geometry) { RouteLine(geometry).length }
+            val done = uiState.progress?.let { length - it.distanceRemaining } ?: 0.0
+            RouteTrafficLine(geometry, extras.trafficSpans, theme, car, from = done)
           }
         }
     )
@@ -108,18 +112,35 @@ private fun lineJson(points: List<GeographicCoordinate>): String {
   return """{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},"geometry":{"type":"LineString","coordinates":[$coords]}}]}"""
 }
 
-/** The whole route, dark and thin: what stays visible of the road already driven. */
+/**
+ * Traffic on the route itself, like Google's route line: the slow and jammed stretches recoloured
+ * (amber slow, red heavy, darkest where closed), only on the road still ahead ([from] metres on).
+ * Red Dead's route is already red, so its jams are the darker maroon ink.
+ */
 @Composable
 @MaplibreComposable
-private fun RouteTrail(points: List<GeographicCoordinate>, theme: OverworldTheme, car: Boolean) {
-  val json = remember(points) { lineJson(points) }
+fun RouteTrafficLine(points: List<GeographicCoordinate>, spans: List<TrafficSpan>, theme: OverworldTheme, car: Boolean, from: Double = 0.0) {
+  val json =
+      remember(points, spans, (from / 25).toInt()) {
+        val line = RouteLine(points)
+        val features =
+            spans.filter { it.to > from }.joinToString(",") { span ->
+              val coords = line.slice(maxOf(span.from, from), span.to).joinToString(",") { "[${it.lng},${it.lat}]" }
+              """{"type":"Feature","properties":{"level":${span.level}},"geometry":{"type":"LineString","coordinates":[$coords]}}"""
+            }
+        """{"type":"FeatureCollection","features":[$features]}"""
+      }
   val source = rememberGeoJsonSource(GeoJsonData.JsonString(json))
+  val (slow, heavy, closed) =
+      if (theme.skin == Skin.RDR) Triple(Color(0xFFD08A1E), Color(0xFF4A0A10), Color(0xFF1E1E1C))
+      else Triple(Color(0xFFFFB020), Color(0xFFFF3B30), Color(0xFF8F0E1A))
+  val k = if (theme.skin == Skin.RDR) 0.72f else 1f
   Anchor.Below(FIRST_LABEL_LAYER) {
     LineLayer(
-        id = "ow-route-trail",
+        id = "ow-route-traffic",
         source = source,
-        color = const(theme.routeCasing.copy(alpha = 0.55f)),
-        width = widthByZoom(if (car) 3f else 2.5f, if (car) 9f else 7f),
+        color = switch(feature["level"].asNumber(), case(3, const(closed)), case(2, const(heavy)), fallback = const(slow)),
+        width = widthByZoom((if (car) 4.5f else 3.5f) * k, (if (car) 15f else 12f) * k),
         cap = const(LineCap.Round),
         join = const(LineJoin.Round),
     )
@@ -131,6 +152,9 @@ private fun RouteTrail(points: List<GeographicCoordinate>, theme: OverworldTheme
 fun ThemedRouteLine(points: List<GeographicCoordinate>, theme: OverworldTheme, car: Boolean) {
   val json = remember(points) { lineJson(points) }
   val source = rememberGeoJsonSource(GeoJsonData.JsonString(json))
+  // RDR2 inks its route inside the road, so the road's own ink shows along both edges; GTA V's
+  // route is as wide as the road.
+  val k = if (theme.skin == Skin.RDR) 0.72f else 1f
   Anchor.Below(FIRST_LABEL_LAYER) {
     val glow = theme.routeGlow
     if (glow != null && !car) {
@@ -148,7 +172,7 @@ fun ThemedRouteLine(points: List<GeographicCoordinate>, theme: OverworldTheme, c
         id = "ow-route-casing",
         source = source,
         color = const(theme.routeCasing),
-        width = widthByZoom(if (car) 7f else 5.5f, if (car) 22f else 18f),
+        width = widthByZoom((if (car) 7f else 5.5f) * k, (if (car) 22f else 18f) * k),
         cap = const(LineCap.Round),
         join = const(LineJoin.Round),
     )
@@ -156,7 +180,7 @@ fun ThemedRouteLine(points: List<GeographicCoordinate>, theme: OverworldTheme, c
         id = "ow-route-line",
         source = source,
         color = const(theme.routeLine),
-        width = widthByZoom(if (car) 4.5f else 3.5f, if (car) 15f else 12f),
+        width = widthByZoom((if (car) 4.5f else 3.5f) * k, (if (car) 15f else 12f) * k),
         cap = const(LineCap.Round),
         join = const(LineJoin.Round),
     )

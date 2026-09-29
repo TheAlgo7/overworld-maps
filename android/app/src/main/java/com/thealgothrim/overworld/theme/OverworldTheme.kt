@@ -117,7 +117,7 @@ class ThemeStore(context: Context) {
 
   private val _details = MutableStateFlow(
       MapDetails(
-          traffic = prefs.getBoolean("detail_traffic", true),
+          traffic = prefs.getBoolean("detail_traffic", false),
           signals = prefs.getBoolean("detail_signals", true),
           incidents = prefs.getBoolean("detail_incidents", true),
       )
@@ -157,7 +157,7 @@ object StyleCache {
 
   /**
    * [trafficTiles]: TomTom flow tiles URL. When set, a live-traffic layer is added above the roads
-   * and below the route, coloured like Google's (green free-flowing, amber slow, red jammed) in
+   * and below the route: amber where roads are slower than usual, red where they are jammed, in
    * tones that suit the theme.
    */
   fun json(context: Context, theme: OverworldTheme, car: Boolean, trafficTiles: String? = null): String {
@@ -178,36 +178,61 @@ object StyleCache {
         "traffic",
         JSONObject().put("type", "vector").put("tiles", JSONArray().put(tiles)).put("minzoom", 0).put("maxzoom", 22),
     )
-    val (jam, slow, busy, free) =
-        if (theme.skin == Skin.RDR) listOf("#5a0a14", "#b3120c", "#c47a12", "#5b7a38")
-        else listOf("#8f0e1a", "#ff3b30", "#ffb020", "#34c759")
+    val (jam, slow, busy) =
+        if (theme.skin == Skin.RDR) listOf("#5a0a14", "#b3120c", "#c47a12")
+        else listOf("#8f0e1a", "#ff3b30", "#ffb020")
     val level = JSONArray("[\"to-number\", [\"get\", \"traffic_level\"], 1]")
-    val layer =
+    // Like Google: highways from city zoom, arterials and then streets as you zoom in. All of them
+    // at once turned the whole city orange. Only roads slower than usual are drawn: free-flowing
+    // green on every road buried the game look, and the point is to see where the traffic is.
+    val highways = listOf("International road", "Major road")
+    val arterials = listOf("Secondary road", "Connecting road")
+    /** [types]: the road types this layer draws, or null for every type not listed in [others]. */
+    fun trafficLayer(id: String, minzoom: Double, types: List<String>?, others: List<String> = emptyList()): JSONObject =
         JSONObject()
-            .put("id", "traffic-flow")
+            .put("id", id)
             .put("type", "line")
             .put("source", "traffic")
             .put("source-layer", "Traffic flow")
-            .put("minzoom", 10)
+            .put("minzoom", minzoom)
+            .put(
+                "filter",
+                JSONArray()
+                    .put("all")
+                    .put(JSONArray().put("<").put(level).put(0.8))
+                    .put(
+                        JSONArray()
+                            .put("match")
+                            .put(JSONArray("[\"get\", \"road_type\"]"))
+                            .put(JSONArray(types ?: others))
+                            .put(types != null)
+                            .put(types == null)
+                    ),
+            )
             .put("layout", JSONObject().put("line-cap", "round").put("line-join", "round"))
             .put(
                 "paint",
                 JSONObject()
-                    .put("line-color", JSONArray().put("step").put(level).put(jam).put(0.25).put(slow).put(0.5).put(busy).put(0.8).put(free))
-                    .put("line-width", JSONArray("[\"interpolate\", [\"linear\"], [\"zoom\"], 10, 1.2, 14, ${if (car) 3.5 else 3}, 18, ${if (car) 9 else 7}]"))
-                    // Free-flowing roads stay subtle, slow ones stand out.
-                    .put("line-opacity", JSONArray().put("step").put(level).put(0.95).put(0.8).put(0.55))
+                    .put("line-color", JSONArray().put("step").put(level).put(jam).put(0.25).put(slow).put(0.5).put(busy))
+                    .put("line-width", JSONArray("[\"interpolate\", [\"linear\"], [\"zoom\"], 10, 1, 13, 2, 15, ${if (car) 4 else 3.5}, 18, ${if (car) 9 else 7}]"))
+                    .put("line-opacity", JSONArray("[\"interpolate\", [\"linear\"], [\"zoom\"], 10, 0.7, 14, 0.9]"))
                     .put("line-offset", JSONArray("[\"interpolate\", [\"linear\"], [\"zoom\"], 12, 0, 18, 3]")),
             )
+    val added =
+        listOf(
+            trafficLayer("traffic-flow", 10.0, highways),
+            trafficLayer("traffic-flow-arterial", 13.0, arterials),
+            trafficLayer("traffic-flow-local", 14.5, null, others = highways + arterials),
+        )
     val layers = root.getJSONArray("layers")
     var insertAt = layers.length()
     for (i in 0 until layers.length()) if (layers.getJSONObject(i).optString("id") == "label-water") insertAt = i
     val out = JSONArray()
     for (i in 0 until layers.length()) {
-      if (i == insertAt) out.put(layer)
+      if (i == insertAt) added.forEach { out.put(it) }
       out.put(layers.get(i))
     }
-    if (insertAt == layers.length()) out.put(layer)
+    if (insertAt == layers.length()) added.forEach { out.put(it) }
     root.put("layers", out)
     return root.toString()
   }

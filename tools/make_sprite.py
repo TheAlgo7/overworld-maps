@@ -6,6 +6,8 @@
    The same patterns plus RDR2 POI icons: the game's blip pictograms on black discs, the way the
    RDR2 map draws shops. Built from "Reference - RDR2/blips" (Rockstar's textures), so it lives in
    the gitignored local folder and is only used on personal builds. The app picks it up when present.
+   GTA V's shop blips go in the same local sheet ("gta-*"), cut from the game's blip texture sheet
+   in "Reference - GTA V/blips" (a 16x16 grid of 64 px icons: white pictograms, black outline).
 
 Run: python tools/make_sprite.py   (needs Pillow)
 """
@@ -18,6 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 MAIN = ROOT / "android" / "app" / "src" / "main" / "assets" / "sprites"
 LOCAL = ROOT / "android" / "app" / "src" / "local" / "assets" / "sprites-local"
 BLIPS = ROOT / "Reference - RDR2" / "blips"
+GTA_SHEET = ROOT / "Reference - GTA V" / "blips" / "blips_texturesheet_ng.png"
 INK = (64, 66, 61)
 
 # Map icon name -> RDR2 blip. The style's POI layer picks these by OSM category.
@@ -40,6 +43,29 @@ POIS = {
     "poi-theatre": "blip_ambient_theatre",
     "poi-landmark": "blip_poi",
 }
+
+
+# Map icon name -> (row, column) in GTA V's blip sheet.
+GTA_POIS = {
+    "gta-bar": (2, 1),  # cocktail glass
+    "gta-doctor": (0, 13),  # star of life
+    "gta-pharmacy": (0, 8),  # pill
+    "gta-bank": (2, 11),  # dollar
+    "gta-barber": (1, 2),  # scissors (Herr Kutz)
+    "gta-clothes": (1, 4),  # T-shirt (Binco, Suburban)
+    "gta-repair": (1, 3),  # spray gun (Los Santos Customs)
+    "gta-store": (0, 9),  # basket (24/7)
+    "gta-fuel": (12, 3),  # petrol pump
+    "gta-police": (0, 12),  # police shield
+    "gta-theatre": (3, 11),  # film camera
+}
+
+
+def gta(cell: tuple, scale: int) -> Image.Image:
+    size = 22 * scale
+    r, c = cell
+    icon = Image.open(GTA_SHEET).convert("RGBA").crop((c * 64, r * 64, c * 64 + 64, r * 64 + 64))
+    return icon.resize((size, size), Image.LANCZOS)
 
 
 def hatch(scale):
@@ -90,6 +116,11 @@ def write(out: Path, parts: dict, scale: int, suffix: str) -> None:
 for scale, suffix in [(1, ""), (2, "@2x")]:
     patterns = {"hatch": hatch(scale), "stipple": stipple(scale)}
     write(MAIN, patterns, scale, suffix)
+    local = dict(patterns)
     if BLIPS.exists():
-        write(LOCAL, {**patterns, **{name: poi(blip, scale) for name, blip in POIS.items()}}, scale, suffix)
-print("sprites ->", MAIN, "and", LOCAL if BLIPS.exists() else "(no local blips)")
+        local.update({name: poi(blip, scale) for name, blip in POIS.items()})
+    if GTA_SHEET.exists():
+        local.update({name: gta(cell, scale) for name, cell in GTA_POIS.items()})
+    if len(local) > len(patterns):
+        write(LOCAL, local, scale, suffix)
+print("sprites ->", MAIN, "and", LOCAL if BLIPS.exists() or GTA_SHEET.exists() else "(no local blips)")

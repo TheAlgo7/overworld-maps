@@ -42,8 +42,12 @@
           place: "#f0f0ea", placeHalo: "#16181a", placeFont: "Noto Sans Bold", placeSpacing: 0.08, upper: true,
           water: "#a9c3cf", waterHalo: "#2e4756",
         },
-        // HUD_COLOUR_WAYPOINT (164, 76, 242) and its dark variant.
-        route: { line: "#a44cf2", casing: "#522679", glow: null },
+        // HUD_COLOUR_WAYPOINT (164, 76, 242), drawn flat with no outline like the pause map and radar.
+        route: { line: "#a44cf2", casing: "#a44cf2", glow: null },
+        // Shop blips: the game's white pictograms (T-shirt, scissors, spray gun...). No food or hotels:
+        // the GTA map only marks shops and services you can use.
+        pois: { prefix: "gta-", minzoom: 15, size: 1,
+          only: ["bar", "doctor", "pharmacy", "bank", "barber", "clothes", "repair", "store", "fuel", "police", "theatre"] },
       },
       // Radar arrow (radar_centre): white left half, #b3b3b3 right half, black outline.
       // Waypoint (radar_waypoint): four pointed petals in the waypoint colour, dark ring centre.
@@ -393,32 +397,39 @@
       });
     }
     if (m.pois && !car) {
-      // Shops and services as the game's black-disc blips (icons ship in the app's local sprite).
-      const cls = ["get", "class"];
+      // Shops and services as the game's blips: RDR2's black discs, GTA V's white pictograms
+      // (icons ship in the app's local sprite, cut from the games' blip textures).
+      const P = m.pois === true ? { prefix: "poi-" } : m.pois;
+      const groups = [
+        ["food", ["restaurant", "fast_food", "food_court", "cafe", "ice_cream", "bakery"]],
+        ["bar", ["bar", "pub", "beer", "alcohol_shop"]],
+        ["doctor", ["hospital", "doctors", "clinic", "dentist"]],
+        ["pharmacy", ["pharmacy", "chemist"]],
+        ["bank", ["bank", "atm"]],
+        ["post", ["post"]],
+        ["hotel", ["lodging"]],
+        ["train", ["railway"]],
+        ["barber", ["hairdresser", "beauty"]],
+        ["clothes", ["clothing_store", "shoes", "fashion"]],
+        ["repair", ["car", "car_repair"]],
+        ["store", ["grocery", "supermarket", "convenience", "department_store"]],
+        // Shops OpenStreetMap doesn't classify: RDR2's general store; GTA V leaves them unmarked.
+        ["shop", ["shop"], "store"],
+        ["market", ["marketplace"]],
+        ["fuel", ["fuel"]],
+        ["police", ["police"]],
+        ["theatre", ["cinema", "theatre"]],
+        ["landmark", ["attraction", "museum", "monument", "castle"]],
+      ];
+      const icon = ["match", ["get", "class"]];
+      for (const [name, classes, iconName] of groups) if (!P.only || P.only.includes(name)) icon.push(classes, P.prefix + (iconName || name));
+      icon.push("");
       layers.push({
-        id: "poi-blips", type: "symbol", source: "omt", "source-layer": "poi", minzoom: 15.5,
+        id: "poi-blips", type: "symbol", source: "omt", "source-layer": "poi", minzoom: P.minzoom || 15.5,
         filter: ["<=", ["coalesce", ["get", "rank"], 99], 20],
         layout: {
-          "icon-image": ["match", cls,
-            ["restaurant", "fast_food", "food_court", "cafe", "ice_cream", "bakery"], "poi-food",
-            ["bar", "pub", "beer", "alcohol_shop"], "poi-bar",
-            ["hospital", "doctors", "clinic", "dentist"], "poi-doctor",
-            ["pharmacy", "chemist"], "poi-pharmacy",
-            ["bank", "atm"], "poi-bank",
-            ["post"], "poi-post",
-            ["lodging"], "poi-hotel",
-            ["railway"], "poi-train",
-            ["hairdresser", "beauty"], "poi-barber",
-            ["clothing_store", "shoes", "fashion"], "poi-clothes",
-            ["car", "car_repair"], "poi-repair",
-            ["grocery", "shop", "supermarket", "convenience", "department_store"], "poi-store",
-            ["marketplace"], "poi-market",
-            ["fuel"], "poi-fuel",
-            ["police"], "poi-police",
-            ["cinema", "theatre"], "poi-theatre",
-            ["attraction", "museum", "monument", "castle"], "poi-landmark",
-            ""],
-          "icon-size": 0.95, "symbol-sort-key": ["coalesce", ["get", "rank"], 99], "icon-padding": 4,
+          "icon-image": icon,
+          "icon-size": P.size || 0.95, "symbol-sort-key": ["coalesce", ["get", "rank"], 99], "icon-padding": 4,
         },
       });
     }
@@ -455,7 +466,8 @@
     // Label-free themes (the GTA V map shows no names) hide the layers rather than drop them:
     // the app anchors its route line under "label-water", so that layer must exist.
     if (m.labels === false) {
-      for (const l of layers.slice(firstLabel)) l.layout = Object.assign({}, l.layout, { visibility: "none" });
+      // Text labels only: the map's blips stay, like the game's pause map.
+      for (const l of layers.slice(firstLabel)) if (l.id !== "poi-blips") l.layout = Object.assign({}, l.layout, { visibility: "none" });
     }
 
     return {

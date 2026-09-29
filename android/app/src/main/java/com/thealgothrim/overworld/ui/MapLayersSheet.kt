@@ -96,8 +96,8 @@ fun BoxScope.MapLayersSheet(theme: OverworldTheme, onClose: () -> Unit) {
       SkinText(spec.title("Map details"), spec.title, if (spec.gta) 16.sp else 19.sp, spec.sub, spacing = if (spec.gta) 0.sp else 1.sp)
       Spacer(Modifier.height(4.dp))
       ToggleRow(
-          spec, "Live traffic",
-          if (live) "Road colours from TomTom: green flowing, amber slow, red jammed." else "Needs a free TomTom key (see Settings, About).",
+          spec, "Traffic on every road",
+          if (live) "Your route always shows its own traffic. This colours all roads: amber slow, red jammed." else "Needs a free TomTom key (see Settings, About).",
           checked = details.traffic && live, enabled = live,
       ) { store.setDetails(details.copy(traffic = !details.traffic)) }
       SkinDivider(spec)

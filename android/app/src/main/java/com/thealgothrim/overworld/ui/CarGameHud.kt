@@ -164,7 +164,7 @@ private fun PreviewCard(spec: SkinSpec, preview: RoutePreview, extras: RouteExtr
         listOfNotNull(
             preview.via?.let { "via $it" },
             extras.lightsOnRoute.takeIf { it > 0 }?.let { "$it traffic lights" },
-            extras.incidentsOnRoute.size.takeIf { it > 0 }?.let { "$it incident${if (it == 1) "" else "s"}" },
+            extras.markedIncidents.size.takeIf { it > 0 }?.let { "$it incident${if (it == 1) "" else "s"}" },
             trafficNote(extras.eta),
         )
     if (facts.isNotEmpty()) SkinText(facts.joinToString("  ·  "), spec.body, 17.sp, spec.sub, Modifier.padding(top = 2.dp), maxLines = 2)

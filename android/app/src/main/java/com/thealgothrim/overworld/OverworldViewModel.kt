@@ -16,6 +16,7 @@ import com.thealgothrim.overworld.traffic.RoadFeature
 import com.thealgothrim.overworld.traffic.RoadFeatureKind
 import com.thealgothrim.overworld.traffic.RouteLine
 import com.thealgothrim.overworld.traffic.TrafficEta
+import com.thealgothrim.overworld.traffic.TrafficSpan
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -50,12 +51,22 @@ data class RouteExtras(
     val eta: TrafficEta? = null,
     /** Distance left when [eta] was fetched, to scale it down as the trip goes on. */
     val etaAtDistance: Double = 0.0,
+    /** Stretches of the route in traffic (metres along the whole route), drawn on the route line. */
+    val trafficSpans: List<TrafficSpan> = emptyList(),
 ) {
   val lightsOnRoute: Int
     get() = signals.count { it.kind == RoadFeatureKind.TRAFFIC_LIGHT && it.along != null }
 
+  /**
+   * Incidents on the route itself. Ordinary jams are left to the traffic colours on the roads;
+   * only stationary traffic (TomTom's "major" delay) gets an icon and an alert.
+   */
   val incidentsOnRoute: List<RoadFeature>
-    get() = incidents.filter { it.along != null }
+    get() = incidents.filter { it.along != null && (it.kind != RoadFeatureKind.JAM || it.magnitude >= 3) }
+
+  /** What gets an icon on the map and a count in the preview: jams are shown on the route line instead. */
+  val markedIncidents: List<RoadFeature>
+    get() = incidentsOnRoute.filter { it.kind != RoadFeatureKind.JAM }
 }
 
 /** The next incident or camera ahead on the route, for the "Accident ahead" alert. */
@@ -321,7 +332,6 @@ class OverworldViewModel :
       _extras.value = RouteExtras()
       extrasLoaded.clear()
     }
-    val destination = route.last()
     extrasJob =
         viewModelScope.launch {
           // Lights come from the routing server in about a second; cameras from Overpass, which can
@@ -334,12 +344,22 @@ class OverworldViewModel :
               _extras.update { e -> e.copy(signals = (e.signals.filter { it.kind != kind } + found).sortedBy { it.along ?: Double.MAX_VALUE }) }
             }
           }
+          val line = RouteLine(route)
           while (true) {
-            val from = navigationUiState.value.location?.coordinates ?: route.first()
+            // While driving, ask about the road still ahead so the time counts from here.
+            val left = navigationUiState.value.progress?.distanceRemaining?.takeIf { live } ?: line.length
+            val done = (line.length - left).coerceAtLeast(0.0)
+            val ahead = if (done > 50.0) line.slice(done, line.length) else route
             val incidents = runCatching { traffic.incidents(route) }.getOrDefault(emptyList())
-            val eta = runCatching { traffic.eta(from, destination) }.getOrNull()
-            val left = navigationUiState.value.progress?.distanceRemaining ?: routeLength(route)
-            _extras.value = _extras.value.copy(incidents = incidents, eta = eta ?: _extras.value.eta, etaAtDistance = left)
+            val fresh = runCatching { traffic.routeTraffic(ahead) }.getOrNull()
+            _extras.update { e ->
+              e.copy(
+                  incidents = incidents,
+                  eta = fresh?.eta ?: e.eta,
+                  etaAtDistance = left,
+                  trafficSpans = fresh?.spans?.map { it.copy(from = it.from + done, to = it.to + done) } ?: e.trafficSpans,
+              )
+            }
             if (!live || !traffic.hasLiveTraffic) break
             delay(150_000)
           }

@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -35,7 +36,10 @@ import com.thealgothrim.overworld.ui.skin.spec
 import kotlin.math.abs
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import com.thealgothrim.overworld.traffic.metres
+import uniffi.ferrostar.GeographicCoordinate
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.spatialk.geojson.Position
 
@@ -103,7 +107,26 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
     }
   }
 
-  val locate: () -> Unit = { mapState.recenter(isNavigating = navigating) }
+  // Locate asks Android to turn location on first when it is off, like Google Maps.
+  val locate = rememberWithLocationOn { mapState.recenter(isNavigating = navigating) }
+
+  // GTA V's pause map names the area under the map's centre (bottom-left, with the scale bar).
+  var mapArea by remember { mutableStateOf<String?>(null) }
+  val position = mapState.cameraState.position
+  val scale = metresPerDp(position.target.latitude, position.zoom)
+  LaunchedEffect(spec.gta) {
+    if (!spec.gta) return@LaunchedEffect
+    var looked: Pair<GeographicCoordinate, Double>? = null
+    snapshotFlow { mapState.cameraState.position }
+        .collectLatest { p ->
+          delay(800) // wait for the map to settle
+          val centre = GeographicCoordinate(p.target.latitude, p.target.longitude)
+          val last = looked
+          if (last != null && metres(last.first, centre) < 250.0 && abs(last.second - p.zoom) < 1.5) return@collectLatest
+          looked = centre to p.zoom
+          runCatching { AppModule.search.areaAt(centre) }.getOrNull()?.let { mapArea = it }
+        }
+  }
   val northUp: () -> Unit = {
     scope.launch {
       mapState.cameraMode = NavigationCameraMode.FREE
@@ -180,6 +203,8 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
                 onLayers = { layersOpen = true },
                 onLocate = locate,
                 onNorthUp = northUp,
+                mapArea = mapArea,
+                metresPerDp = scale,
             )
       }
     }

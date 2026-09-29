@@ -88,7 +88,7 @@ fun BoxScope.PreviewLayer(
               preview.via?.let { "via $it" },
               trafficNote(extras.eta),
               extras.lightsOnRoute.takeIf { it > 0 }?.let { "$it traffic light${if (it == 1) "" else "s"}" },
-              extras.incidentsOnRoute.size.takeIf { it > 0 }?.let { "$it incident${if (it == 1) "" else "s"} on route" },
+              extras.markedIncidents.size.takeIf { it > 0 }?.let { "$it incident${if (it == 1) "" else "s"} on route" },
           )
       if (facts.isNotEmpty()) SkinText(facts.joinToString("  ·  "), spec.body, 16.sp, spec.fg, Modifier.padding(top = 4.dp), maxLines = 2)
       SkinText(
