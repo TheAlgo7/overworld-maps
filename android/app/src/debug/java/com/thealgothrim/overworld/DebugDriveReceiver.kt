@@ -29,7 +29,12 @@ class DebugDriveReceiver : BroadcastReceiver() {
           val to = GeographicCoordinate(intent.getFloatExtra("lat", 0f).toDouble(), intent.getFloatExtra("lng", 0f).toDouble())
           vm.setTestDrive(true)
           // "%s" for spaces, the same convention as `adb shell input text`.
-          vm.startNavigation(to, intent.getStringExtra("name")?.replace("%s", " "))
+          // Optional start ("from_lat"/"from_lng"), so a drive can begin anywhere, not where the phone is.
+          val from =
+              if (intent.hasExtra("from_lat") && intent.hasExtra("from_lng"))
+                  GeographicCoordinate(intent.getFloatExtra("from_lat", 0f).toDouble(), intent.getFloatExtra("from_lng", 0f).toDouble())
+              else null
+          vm.startNavigation(to, intent.getStringExtra("name")?.replace("%s", " "), from)
           Log.i("DebugDrive", "test drive to $to")
         }
       }

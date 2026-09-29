@@ -158,6 +158,8 @@ adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver -a com.
 adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver -a com.thealgothrim.overworld.DEBUG_STOP
 ```
 
+The drive starts where the phone is. Add `--ef from_lat 28.6315 --ef from_lng 77.2167` to start somewhere else, here on Connaught Place's Outer Circle, a good test for roundabouts.
+
 Map icons and labels don't draw on the emulator's default software GPU. Start it on the computer's GPU: `emulator -avd <name> -gpu host`.
 
 ## Put it in the car

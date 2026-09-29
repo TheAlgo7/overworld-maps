@@ -431,7 +431,8 @@ class OverworldViewModel :
     _planner.value = PlannerState()
   }
 
-  private fun begin(route: Route, place: Place) {
+  private fun begin(given: Route, place: Place) {
+    val route = given.safeForCar()
     if (_testDrive.value) locationProvider.enableSimulationOn(route)
     setDestination(place.name)
     destinationName = place.name
@@ -440,13 +441,21 @@ class OverworldViewModel :
     if (navigationUiState.value.isNavigating()) core.replaceRoute(route = route) else core.startNavigation(route = route)
   }
 
-  /** Straight to driving, without a preview (used by the car and by saved-place shortcuts there). */
-  fun startNavigation(destination: GeographicCoordinate, name: String?) {
+  /**
+   * Straight to driving, without a preview (used by the car and by saved-place shortcuts there).
+   * [from] replaces the phone's position as the start (debug test drives).
+   */
+  fun startNavigation(destination: GeographicCoordinate, name: String?, from: GeographicCoordinate? = null) {
     _planner.value = _planner.value.copy(routing = true, error = null)
     viewModelScope.launch(Dispatchers.IO) {
       try {
         val route =
-            core.getRoutes(origin, listOf(Waypoint(coordinate = destination, kind = WaypointKind.BREAK))).first()
+            core
+                .getRoutes(
+                    from?.let { UserLocation(it, 6.0, null, Instant.now(), null) } ?: origin,
+                    listOf(Waypoint(coordinate = destination, kind = WaypointKind.BREAK)),
+                )
+                .first()
         begin(route, Place(name ?: "Destination", "", destination))
         _planner.value = PlannerState()
       } catch (e: Exception) {

@@ -2,6 +2,7 @@ package com.thealgothrim.overworld
 
 import android.content.Context
 import com.stadiamaps.ferrostar.composeui.notification.DefaultForegroundNotificationBuilder
+import com.stadiamaps.ferrostar.core.AlternativeRouteProcessor
 import com.stadiamaps.ferrostar.core.AndroidTtsObserver
 import com.stadiamaps.ferrostar.core.CorrectiveAction
 import com.stadiamaps.ferrostar.core.FerrostarCore
@@ -101,6 +102,11 @@ object AppModule {
         )
     core.deviationHandler = RouteDeviationHandler { _, _, remainingWaypoints ->
       CorrectiveAction.GetNewRoutes(remainingWaypoints)
+    }
+    // Ferrostar only calls this while off the route. Same as its default (take the first new
+    // route), but made safe for Android Auto first: a reroute often starts on a roundabout.
+    core.alternativeRouteProcessor = AlternativeRouteProcessor { c, routes ->
+      routes.firstOrNull()?.let { c.replaceRoute(it.safeForCar()) }
     }
     core
   }
