@@ -3,6 +3,11 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.compose'
 }
 
+// Personal settings, never committed: the TomTom key and the Play upload key's location.
+def props = new Properties()
+def localProps = rootProject.file("local.properties")
+if (localProps.exists()) localProps.withInputStream { props.load(it) }
+
 android {
     namespace 'com.thealgothrim.overworld'
     compileSdk = 36
@@ -16,16 +21,33 @@ android {
         versionName "0.2.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
-        // Live traffic (TomTom free tier). Put tomtomKey=... in local.properties, which is gitignored.
-        def props = new Properties()
-        def localProps = rootProject.file("local.properties")
-        if (localProps.exists()) localProps.withInputStream { props.load(it) }
+        // Live traffic (TomTom free tier). Put tomtomKey=... in local.properties.
         buildConfigField "String", "TOMTOM_KEY", "\"${props.getProperty("tomtomKey", "")}\""
     }
 
+    // Google Play upload key (uploadStoreFile, uploadStorePassword, uploadKeyAlias, uploadKeyPassword
+    // in local.properties). Play re-signs releases with its own key. Without these, release builds
+    // come out unsigned.
+    signingConfigs {
+        upload {
+            if (props.getProperty("uploadStoreFile")) {
+                storeFile file(props.getProperty("uploadStoreFile"))
+                storePassword props.getProperty("uploadStorePassword")
+                keyAlias props.getProperty("uploadKeyAlias")
+                keyPassword props.getProperty("uploadKeyPassword")
+            }
+        }
+    }
+
     buildTypes {
+        // Test builds install next to the Play copy (their own package and name), so testing over
+        // USB never means uninstalling the app in the car.
+        debug {
+            applicationIdSuffix ".debug"
+        }
         release {
             minifyEnabled false
+            if (props.getProperty("uploadStoreFile")) signingConfig signingConfigs.upload
         }
     }
     compileOptions {

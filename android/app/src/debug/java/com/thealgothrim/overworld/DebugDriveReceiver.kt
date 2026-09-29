@@ -10,19 +10,19 @@ import uniffi.ferrostar.GeographicCoordinate
  * Debug builds only: start or stop a simulated trip from the laptop, so the Android Auto screen can
  * be tested in the Desktop Head Unit without touching (or unlocking) the phone.
  *
- *   adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver \
+ *   adb shell am broadcast -n com.thealgothrim.overworld.debug/com.thealgothrim.overworld.DebugDriveReceiver \
  *     -a com.thealgothrim.overworld.DEBUG_DRIVE --ef lat 28.6129 --ef lng 77.2295 --es name "India Gate"
- *   adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver \
+ *   adb shell am broadcast -n com.thealgothrim.overworld.debug/com.thealgothrim.overworld.DebugDriveReceiver \
  *     -a com.thealgothrim.overworld.DEBUG_DRIVE --es theme rdr2
- *   adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver \
+ *   adb shell am broadcast -n com.thealgothrim.overworld.debug/com.thealgothrim.overworld.DebugDriveReceiver \
  *     -a com.thealgothrim.overworld.DEBUG_STOP
  *
  * A place by name, the way Android Auto's "navigate to India Gate" arrives:
- *   adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver \
+ *   adb shell am broadcast -n com.thealgothrim.overworld.debug/com.thealgothrim.overworld.DebugDriveReceiver \
  *     -a com.thealgothrim.overworld.DEBUG_DRIVE --es query "India%sGate"
  *
  * What the app holds right now (trip, simulator, route extras), in logcat under DebugDrive:
- *   adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver \
+ *   adb shell am broadcast -n com.thealgothrim.overworld.debug/com.thealgothrim.overworld.DebugDriveReceiver \
  *     -a com.thealgothrim.overworld.DEBUG_STATE
  */
 class DebugDriveReceiver : BroadcastReceiver() {

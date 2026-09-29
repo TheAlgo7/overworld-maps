@@ -119,15 +119,10 @@ You need JDK 21 and the Android SDK.
 powershell -File tools/build-install.ps1          # build the debug APK and install it on the connected phone or emulator
 ```
 
-Or by hand from PowerShell: `cd android; .\gradlew.bat :app:assembleDebug`. Don't call `gradlew.bat` from Git Bash when the path has a space in it: it fails without an obvious error and the old APK stays in place.
+Or by hand from PowerShell: `cd android; .\gradlew.bat :app:assembleDebug`. Debug builds are their own app, `com.thealgothrim.overworld.debug` ("Overworld debug"), so they install next to the Play copy instead of over it. Don't call `gradlew.bat` from Git Bash when the path has a space in it: it fails without an obvious error and the old APK stays in place.
 
 After changing a theme in `prototype/themes.js`, run `node tools/export-android.mjs`, then rebuild.
 
-Tests (the Android Auto screen inside Google's car-app test host, with a real simulated trip) need an emulator or phone connected:
-
-```bash
-./gradlew :app:connectedDebugAndroidTest
-```
 
 ### On the phone
 
@@ -155,27 +150,27 @@ If the head unit sits on "Waiting for phone", stop and start the head unit serve
 **Test drives from the laptop** (debug builds, works with the phone locked):
 
 ```bat
-adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver -a com.thealgothrim.overworld.DEBUG_DRIVE --es theme gta5 --ef lat 28.6129 --ef lng 77.2295 --es name "India%sGate"
-adb shell am broadcast -n com.thealgothrim.overworld/.DebugDriveReceiver -a com.thealgothrim.overworld.DEBUG_STOP
+adb shell am broadcast -n com.thealgothrim.overworld.debug/com.thealgothrim.overworld.DebugDriveReceiver -a com.thealgothrim.overworld.DEBUG_DRIVE --es theme gta5 --ef lat 28.6129 --ef lng 77.2295 --es name "India%sGate"
+adb shell am broadcast -n com.thealgothrim.overworld.debug/com.thealgothrim.overworld.DebugDriveReceiver -a com.thealgothrim.overworld.DEBUG_STOP
 ```
 
 The drive starts where the phone is. Add `--ef from_lat 28.6315 --ef from_lng 77.2167` to start somewhere else, here on Connaught Place's Outer Circle, a good test for roundabouts. `--es query "India%sGate"` drives to a place by name, the way a request from Android Auto arrives, and `--ez test false` makes it a real trip on the phone's GPS. `-a com.thealgothrim.overworld.DEBUG_STATE` logs what the app holds (trip, simulator, route extras, voice) under the `DebugDrive` tag.
 
-**Tests** (`android/app/src/androidTest`, need a phone or emulator with internet): real Delhi and Chandigarh routes run through Android Auto's builders step by step, navigation requests in every link form, trips stopped as they start, and the car screen itself. Run them on an emulator, since `connectedDebugAndroidTest` uninstalls the app afterwards and a phone would lose its saved places. Put the emulator in Delhi first (`adb emu geo fix 77.2167 28.6315`); by default it thinks it's in California.
+**Tests** (`android/app/src/androidTest`, need a phone or emulator with internet): real Delhi and Chandigarh routes run through Android Auto's builders step by step, navigation requests in every link form, trips stopped as they start, and the car screen itself. Run them on an emulator, since `connectedDebugAndroidTest` uninstalls the app afterwards. Put the emulator in Delhi first (`adb emu geo fix 77.2167 28.6315`); by default it thinks it's in California. Then install both APKs from `assembleDebug assembleDebugAndroidTest` and run `adb shell am instrument -w com.thealgothrim.overworld.debug.test/androidx.test.runner.AndroidJUnitRunner`.
 
 Map icons and labels don't draw on the emulator's default software GPU. Start it on the computer's GPU: `emulator -avd <name> -gpu host`.
 
 ## Put it in the car
 
-Android Auto won't show a sideloaded navigation app in a real car ([Google's testing docs](https://developer.android.com/training/cars/testing)). It has to come from Google Play, but **Internal App Sharing skips the review**:
+Android Auto won't show a sideloaded navigation app in a real car ([Google's testing docs](https://developer.android.com/training/cars/testing)). It has to come from Google Play. Play's **internal testing** track skips the review and reaches up to 100 testers within minutes:
 
-1. Create a Google Play Console developer account (USD 25 once, plus an identity check).
-2. Build the app bundle: `.\gradlew.bat :app:bundleDebug` (`android/app/build/outputs/bundle/debug/app-debug.aab`). Play refuses APKs over 100 MB, and the debug APK is about 116 MB because it carries the map engine for four kinds of phone chip; from the bundle, Play sends each phone only its own.
-3. Upload it at Play Console > **Internal app sharing** and copy the link. Debug builds are accepted.
-4. On the phone: Play Store > Settings > About > tap **Play Store version** 7 times, then Settings > General > **Internal app sharing** on.
-5. Uninstall any copy installed over USB (it's signed with a different key), open the link and install. Overworld then appears in the car's Android Auto launcher.
+1. Create a Google Play Console developer account (USD 25 once, plus an identity check), then **Create app** with the package name `com.thealgothrim.overworld`.
+2. Make an upload key (`keytool -genkeypair -keystore overworld-upload.jks -alias upload -keyalg RSA -keysize 4096 -validity 12000`) and put `uploadStoreFile`, `uploadStorePassword`, `uploadKeyAlias` and `uploadKeyPassword` in `android/local.properties`. Keep the key out of the repo. Play re-signs the app with its own key, and a lost upload key can be reset in Play Console.
+3. Build the release bundle: `.\gradlew.bat :app:bundleRelease` (`android/app/build/outputs/bundle/release/app-release.aab`). Play's tracks refuse debug builds, and a bundle rather than an APK because the APK carries the map engine for four kinds of phone chip; from the bundle, Play sends each phone only its own.
+4. Play Console > Test and release > Testing > **Internal testing**: under Testers, make an email list with your Google account. Under Releases, **Create new release**, let Google manage the app signing key, upload the bundle and roll it out.
+5. Open the testers' opt-in link on the phone, accept, and install from Play. Overworld then appears in the car's Android Auto launcher. Later versions arrive as ordinary Play Store updates.
 
-The link expires after 60 days; the installed app keeps working.
+Internal app sharing (a link per upload, debug builds allowed) only works once the app has been published on a track, so it can't be the first step.
 
 ## Project structure
 
