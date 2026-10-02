@@ -80,7 +80,7 @@ fun SettingsScreen(
               value = if (carGameHud) "Game HUD" else "Android Auto",
           ) { store.setCarGameHud(!carGameHud) },
           Setting("Voice guidance", "Spoken turn instructions while driving. Off unless you turn it on.", checked = !(uiState.isMuted ?: AppModule.ttsObserver.isMuted)) { onMute() },
-          Setting("Camera beep", "A short beep as a speed camera comes within 500 m, on a trip or just driving.", checked = cameraBeep) {
+          Setting("Camera beep", "Two quick notes as a speed camera comes within 500 m, on a trip or just driving. Plays through the car like a turn prompt. Voice guidance stays separate.", checked = cameraBeep) {
             AppModule.viewModel.setCameraBeep(!cameraBeep)
           },
           Setting(

@@ -9,6 +9,8 @@
                 <action android:name="com.thealgothrim.overworld.DEBUG_DRIVE" />
                 <action android:name="com.thealgothrim.overworld.DEBUG_STOP" />
                 <action android:name="com.thealgothrim.overworld.DEBUG_STATE" />
+                <action android:name="com.thealgothrim.overworld.DEBUG_CHIME" />
+                <action android:name="com.thealgothrim.overworld.DEBUG_CAMERA" />
             </intent-filter>
         </receiver>
     </application>

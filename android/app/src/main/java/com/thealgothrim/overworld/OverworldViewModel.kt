@@ -15,6 +15,7 @@ import com.stadiamaps.ferrostar.core.isNavigating
 import com.stadiamaps.ferrostar.core.location.toUserLocation
 import com.thealgothrim.overworld.search.Nearby
 import com.thealgothrim.overworld.search.Place
+import com.thealgothrim.overworld.traffic.CameraChime
 import com.thealgothrim.overworld.traffic.angleBetween
 import com.thealgothrim.overworld.traffic.bearing
 import com.thealgothrim.overworld.traffic.metres
@@ -115,6 +116,8 @@ class OverworldViewModel :
 
   private val hasLocationPermission = MutableStateFlow(false)
   private val lastLocation = MutableStateFlow<UserLocation?>(null)
+  /** Which way the last fixes moved, for when GPS gives no course of its own. */
+  @Volatile private var movementHeading: Double? = null
   /** Map screens in view right now (the phone app, the car screen). */
   private val watchers = MutableStateFlow(0)
 
@@ -175,6 +178,9 @@ class OverworldViewModel :
           }
           .collect {
             if (it != null) {
+              lastLocation.value?.let { previous ->
+                if (metres(previous.coordinates, it.coordinates) >= 8.0) movementHeading = bearing(previous.coordinates, it.coordinates)
+              }
               lastLocation.value = it
               rememberFix(it.coordinates)
             }
@@ -519,7 +525,7 @@ class OverworldViewModel :
    * cameras and the ones marked by hand). With no trip: the nearest known camera within 600 m in
    * the direction the car is heading, so free driving gets camera alerts too.
    */
-  fun hazardAhead(state: NavigationUiState, extras: RouteExtras): HazardAhead? {
+  fun hazardAhead(state: NavigationUiState, extras: RouteExtras, camerasOnly: Boolean = false): HazardAhead? {
     val progress = state.progress ?: return freeDriveCamera(state)
     val geometry = state.routeGeometry ?: return null
     val line = routeLine(geometry)
@@ -529,7 +535,7 @@ class OverworldViewModel :
           val (along, off) = line.project(c.at)
           if (off <= 30.0) RoadFeature(RoadFeatureKind.SPEED_CAMERA, c.at, along = along) else null
         }
-    return (extras.incidentsOnRoute + extras.signals.filter { it.kind == RoadFeatureKind.SPEED_CAMERA } + marked)
+    return ((if (camerasOnly) emptyList() else extras.incidentsOnRoute) + extras.signals.filter { it.kind == RoadFeatureKind.SPEED_CAMERA } + marked)
         .mapNotNull { f -> f.along?.let { a -> HazardAhead(f, a - done) } }
         .filter { it.distance in 0.0..2_000.0 }
         .minByOrNull { it.distance }
@@ -556,7 +562,7 @@ class OverworldViewModel :
 
   private fun freeDriveCamera(state: NavigationUiState): HazardAhead? {
     val here = state.location ?: return null
-    val heading = here.courseOverGround?.degrees?.toDouble() ?: return null
+    val heading = here.courseOverGround?.degrees?.toDouble() ?: movementHeading ?: return null
     refreshCamerasAround(here.coordinates)
     val marked = AppModule.cameras.all.value.filter { c -> c.heading == null || angleBetween(c.heading, heading) < 50.0 }.map { it.at }
     return (_camerasAround.value + marked)
@@ -591,39 +597,33 @@ class OverworldViewModel :
     _cameraMarkedAt.value = System.currentTimeMillis()
   }
 
-  private val _cameraBeep = MutableStateFlow(prefs.getBoolean("camera_beep", false))
-  /** A short beep as a camera comes within 500 m, like Radarbot (off unless turned on). */
+  private val _cameraBeep = MutableStateFlow(prefs.getBoolean("camera_beep", true))
+  /** A short chime as a camera comes within 500 m, like Radarbot. On unless turned off (voice stays off). */
   val cameraBeep: StateFlow<Boolean> = _cameraBeep.asStateFlow()
 
   fun setCameraBeep(on: Boolean) {
     _cameraBeep.value = on
     prefs.edit().putBoolean("camera_beep", on).apply()
+    // Switching it on plays it once, so it's known what to listen for.
+    if (on) beep()
   }
 
-  private fun beep() {
-    runCatching {
-      val tone = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 90)
-      tone.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 350)
-      viewModelScope.launch {
-        delay(600)
-        tone.release()
-      }
-    }
-  }
+  private fun beep() = CameraChime.play(AppModule.context)
 
   // Here, after the camera state above: init blocks run in order, and a collector started on the
   // main thread runs its first round at once.
   init {
     viewModelScope.launch {
-      // One beep per camera as it comes within 500 m, when the beep is on.
-      val beeped = ArrayDeque<GeographicCoordinate>()
+      // One chime per camera as it comes within 500 m, when the chime is on. A camera left more
+      // than a kilometre behind can chime again (the drive back, a second lap).
+      val chimed = ArrayDeque<GeographicCoordinate>()
       navigationUiState.collect { state ->
+        val here = state.location?.coordinates
+        if (here != null) chimed.removeAll { metres(it, here) > 1_000.0 }
         if (!_cameraBeep.value) return@collect
-        val hazard = hazardAhead(state, _extras.value) ?: return@collect
-        if (hazard.feature.kind != RoadFeatureKind.SPEED_CAMERA || hazard.distance > 500.0) return@collect
-        if (beeped.any { metres(it, hazard.feature.at) < 50.0 }) return@collect
-        beeped.addLast(hazard.feature.at)
-        if (beeped.size > 20) beeped.removeFirst()
+        val camera = hazardAhead(state, _extras.value, camerasOnly = true) ?: return@collect
+        if (camera.distance > 500.0 || chimed.any { metres(it, camera.feature.at) < 50.0 }) return@collect
+        chimed.addLast(camera.feature.at)
         beep()
       }
     }

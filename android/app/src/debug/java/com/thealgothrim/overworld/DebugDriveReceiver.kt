@@ -21,6 +21,8 @@ import uniffi.ferrostar.GeographicCoordinate
  *   adb shell am broadcast -n com.thealgothrim.overworld.debug/com.thealgothrim.overworld.DebugDriveReceiver \
  *     -a com.thealgothrim.overworld.DEBUG_DRIVE --es query "India%sGate"
  *
+ * The camera chime (-a com.thealgothrim.overworld.DEBUG_CHIME), to hear it in the car.
+ *
  * What the app holds right now (trip, simulator, route extras), in logcat under DebugDrive:
  *   adb shell am broadcast -n com.thealgothrim.overworld.debug/com.thealgothrim.overworld.DebugDriveReceiver \
  *     -a com.thealgothrim.overworld.DEBUG_STATE
@@ -31,6 +33,13 @@ class DebugDriveReceiver : BroadcastReceiver() {
     val vm = AppModule.viewModel
     when (intent.action) {
       "com.thealgothrim.overworld.DEBUG_STOP" -> vm.stopNavigation()
+      "com.thealgothrim.overworld.DEBUG_CHIME" -> com.thealgothrim.overworld.traffic.CameraChime.play(context)
+      // A camera at --ef lat/lng (and --ef heading), as if marked with + Cam there.
+      "com.thealgothrim.overworld.DEBUG_CAMERA" ->
+          AppModule.cameras.mark(
+              GeographicCoordinate(intent.getFloatExtra("lat", 0f).toDouble(), intent.getFloatExtra("lng", 0f).toDouble()),
+              if (intent.hasExtra("heading")) intent.getFloatExtra("heading", 0f).toDouble() else null,
+          )
       "com.thealgothrim.overworld.DEBUG_STATE" -> {
         val ui = vm.navigationUiState.value
         val extras = vm.extras.value
