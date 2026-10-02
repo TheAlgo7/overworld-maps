@@ -66,6 +66,8 @@ fun SettingsScreen(
 ) {
   val store = AppModule.themeStore
   val carGameHud by store.carGameHud.collectAsState()
+  val cameraBeep by AppModule.viewModel.cameraBeep.collectAsState()
+  val marked by AppModule.cameras.all.collectAsState()
   var selected by remember { mutableIntStateOf(0) }
 
   val rows =
@@ -78,6 +80,15 @@ fun SettingsScreen(
               value = if (carGameHud) "Game HUD" else "Android Auto",
           ) { store.setCarGameHud(!carGameHud) },
           Setting("Voice guidance", "Spoken turn instructions while driving. Off unless you turn it on.", checked = !(uiState.isMuted ?: AppModule.ttsObserver.isMuted)) { onMute() },
+          Setting("Camera beep", "A short beep as a speed camera comes within 500 m, on a trip or just driving.", checked = cameraBeep) {
+            AppModule.viewModel.setCameraBeep(!cameraBeep)
+          },
+          Setting(
+              "Cameras you marked",
+              "Added with the + Cam button on the car screen (or Mark a camera here while driving on the phone). Tap to remove them all.",
+              value = marked.size.toString(),
+              danger = true,
+          ) { AppModule.cameras.clear() },
           Setting(
               "Test drive",
               "Simulates the trip along the route instead of using GPS. For trying things out without driving.",
@@ -101,7 +112,7 @@ fun SettingsScreen(
           ) { AppModule.saved.clearRecents() },
           Setting(
               "About",
-              "Overworld 0.2. Map data © OpenStreetMap contributors (ODbL), tiles by OpenFreeMap, routing by Valhalla (FOSSGIS), search by Photon (komoot), traffic lights from Valhalla and speed cameras from Overpass, navigation by Ferrostar (Stadia Maps)." +
+              "Overworld 0.3. Map data © OpenStreetMap contributors (ODbL), tiles by OpenFreeMap, routing by Valhalla (FOSSGIS), search by TomTom and Photon (komoot), traffic lights from Valhalla and speed cameras from Overpass, navigation by Ferrostar (Stadia Maps)." +
                   if (AppModule.traffic.hasLiveTraffic) " Live traffic by TomTom." else " Live traffic is off: add a free TomTom key (tomtomKey in local.properties) to turn on traffic, incidents and live travel times.",
           ) {},
       )

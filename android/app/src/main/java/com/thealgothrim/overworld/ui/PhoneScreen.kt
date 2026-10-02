@@ -193,6 +193,10 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
                 onSearchOpen = { searchOpen = it },
                 rotated = rotated,
                 onQuery = viewModel::onQueryChange,
+                onNearby = {
+                  searchOpen = true
+                  viewModel.searchNearby(it)
+                },
                 onChoose = {
                   searchOpen = false
                   viewModel.choose(it)

@@ -52,7 +52,9 @@ class CarScreenSmokeTest {
     val idle = main { screen.onGetTemplate() } as NavigationTemplate
     val message = idle.navigationInfo as MessageInfo
     assertEquals("GTA V", message.title.toString())
-    val themeAction = idle.actionStrip!!.actions[1]
+    val titles = idle.actionStrip!!.actions.map { it.title.toString() }
+    assertEquals(listOf("Search", "Nearby", "Saved", "Theme"), titles)
+    val themeAction = idle.actionStrip!!.actions[3]
     main { themeAction.onClickDelegate!!.sendClick(NoopCallback) }
     assertEquals("rdr2", store.theme.value.id)
 

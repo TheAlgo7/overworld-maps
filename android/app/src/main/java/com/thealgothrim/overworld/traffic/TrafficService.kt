@@ -145,31 +145,55 @@ class TrafficService(private val http: OkHttpClient) {
   }
 
   /**
-   * Speed cameras along the route, from OpenStreetMap through Overpass. Overpass is quick at
-   * "cameras in this box" and slow at "cameras near a long line", so this asks for small boxes
-   * along the route and measures the distance here.
+   * Cameras along the route, from OpenStreetMap through Overpass: speed cameras, number-plate (ANPR)
+   * cameras, which Delhi's traffic police use for speeding and red lights, and mapped enforcement
+   * points. In the Delhi NCR core OpenStreetMap has only about 9 speed cameras but some 40 more of
+   * the others, so all of them count. Overpass is quick at "cameras in this box" and slow at
+   * "cameras near a long line", so this asks for small boxes along the route and measures here.
    */
   suspend fun speedCameras(route: List<GeographicCoordinate>): List<RoadFeature> =
       withContext(Dispatchers.IO) {
         if (route.size < 2) return@withContext emptyList()
         val line = RouteLine(route)
-        val boxes = line.chunkBoxes(chunkMetres = 4000.0, padMetres = 60.0).joinToString("") { (s, w, n, e) ->
-          "node[highway=speed_camera](${String.format(Locale.US, "%.5f,%.5f,%.5f,%.5f", s, w, n, e)});"
-        }
-        val body = overpass("[out:json][timeout:25];($boxes);out body;") ?: return@withContext emptyList()
-        val elements = JSONObject(body).optJSONArray("elements") ?: return@withContext emptyList()
-        (0 until elements.length())
-            .mapNotNull { i ->
-              val e = elements.getJSONObject(i)
-              val at = GeographicCoordinate(e.getDouble("lat"), e.getDouble("lon"))
+        val boxes = line.chunkBoxes(chunkMetres = 4000.0, padMetres = 60.0)
+        cameras(boxes)
+            .mapNotNull { at ->
               val (along, off) = line.project(at)
               if (off <= 30.0) RoadFeature(RoadFeatureKind.SPEED_CAMERA, at, along = along) else null
             }
             .sortedBy { it.along }
       }
 
+  /** Cameras within about [radiusMetres] of [center], for alerts while driving without a trip. */
+  suspend fun camerasAround(center: GeographicCoordinate, radiusMetres: Double): List<GeographicCoordinate> =
+      withContext(Dispatchers.IO) {
+        val dLat = radiusMetres / 111_320.0
+        val dLng = radiusMetres / (111_320.0 * cos(Math.toRadians(center.lat)))
+        cameras(listOf(listOf(center.lat - dLat, center.lng - dLng, center.lat + dLat, center.lng + dLng)))
+      }
+
+  /** Every camera OpenStreetMap has in the [south, west, north, east] boxes. */
+  private suspend fun cameras(boxes: List<List<Double>>): List<GeographicCoordinate> {
+    if (boxes.isEmpty()) return emptyList()
+    val parts =
+        boxes.joinToString("") { (s, w, n, e) ->
+          val b = String.format(Locale.US, "%.5f,%.5f,%.5f,%.5f", s, w, n, e)
+          "node[highway=speed_camera]($b);node[man_made=surveillance][\"surveillance:type\"=\"ALPR\"]($b);rel[type=enforcement]($b);"
+        }
+    val body = overpass("[out:json][timeout:25];($parts);out center;") ?: return emptyList()
+    val elements = JSONObject(body).optJSONArray("elements") ?: return emptyList()
+    return (0 until elements.length()).mapNotNull { i ->
+      val e = elements.getJSONObject(i)
+      // Nodes carry their own point; an enforcement relation is placed at the centre of its members.
+      val lat = e.optDouble("lat").takeUnless { it.isNaN() } ?: e.optJSONObject("center")?.optDouble("lat") ?: return@mapNotNull null
+      val lng = e.optDouble("lon").takeUnless { it.isNaN() } ?: e.optJSONObject("center")?.optDouble("lon") ?: return@mapNotNull null
+      GeographicCoordinate(lat, lng)
+    }
+  }
+
   private suspend fun overpass(query: String): String? {
-    val servers = listOf("https://overpass-api.de/api/interpreter", "https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter")
+    // overpass-api.de times out on Delhi queries more often than not (504s); kumi.systems answers.
+    val servers = listOf("https://overpass.kumi.systems/api/interpreter", "https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter")
     for ((i, url) in servers.withIndex()) {
       try {
         val request = Request.Builder().url(url).post(FormBody.Builder().add("data", query).build()).build()
@@ -506,4 +530,17 @@ class RouteLine(private val points: List<GeographicCoordinate>) {
     }
     return listOf(minLon, minLat, maxLon, maxLat)
   }
+}
+
+/** Compass bearing from [a] to [b], in degrees. */
+internal fun bearing(a: GeographicCoordinate, b: GeographicCoordinate): Double {
+  val dx = (b.lng - a.lng) * cos(Math.toRadians((a.lat + b.lat) / 2))
+  val dy = b.lat - a.lat
+  return (Math.toDegrees(kotlin.math.atan2(dx, dy)) + 360) % 360
+}
+
+/** The smaller angle between two compass bearings, 0 to 180. */
+internal fun angleBetween(a: Double, b: Double): Double {
+  val d = abs(a - b) % 360
+  return if (d > 180) 360 - d else d
 }

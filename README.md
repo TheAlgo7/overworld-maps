@@ -65,9 +65,12 @@ It is a personal project, built first for one car: a Tata Curvv with a 10.25-inc
 ## Features
 
 - **The car screen comes first.** Our HUD owns the left of the Android Auto screen and Android Auto keeps the right: the turn card with "Then" and road alerts top-left, the time card with the speedometer and speed-limit sign bottom-left, the street name along the bottom. The route preview is a themed card with Start and Cancel drawn in the game's style.
+- **Free drive.** With no trip the car map still follows you heading-up and glides between GPS fixes, with your speed and camera alerts, like Google Maps' free drive.
+- **Find places on the car screen.** Search (Android Auto's keyboard while parked) and **Nearby**: petrol and CNG, food, parking, toilets, hospitals and hotels, closest first.
+- **Places Google knows.** Search finds Indian places first (TomTom's business listings and OpenStreetMap), reads plus codes like `F5QR+3F New Delhi` from any Google Maps page, and takes a place shared from Google Maps (Share > Overworld) for the ones only Google has.
 - **The route behaves like the games'.** The road already driven disappears behind the marker, as on GTA V's radar and Red Dead's minimap.
 - **Traffic only where it matters.** Like Google's route line: amber where slow, red for jams, darkest where closed, and only on your route. Traffic on every road is one switch away in Layers, off by default.
-- **Road alerts.** Traffic lights on the route, speed cameras ahead, and accidents, road works and closures that run along the route (not side streets it crosses), with how much time the traffic adds.
+- **Road alerts.** Traffic lights on the route, speed cameras ahead (every kind OpenStreetMap has, plus the ones you mark with **+ Cam** while driving, and an optional beep), and accidents, road works and closures that run along the route (not side streets it crosses), with how much time the traffic adds.
 - **Speed-limit signs for each world**, turning red at 5 km/h over.
 - **Google Maps layout, game look.** Search, Home, Work and Saved, a place sheet, a route preview, a Layers sheet with theme cards. Settings is the game's pause menu.
 - **Navigation requests in the car.** When Android Auto hands Overworld a destination ("navigate to India Gate", or an address from a message), it drives there, by place name or by coordinates, even with a trip already running.
@@ -156,7 +159,7 @@ adb shell am broadcast -n com.thealgothrim.overworld.debug/com.thealgothrim.over
 
 The drive starts where the phone is. Add `--ef from_lat 28.6315 --ef from_lng 77.2167` to start somewhere else, here on Connaught Place's Outer Circle, a good test for roundabouts. `--es query "India%sGate"` drives to a place by name, the way a request from Android Auto arrives, and `--ez test false` makes it a real trip on the phone's GPS. `-a com.thealgothrim.overworld.DEBUG_STATE` logs what the app holds (trip, simulator, route extras, voice) under the `DebugDrive` tag.
 
-**Tests** (`android/app/src/androidTest`, need a phone or emulator with internet): real Delhi and Chandigarh routes run through Android Auto's builders step by step, navigation requests in every link form, trips stopped as they start, and the car screen itself. Run them on an emulator, since `connectedDebugAndroidTest` uninstalls the app afterwards. Put the emulator in Delhi first (`adb emu geo fix 77.2167 28.6315`); by default it thinks it's in California. Then install both APKs from `assembleDebug assembleDebugAndroidTest` and run `adb shell am instrument -w com.thealgothrim.overworld.debug.test/androidx.test.runner.AndroidJUnitRunner`.
+**Tests** (`android/app/src/androidTest`, need a phone or emulator with internet): real Delhi and Chandigarh routes run through Android Auto's builders step by step, navigation requests in every link form, trips stopped as they start, search and Nearby on the car screen, and the car screen itself. `.\gradlew.bat :app:testDebugUnitTest` checks plus codes, typed coordinates and Google Maps links without a device. Run them on an emulator, since `connectedDebugAndroidTest` uninstalls the app afterwards. Put the emulator in Delhi first (`adb emu geo fix 77.2167 28.6315`); by default it thinks it's in California. Then install both APKs from `assembleDebug assembleDebugAndroidTest` and run `adb shell am instrument -w com.thealgothrim.overworld.debug.test/androidx.test.runner.AndroidJUnitRunner`.
 
 Map icons and labels don't draw on the emulator's default software GPU. Start it on the computer's GPU: `emulator -avd <name> -gpu host`.
 
@@ -198,6 +201,8 @@ licenses/             licence texts for the bundled fonts
 
 - Tested on a Galaxy S24 Ultra and on the Desktop Head Unit at the Curvv's screen size. The first run in the real car is waiting on the Play step above.
 - The public routing and search servers are fair-use: fine for one driver, not for a public app with many users.
+- OpenStreetMap knows few of Delhi's speed cameras (about 9 speed cameras and 40 enforcement cameras in the NCR core). Radarbot's list is its own and can't be used, so cameras you mark fill the gaps on your roads.
+- Small places only Google lists (a house, a small church) aren't in OpenStreetMap or TomTom. Share them from Google Maps, or type their plus code.
 - GTA V hides map labels, like the game's pause map. Red Dead's label glyphs cover Latin scripts only.
 - No offline maps yet (OpenFreeMap has no India extract download; Protomaps PMTiles would be the way).
 - Android refuses the background location service if a trip starts while the app isn't on screen. The app then keeps navigating while the phone or car screen shows it, instead of crashing.

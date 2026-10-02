@@ -1,5 +1,14 @@
 package com.thealgothrim.overworld.ui
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.thealgothrim.overworld.AppModule
+import com.thealgothrim.overworld.ui.skin.GameIconView
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
@@ -61,8 +70,20 @@ fun BoxScope.CarGameHud(
   val spec = theme.spec
   val progress = uiState.progress
   if (!uiState.isNavigating() || progress == null) {
-    if (preview != null) PreviewCard(spec, preview, extras, Modifier.align(Alignment.TopStart))
-    else IdleCard(spec, Modifier.align(Alignment.TopStart))
+    val moving = (uiState.location?.speed?.value ?: 0.0) > FREE_DRIVE_SPEED
+    when {
+      preview != null -> PreviewCard(spec, preview, extras, Modifier.align(Alignment.TopStart))
+      // Driving without a trip: the map, the speed and camera alerts, like Google's free drive.
+      // The "Where to?" card comes back when the car stops.
+      moving -> {
+        hazard?.let { HazardRow(spec, it, Modifier.align(Alignment.TopStart).widthIn(max = 420.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 14.dp), textSize = 20.sp, icon = 40.dp) }
+        Row(Modifier.align(Alignment.BottomStart), verticalAlignment = Alignment.Bottom) {
+          SpeedBadge(spec, uiState, Modifier.padding(start = 4.dp), big = true)
+          CameraButton(spec, Modifier.padding(start = 12.dp))
+        }
+      }
+      else -> IdleCard(spec, Modifier.align(Alignment.TopStart))
+    }
     return
   }
 
@@ -82,6 +103,7 @@ fun BoxScope.CarGameHud(
         trafficNote(extras.eta)?.let { SkinText(it, spec.body, 16.sp, spec.sub) }
       }
       SpeedBadge(spec, uiState, Modifier.padding(start = 12.dp), big = true)
+      CameraButton(spec, Modifier.padding(start = 12.dp))
     }
     Box(Modifier.weight(1f).padding(bottom = 6.dp), contentAlignment = Alignment.Center) {
       val street = listOfNotNull(uiState.currentStepRoadName?.takeIf { it.isNotBlank() }, area)
@@ -149,6 +171,33 @@ private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardA
 object CarTapTargets {
   @Volatile var start: Rect? = null
   @Volatile var cancel: Rect? = null
+  @Volatile var camera: Rect? = null
+}
+
+/**
+ * Marks a speed camera where the car is: OpenStreetMap knows few of Delhi's, so the ones passed
+ * daily fill in from here. Says "Saved" for a few seconds after a tap. Pressed through map taps
+ * (see CarNavigationScreen).
+ */
+@Composable
+private fun CameraButton(spec: SkinSpec, modifier: Modifier) {
+  val markedAt by AppModule.viewModel.cameraMarkedAt.collectAsState()
+  var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+  LaunchedEffect(markedAt) {
+    now = System.currentTimeMillis()
+    delay(3_000)
+    now = System.currentTimeMillis()
+  }
+  val saved = markedAt > 0 && now - markedAt < 3_000
+  DisposableEffect(Unit) { onDispose { CarTapTargets.camera = null } }
+  Row(
+      modifier.height(56.dp).skinPanel(spec).onGloballyPositioned { CarTapTargets.camera = it.boundsInRoot() }.padding(horizontal = 14.dp),
+      verticalAlignment = Alignment.CenterVertically,
+  ) {
+    GameIconView(GameIcon.CAMERA, spec.fg, Modifier.size(28.dp))
+    Spacer(Modifier.width(8.dp))
+    SkinText(spec.title(if (saved) "Saved" else "+ Cam"), spec.title, 18.sp, if (saved) spec.good else spec.fg)
+  }
 }
 
 /** The phone's route preview on the car, in the theme: place, time, the road's details, Start. */
@@ -195,6 +244,9 @@ private fun PreviewCard(spec: SkinSpec, preview: RoutePreview, extras: RouteExtr
 private fun IdleCard(spec: SkinSpec, modifier: Modifier) {
   Column(modifier.widthIn(max = 420.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 16.dp)) {
     SkinText(spec.title("Where to?"), spec.title, if (spec.gta) 28.sp else 32.sp, spec.fg, spacing = if (spec.gta) 0.sp else 1.sp)
-    SkinText("Pick a place on your phone, or open Saved.", spec.body, 19.sp, spec.sub, Modifier.padding(top = 4.dp), maxLines = 2)
+    SkinText("Tap Search or Nearby, or pick a place on your phone.", spec.body, 19.sp, spec.sub, Modifier.padding(top = 4.dp), maxLines = 2)
   }
 }
+
+/** About 11 km/h: faster than this with no trip, the car is free driving. */
+private const val FREE_DRIVE_SPEED = 3.0

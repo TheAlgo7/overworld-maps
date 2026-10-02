@@ -188,6 +188,7 @@ fun BoxScope.NavigationLayer(
           SkinDivider(spec)
           SkinRow(spec, if (uiState.isMuted == true) "Unmute voice" else "Mute voice", onMute, icon = if (uiState.isMuted == true) GameIcon.SOUND_ON else GameIcon.SOUND_OFF)
           SkinRow(spec, "Route overview", { expanded = false; onOverview() }, icon = GameIcon.ROUTE)
+          SkinRow(spec, "Mark a camera here", { expanded = false; com.thealgothrim.overworld.AppModule.viewModel.markCamera() }, icon = GameIcon.CAMERA)
           SkinRow(spec, "Settings", onSettings, icon = GameIcon.SETTINGS)
           SkinRow(spec, "End trip", onEnd, icon = GameIcon.CLOSE)
         }

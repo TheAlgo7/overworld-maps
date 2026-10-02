@@ -32,6 +32,7 @@ import com.stadiamaps.ferrostar.car.app.template.icons.InterfaceCarIcons
 import com.stadiamaps.ferrostar.core.NavigationUiState
 import com.stadiamaps.ferrostar.core.boundingBox
 import com.stadiamaps.ferrostar.core.extensions.progress
+import com.stadiamaps.ferrostar.maplibreui.runtime.NavigationCameraMode
 import com.stadiamaps.ferrostar.maplibreui.runtime.NavigationMapState
 import com.stadiamaps.ferrostar.maplibreui.runtime.navigationCameraOptions
 import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.SurfaceAreaTracker
@@ -114,6 +115,7 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
     passTapsTo { x, y ->
       val hit = { r: androidx.compose.ui.geometry.Rect? -> r?.inflate(12f)?.contains(Offset(x, y)) == true }
       when {
+        hit(CarTapTargets.camera) -> viewModel.markCamera()
         viewModel.planner.value.preview == null -> {}
         hit(CarTapTargets.start) -> viewModel.startPreview()
         hit(CarTapTargets.cancel) -> viewModel.cancelPreview()
@@ -125,7 +127,12 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
           // Ferrostar posts a turn notification only while this screen is hidden (Android Auto shows
           // it as a pop-up over Spotify and the like), but never takes it back: coming back to the
           // map left a stale "Continue for 1.5 kilometers" pop-up over our own turn card.
-          override fun onStart(owner: LifecycleOwner) = notificationManager.clear()
+          override fun onStart(owner: LifecycleOwner) {
+            notificationManager.clear()
+            viewModel.mapInView(true)
+          }
+
+          override fun onStop(owner: LifecycleOwner) = viewModel.mapInView(false)
 
           override fun onDestroy(owner: LifecycleOwner) {
             navigationManagerBridge.stop()
@@ -146,7 +153,9 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
     val cameraOptions =
         navigationCameraOptions()
             .copy(browsingPadding = normalPadding, navigationPadding = trackingPadding, navigationZoom = 16.4)
-    val state = rememberOverworldMapState(cameraOptions)
+    // With no trip the car still drives: follow it heading-up like a trip does (Google Maps' free
+    // drive). North-up made the map look stuck while the car turned.
+    val state = rememberOverworldMapState(cameraOptions, initialCameraMode = NavigationCameraMode.FOLLOW_USER_WITH_BEARING)
     mapState = state
 
     // Route overviews fit the part of the map nothing covers: inside Android Auto's visible area
@@ -179,12 +188,19 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
       if (viewModel.planner.value.preview?.route !== previewRoute || uiState?.isNavigating() == true) return@LaunchedEffect
       state.showRouteOverview(boundingBox = bounds, paddingValues = padding)
     }
+    // Preview cancelled: back to following the car.
+    LaunchedEffect(previewRoute == null) {
+      if (previewRoute == null && uiState?.isNavigating() != true && state.cameraMode == NavigationCameraMode.OVERVIEW) followCar(state)
+    }
 
     LaunchedEffect(uiState?.isNavigating(), state) {
       if (uiState?.isNavigating() == true) {
         // Following keeps the current zoom, which after the route preview is the whole city.
         state.cameraState.position = state.cameraState.position.copy(zoom = cameraOptions.navigationZoom)
         state.recenter(isNavigating = true)
+      } else if (state.cameraMode == NavigationCameraMode.FOLLOW_USER) {
+        // Ferrostar drops to north-up when a trip ends; the car keeps following heading-up.
+        followCar(state)
       }
     }
     LaunchedEffect(state) { snapshotFlow { state.cameraMode }.collectLatest { invalidate() } }
@@ -253,6 +269,19 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
     if (preview != null) return previewTemplate()
     val idleActions =
         ActionStrip.Builder()
+            // Find a place on the car screen itself; the phone can stay in its mount.
+            .addAction(
+                Action.Builder()
+                    .setTitle(carContext.getString(R.string.search))
+                    .setOnClickListener { screenManager.push(CarSearchScreen(carContext)) }
+                    .build()
+            )
+            .addAction(
+                Action.Builder()
+                    .setTitle(carContext.getString(R.string.nearby))
+                    .setOnClickListener { screenManager.push(CarNearbyScreen(carContext)) }
+                    .build()
+            )
             .addAction(
                 Action.Builder()
                     .setTitle(carContext.getString(R.string.saved))
@@ -273,7 +302,20 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
           }
         }
         .setActionStrip(idleActions)
-        .setMapActionStrip(ActionStrip.Builder().addAction(Action.PAN).build())
+        .setMapActionStrip(
+            ActionStrip.Builder()
+                .addAction(Action.PAN)
+                .addAction(Action.Builder().setIcon(icons.add).setOnClickListener { mapState?.zoomIn() }.build())
+                .addAction(Action.Builder().setIcon(icons.remove).setOnClickListener { mapState?.zoomOut() }.build())
+                // Back to following the car after looking around (there was no way back before).
+                .addAction(
+                    Action.Builder()
+                        .setIcon(icons.camera(mapState?.isTrackingUser != false))
+                        .setOnClickListener { mapState?.let { followCar(it) }; invalidate() }
+                        .build()
+                )
+                .build()
+        )
         .build()
   }
 
@@ -297,14 +339,21 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
           )
           .build()
 
+  /** Follow the car heading-up, the way the map runs with no trip. */
+  private fun followCar(state: NavigationMapState) {
+    state.cameraMode = NavigationCameraMode.FOLLOW_USER_WITH_BEARING
+  }
+
   private fun toggleOverview() {
     val state = mapState ?: return
     if (state.isTrackingUser) {
       viewModel.navigationUiState.value.routeGeometry?.boundingBox()?.let {
         state.showRouteOverview(boundingBox = it, paddingValues = overviewPadding)
       }
+    } else if (uiState?.isNavigating() == true) {
+      state.recenter(isNavigating = true)
     } else {
-      state.recenter(isNavigating = uiState?.isNavigating() == true)
+      followCar(state)
     }
     invalidate()
   }

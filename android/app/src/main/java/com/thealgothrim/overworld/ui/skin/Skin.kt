@@ -1,5 +1,6 @@
 package com.thealgothrim.overworld.ui.skin
 
+import com.thealgothrim.overworld.search.Nearby
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -273,7 +275,20 @@ fun RowScope.SkinRowSpacer() = Spacer(Modifier.weight(1f))
 enum class GameIcon {
   SEARCH, SETTINGS, LOCATE, CLOSE, BACK, STAR, STAR_FILLED, HOME, WORK, RECENT, PIN, SOUND_ON, SOUND_OFF,
   ROUTE, CHEVRON_UP, CHEVRON_DOWN, NORTH, NAVIGATE, CAR, LAYERS,
+  FUEL, FOOD, PARKING, TOILET, HOSPITAL, HOTEL, CAMERA,
 }
+
+/** The icon for a kind of nearby place. */
+val Nearby.icon: GameIcon
+  get() =
+      when (this) {
+        Nearby.FUEL -> GameIcon.FUEL
+        Nearby.FOOD -> GameIcon.FOOD
+        Nearby.PARKING -> GameIcon.PARKING
+        Nearby.TOILETS -> GameIcon.TOILET
+        Nearby.HOSPITAL -> GameIcon.HOSPITAL
+        Nearby.HOTEL -> GameIcon.HOTEL
+      }
 
 /** Simple line icons drawn in code, so they match any theme and stay sharp on the car screen. */
 @Composable
@@ -392,6 +407,53 @@ fun DrawScope.drawGameIcon(icon: GameIcon, color: Color) {
       drawPath(path(3f to 16f, 3f to 12f, 6f to 6f, 18f to 6f, 21f to 12f, 21f to 16f, close = true), color, style = line)
       drawCircle(color, 1.8f * u, p(7.5f, 16.5f))
       drawCircle(color, 1.8f * u, p(16.5f, 16.5f))
+    }
+    GameIcon.FUEL -> {
+      // A pump with its window and the hose curling down from the side.
+      drawPath(path(4f to 21f, 4f to 4.5f, 13f to 4.5f, 13f to 21f, close = true), color, style = line)
+      drawLine(color, p(2.5f, 21f), p(14.5f, 21f), strokeWidth = w, cap = StrokeCap.Round)
+      drawPath(path(6.5f to 7f, 10.5f to 7f, 10.5f to 10.5f, 6.5f to 10.5f, close = true), color)
+      drawPath(path(13f to 9f, 17f to 9f, 18.5f to 11f, 18.5f to 17.5f, 20f to 18.5f, 20f to 7.5f, 17.5f to 5f), color, style = line)
+    }
+    GameIcon.FOOD -> {
+      // Fork and knife.
+      drawLine(color, p(7.5f, 3f), p(7.5f, 21f), strokeWidth = w, cap = StrokeCap.Round)
+      drawPath(path(4.5f to 3f, 4.5f to 8.5f, 10.5f to 8.5f, 10.5f to 3f), color, style = line)
+      drawPath(path(16.5f to 21f, 16.5f to 3f, 19.5f to 6f, 19.5f to 12f, 16.5f to 12f), color, style = line)
+    }
+    GameIcon.PARKING -> {
+      drawRoundRect(color, p(3f, 3f), Size(18f * u, 18f * u), CornerRadius(3f * u), style = line)
+      drawPath(path(9.5f to 17.5f, 9.5f to 7f, 13f to 7f), color, style = line)
+      drawArc(color, -90f, 180f, false, p(10.5f, 7f), Size(5f * u, 5f * u), style = line)
+      drawLine(color, p(9.5f, 12f), p(13f, 12f), strokeWidth = w, cap = StrokeCap.Round)
+    }
+    GameIcon.TOILET -> {
+      // Two figures, as on Indian public toilet signs.
+      drawCircle(color, 2f * u, p(7f, 4.5f))
+      drawPath(path(4.5f to 21f, 4.5f to 9f, 9.5f to 9f, 9.5f to 21f), color, style = line)
+      drawCircle(color, 2f * u, p(17f, 4.5f))
+      drawPath(path(14.5f to 15.5f, 17f to 8.5f, 19.5f to 15.5f, close = true), color, style = line)
+      drawLine(color, p(17f, 15.5f), p(17f, 21f), strokeWidth = w, cap = StrokeCap.Round)
+      drawLine(color, p(12f, 3f), p(12f, 21f), strokeWidth = w * 0.7f, cap = StrokeCap.Round)
+    }
+    GameIcon.HOSPITAL -> {
+      drawRoundRect(color, p(3f, 3f), Size(18f * u, 18f * u), CornerRadius(3f * u), style = line)
+      drawLine(color, p(12f, 7f), p(12f, 17f), strokeWidth = w * 1.3f, cap = StrokeCap.Round)
+      drawLine(color, p(7f, 12f), p(17f, 12f), strokeWidth = w * 1.3f, cap = StrokeCap.Round)
+    }
+    GameIcon.HOTEL -> {
+      // A bed: headboard, mattress, pillow.
+      drawPath(path(3f to 19f, 3f to 6f), color, style = line)
+      drawPath(path(3f to 14f, 21f to 14f, 21f to 19f), color, style = line)
+      drawPath(path(3f to 11f, 21f to 11f, 21f to 14f), color, style = line)
+      drawCircle(color, 1.8f * u, p(7f, 8.5f))
+    }
+    GameIcon.CAMERA -> {
+      // A speed camera on its post.
+      drawRoundRect(color, p(3f, 6f), Size(13f * u, 8f * u), CornerRadius(1.5f * u), style = line)
+      drawPath(path(16f to 8f, 21f to 6.5f, 21f to 13.5f, 16f to 12f), color, style = line)
+      drawLine(color, p(9.5f, 14f), p(9.5f, 21f), strokeWidth = w, cap = StrokeCap.Round)
+      drawCircle(color, 1.4f * u, p(7f, 10f))
     }
   }
 }

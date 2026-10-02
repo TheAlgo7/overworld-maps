@@ -38,7 +38,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.PlannerState
+import com.thealgothrim.overworld.search.Nearby
 import com.thealgothrim.overworld.search.Place
+import com.thealgothrim.overworld.ui.skin.icon
 import com.thealgothrim.overworld.search.SavedState
 import com.thealgothrim.overworld.ui.skin.GameIcon
 import com.thealgothrim.overworld.ui.skin.GameIconView
@@ -68,6 +70,7 @@ fun BoxScope.BrowseLayer(
     onSearchOpen: (Boolean) -> Unit,
     rotated: Boolean,
     onQuery: (String) -> Unit,
+    onNearby: (Nearby) -> Unit,
     onChoose: (Place) -> Unit,
     onClear: () -> Unit,
     onDirections: () -> Unit,
@@ -120,7 +123,14 @@ fun BoxScope.BrowseLayer(
         } else {
           val results = planner.results
           if (results.isEmpty()) {
-            SkinText(if (planner.searching) "Searching…" else "No places found.", spec.body, 16.sp, spec.sub, Modifier.padding(16.dp))
+            SkinText(
+                when {
+                  planner.searching -> "Searching…"
+                  planner.nearby != null -> "Nothing found within 10 km."
+                  else -> "No places found. For a place only Google Maps knows, open it there, tap Share and pick Overworld."
+                },
+                spec.body, 16.sp, spec.sub, Modifier.padding(16.dp), maxLines = 3,
+            )
           }
           results.forEachIndexed { i, place ->
             if (i > 0) SkinDivider(spec)
@@ -129,7 +139,7 @@ fun BoxScope.BrowseLayer(
                 place.name,
                 { focus.clearFocus(); onChoose(place) },
                 subtitle = place.detail,
-                icon = GameIcon.PIN,
+                icon = planner.nearby?.icon ?: GameIcon.PIN,
                 highlighted = i == 0,
                 trailing = here?.let { formatDistance(distanceMeters(it, place.coordinate)) },
             )
@@ -146,6 +156,12 @@ fun BoxScope.BrowseLayer(
           saved.work?.let(onChoose) ?: openSaved("Work isn't set yet. Search for it, then tap Save and choose Work.")
         }
         SkinChip(spec, "Saved", GameIcon.STAR) { openSaved() }
+        // Nearby in an emergency, closest first: petrol, food, parking, toilets, hospitals, hotels.
+        Nearby.entries.forEach { kind -> SkinChip(spec, kind.label, kind.icon) { onNearby(kind) } }
+      }
+      planner.error?.let {
+        Spacer(Modifier.height(8.dp))
+        SkinPanel(spec, Modifier.fillMaxWidth()) { SkinText(it, spec.body, 15.sp, spec.accent, Modifier.padding(14.dp), maxLines = 3) }
       }
     }
 

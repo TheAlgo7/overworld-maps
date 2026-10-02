@@ -35,6 +35,7 @@ import com.thealgothrim.overworld.RouteExtras
 import com.thealgothrim.overworld.theme.MapDetails
 import com.thealgothrim.overworld.theme.OverworldTheme
 import com.thealgothrim.overworld.traffic.RoadFeature
+import com.thealgothrim.overworld.traffic.RoadFeatureKind
 import com.thealgothrim.overworld.ui.CarGameHud
 import com.thealgothrim.overworld.ui.PaperOverlay
 import com.thealgothrim.overworld.theme.StyleCache
@@ -66,7 +67,7 @@ fun OverworldPhoneMap(
   NavigationMapView(
       baseStyle = baseStyle,
       navigationMapState = mapState,
-      uiState = uiState,
+      uiState = rememberSmoothedUiState(uiState),
       // No MapLibre ornaments: its (i) attribution button moved around with the camera padding.
       // The OpenStreetMap credit is drawn by the screen instead (MapCredit).
       mapOptions = MapOptions(ornamentOptions = OrnamentOptions.AllDisabled),
@@ -136,7 +137,7 @@ fun OverworldCarMap(
     NavigationMapView(
         baseStyle = baseStyle,
         navigationMapState = mapState,
-        uiState = uiState,
+        uiState = rememberSmoothedUiState(uiState),
         mapOptions = MapOptions(ornamentOptions = OrnamentOptions.AllDisabled),
         navigationCameraOptions = cameraOptions,
         routeOverlayBuilder = route,
@@ -196,9 +197,17 @@ fun OverworldCarMap(
   }
 }
 
-/** Road features the map should show, per the Layers switches. */
-fun visibleFeatures(extras: RouteExtras, details: MapDetails): List<RoadFeature> =
+/** Road features the map should show, per the Layers switches, with the cameras marked by hand. */
+@Composable
+fun visibleFeatures(extras: RouteExtras, details: MapDetails): List<RoadFeature> {
+  val marked by AppModule.cameras.all.collectAsState()
+  return remember(extras, details, marked) {
     buildList {
-      if (details.signals) addAll(extras.signals)
+      if (details.signals) {
+        addAll(extras.signals)
+        marked.forEach { add(RoadFeature(RoadFeatureKind.SPEED_CAMERA, it.at)) }
+      }
       if (details.incidents) addAll(extras.markedIncidents)
     }
+  }
+}

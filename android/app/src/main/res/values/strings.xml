@@ -3,7 +3,9 @@
     <string name="end_trip">End</string>
     <string name="next_theme">Theme</string>
     <string name="saved">Saved</string>
+    <string name="search">Search</string>
+    <string name="nearby">Nearby</string>
     <string name="start">Start</string>
     <string name="cancel">Cancel</string>
-    <string name="car_idle_hint">Pick a place on your phone, or open Saved</string>
+    <string name="car_idle_hint">Tap Search or Nearby, or pick a place on your phone</string>
 </resources>

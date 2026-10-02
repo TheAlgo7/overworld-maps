@@ -6,13 +6,17 @@ import android.content.pm.PackageManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewModelScope
+import com.stadiamaps.ferrostar.car.app.intent.NavigationDestination
 import com.stadiamaps.ferrostar.core.DefaultNavigationViewModel
 import com.stadiamaps.ferrostar.core.InvalidStatusCodeException
 import com.stadiamaps.ferrostar.core.NavigationUiState
 import com.stadiamaps.ferrostar.core.annotation.valhalla.valhallaExtendedOSRMAnnotationPublisher
 import com.stadiamaps.ferrostar.core.isNavigating
 import com.stadiamaps.ferrostar.core.location.toUserLocation
+import com.thealgothrim.overworld.search.Nearby
 import com.thealgothrim.overworld.search.Place
+import com.thealgothrim.overworld.traffic.angleBetween
+import com.thealgothrim.overworld.traffic.bearing
 import com.thealgothrim.overworld.traffic.metres
 import com.thealgothrim.overworld.traffic.RoadFeature
 import com.thealgothrim.overworld.traffic.RoadFeatureKind
@@ -34,6 +38,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -90,6 +95,8 @@ data class RoutePreview(
 data class PlannerState(
     val query: String = "",
     val results: List<Place> = emptyList(),
+    /** Set when [results] are the nearest places of a kind (closest first) rather than a search. */
+    val nearby: Nearby? = null,
     val searching: Boolean = false,
     val destination: Place? = null,
     val routing: Boolean = false,
@@ -108,6 +115,8 @@ class OverworldViewModel :
 
   private val hasLocationPermission = MutableStateFlow(false)
   private val lastLocation = MutableStateFlow<UserLocation?>(null)
+  /** Map screens in view right now (the phone app, the car screen). */
+  private val watchers = MutableStateFlow(0)
 
   private val _testDrive = MutableStateFlow(false)
   /** When on, the next trip is driven by the simulator instead of GPS. */
@@ -155,9 +164,13 @@ class OverworldViewModel :
     // The car can start before the phone screen ever asks, so read the current grant directly.
     refreshLocationPermission()
     viewModelScope.launch {
-      hasLocationPermission
-          .flatMapLatest { granted ->
-            if (granted) locationProvider.locationUpdates(3000L).map { it.toUserLocation() }
+      // A fix a second while a map is on screen (the arrow glides between them; see
+      // map/SmoothLocation.kt). Every 3 s made free driving jump, and running with no screen open
+      // only spent battery. During a trip Ferrostar asks for its own fixes.
+      combine(hasLocationPermission, watchers) { granted, screens -> granted && screens > 0 }
+          .distinctUntilChanged()
+          .flatMapLatest { on ->
+            if (on) locationProvider.locationUpdates(1000L).map { it.toUserLocation() }
             else flowOf(null)
           }
           .collect {
@@ -247,6 +260,11 @@ class OverworldViewModel :
     hasLocationPermission.value = granted
   }
 
+  /** A map screen (phone or car) came into view, or left it. GPS runs while at least one is up. */
+  fun mapInView(visible: Boolean) {
+    watchers.update { (it + if (visible) 1 else -1).coerceAtLeast(0) }
+  }
+
   fun refreshLocationPermission() {
     val context = AppModule.context
     hasLocationPermission.value =
@@ -266,7 +284,7 @@ class OverworldViewModel :
     get() = navigationUiState.value.location?.coordinates
 
   fun onQueryChange(query: String) {
-    _planner.value = _planner.value.copy(query = query, error = null)
+    _planner.value = _planner.value.copy(query = query, error = null, nearby = null)
     searchJob?.cancel()
     if (query.isBlank()) {
       _planner.value = _planner.value.copy(results = emptyList(), searching = false)
@@ -282,6 +300,45 @@ class OverworldViewModel :
                   .getOrDefault(emptyList())
           _planner.value = _planner.value.copy(results = results, searching = false)
         }
+  }
+
+  /** The nearest petrol pumps, toilets, parking and so on, closest first, in the search list. */
+  fun searchNearby(kind: Nearby) {
+    searchJob?.cancel()
+    _planner.value = _planner.value.copy(query = kind.label, nearby = kind, results = emptyList(), searching = true, error = null)
+    val here = currentCoordinate ?: startPoint
+    searchJob =
+        viewModelScope.launch {
+          val found =
+              runCatching { AppModule.search.nearby(kind, here) }
+                  .onFailure { Log.w(TAG, "nearby ${kind.name} failed", it) }
+                  .getOrDefault(emptyList())
+          _planner.value = _planner.value.copy(results = found, searching = false)
+        }
+  }
+
+  /**
+   * A place shared into the app (Google Maps' Share button, a geo: link, an address in a message):
+   * shown on the map with Directions, like a search result. Covers places only Google knows.
+   */
+  fun openShared(text: String) {
+    _planner.value = PlannerState(searching = true)
+    viewModelScope.launch {
+      val place =
+          runCatching { AppModule.search.fromShared(text, currentCoordinate) }
+              .onFailure { Log.w(TAG, "shared place failed", it) }
+              .getOrNull()
+      if (place != null) choose(place)
+      else _planner.value = PlannerState(error = "Couldn't read a place from that. Try sharing it again, or search for it.")
+    }
+  }
+
+  /** A geo: or google.navigation: link opened on the phone: the place, ready for Directions. */
+  fun openDestination(destination: NavigationDestination) {
+    val lat = destination.latitude
+    val lng = destination.longitude
+    if (lat != null && lng != null) choose(Place(destination.query ?: "Pinned point", "", GeographicCoordinate(lat, lng)))
+    else destination.query?.let { openShared(it) }
   }
 
   fun choose(place: Place) {
@@ -419,23 +476,157 @@ class OverworldViewModel :
   /**
    * Time to go: TomTom's live-traffic time when there is one (scaled down as distance is covered),
    * otherwise the routing engine's estimate.
+   *
+   * The arrival time eases toward each new estimate over about 20 s. It used to jump whenever live
+   * traffic refreshed (every 150 s) or a source took over from the other. A new route (a trip, a
+   * reroute) still shows at once.
    */
   fun remainingSeconds(state: NavigationUiState, extras: RouteExtras): Double? {
+    val target = estimateSeconds(state, extras)
+    val route = state.routeGeometry
+    if (target == null || route == null) {
+      shownArrival = null
+      return target
+    }
+    val now = System.currentTimeMillis()
+    val targetArrival = now + (target * 1000).toLong()
+    val previous = shownArrival
+    val arrival =
+        if (previous == null || route !== shownFor) targetArrival
+        else {
+          val k = 1 - kotlin.math.exp(-((now - shownAt).coerceIn(0L, 5_000L) / 1000.0) / ETA_EASE_SECONDS)
+          previous + ((targetArrival - previous) * k).toLong()
+        }
+    shownArrival = arrival
+    shownAt = now
+    shownFor = route
+    return ((arrival - now) / 1000.0).coerceAtLeast(0.0)
+  }
+
+  private var shownArrival: Long? = null
+  private var shownAt = 0L
+  private var shownFor: List<GeographicCoordinate>? = null
+
+  private fun estimateSeconds(state: NavigationUiState, extras: RouteExtras): Double? {
     val progress = state.progress ?: return null
     val eta = extras.eta ?: return progress.durationRemaining
     if (extras.etaAtDistance <= 0) return progress.durationRemaining
     return eta.travelSeconds * (progress.distanceRemaining / extras.etaAtDistance).coerceIn(0.0, 1.5)
   }
 
-  /** The nearest incident or speed camera within 2 km ahead on the route. */
+  /**
+   * On a trip: the nearest incident or camera within 2 km ahead on the route (OpenStreetMap's
+   * cameras and the ones marked by hand). With no trip: the nearest known camera within 600 m in
+   * the direction the car is heading, so free driving gets camera alerts too.
+   */
   fun hazardAhead(state: NavigationUiState, extras: RouteExtras): HazardAhead? {
-    val progress = state.progress ?: return null
-    val length = state.routeGeometry?.let { routeLength(it) } ?: return null
-    val done = length - progress.distanceRemaining
-    return (extras.incidentsOnRoute + extras.signals.filter { it.kind == RoadFeatureKind.SPEED_CAMERA })
+    val progress = state.progress ?: return freeDriveCamera(state)
+    val geometry = state.routeGeometry ?: return null
+    val line = routeLine(geometry)
+    val done = line.length - progress.distanceRemaining
+    val marked =
+        AppModule.cameras.all.value.mapNotNull { c ->
+          val (along, off) = line.project(c.at)
+          if (off <= 30.0) RoadFeature(RoadFeatureKind.SPEED_CAMERA, c.at, along = along) else null
+        }
+    return (extras.incidentsOnRoute + extras.signals.filter { it.kind == RoadFeatureKind.SPEED_CAMERA } + marked)
         .mapNotNull { f -> f.along?.let { a -> HazardAhead(f, a - done) } }
         .filter { it.distance in 0.0..2_000.0 }
         .minByOrNull { it.distance }
+  }
+
+  private var cachedLine: Pair<List<GeographicCoordinate>, RouteLine>? = null
+
+  private fun routeLine(geometry: List<GeographicCoordinate>): RouteLine =
+      cachedLine?.takeIf { it.first === geometry }?.second ?: RouteLine(geometry).also { cachedLine = geometry to it }
+
+  private val _camerasAround = MutableStateFlow<List<GeographicCoordinate>>(emptyList())
+  private var camerasAroundFrom: GeographicCoordinate? = null
+  private var camerasJob: Job? = null
+
+  /** Cameras near the car with no trip running, reloaded after every 2 km or so. */
+  private fun refreshCamerasAround(at: GeographicCoordinate) {
+    val last = camerasAroundFrom
+    if ((last != null && metres(last, at) < 2_000.0) || camerasJob?.isActive == true) return
+    camerasAroundFrom = at
+    camerasJob = viewModelScope.launch {
+      runCatching { traffic.camerasAround(at, 4_000.0) }.getOrNull()?.let { _camerasAround.value = it }
+    }
+  }
+
+  private fun freeDriveCamera(state: NavigationUiState): HazardAhead? {
+    val here = state.location ?: return null
+    val heading = here.courseOverGround?.degrees?.toDouble() ?: return null
+    refreshCamerasAround(here.coordinates)
+    val marked = AppModule.cameras.all.value.filter { c -> c.heading == null || angleBetween(c.heading, heading) < 50.0 }.map { it.at }
+    return (_camerasAround.value + marked)
+        .map { it to metres(here.coordinates, it) }
+        .filter { (at, d) -> d <= 600.0 && angleBetween(bearing(here.coordinates, at), heading) < 35.0 }
+        .minByOrNull { it.second }
+        ?.let { (at, d) -> HazardAhead(RoadFeature(RoadFeatureKind.SPEED_CAMERA, at), d) }
+  }
+
+  private val _cameraMarkedAt = MutableStateFlow(0L)
+  /** When the Camera button last saved a camera (the HUD says so for a few seconds). */
+  val cameraMarkedAt: StateFlow<Long> = _cameraMarkedAt.asStateFlow()
+
+  /**
+   * Marks a camera where the car is (the Camera button). The button is pressed a moment after
+   * passing the camera, so the mark goes back two seconds of driving (at most 60 m).
+   */
+  fun markCamera() {
+    val here = navigationUiState.value.location ?: return
+    val heading = here.courseOverGround?.degrees?.toDouble()
+    val back = ((here.speed?.value ?: 0.0) * 2.0).coerceAtMost(60.0)
+    val at =
+        if (heading == null || back < 1.0) here.coordinates
+        else {
+          val rad = Math.toRadians(heading)
+          GeographicCoordinate(
+              here.coordinates.lat - back * kotlin.math.cos(rad) / 111_320.0,
+              here.coordinates.lng - back * kotlin.math.sin(rad) / (111_320.0 * kotlin.math.cos(Math.toRadians(here.coordinates.lat))),
+          )
+        }
+    AppModule.cameras.mark(at, heading)
+    _cameraMarkedAt.value = System.currentTimeMillis()
+  }
+
+  private val _cameraBeep = MutableStateFlow(prefs.getBoolean("camera_beep", false))
+  /** A short beep as a camera comes within 500 m, like Radarbot (off unless turned on). */
+  val cameraBeep: StateFlow<Boolean> = _cameraBeep.asStateFlow()
+
+  fun setCameraBeep(on: Boolean) {
+    _cameraBeep.value = on
+    prefs.edit().putBoolean("camera_beep", on).apply()
+  }
+
+  private fun beep() {
+    runCatching {
+      val tone = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 90)
+      tone.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 350)
+      viewModelScope.launch {
+        delay(600)
+        tone.release()
+      }
+    }
+  }
+
+  // Here, after the camera state above: init blocks run in order, and a collector started on the
+  // main thread runs its first round at once.
+  init {
+    viewModelScope.launch {
+      // One beep per camera as it comes within 500 m, when the beep is on.
+      val beeped = ArrayDeque<GeographicCoordinate>()
+      navigationUiState.collect { state ->
+        if (!_cameraBeep.value) return@collect
+        val hazard = hazardAhead(state, _extras.value) ?: return@collect
+        if (hazard.feature.kind != RoadFeatureKind.SPEED_CAMERA || hazard.distance > 500.0) return@collect
+        if (beeped.any { metres(it, hazard.feature.at) < 50.0 }) return@collect
+        beeped.addLast(hazard.feature.at)
+        if (beeped.size > 20) beeped.removeFirst()
+        beep()
+      }
+    }
   }
 
   /** Start: drive the previewed route. */
@@ -520,5 +711,7 @@ class OverworldViewModel :
 
   companion object {
     private const val TAG = "OverworldViewModel"
+    /** How quickly a new arrival estimate takes over (a time constant, in seconds). */
+    private const val ETA_EASE_SECONDS = 20.0
   }
 }
