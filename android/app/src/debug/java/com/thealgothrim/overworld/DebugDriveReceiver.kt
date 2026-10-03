@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import kotlinx.coroutines.launch
 import uniffi.ferrostar.GeographicCoordinate
 
 /**
@@ -34,6 +35,80 @@ class DebugDriveReceiver : BroadcastReceiver() {
     when (intent.action) {
       "com.thealgothrim.overworld.DEBUG_STOP" -> vm.stopNavigation()
       "com.thealgothrim.overworld.DEBUG_CHIME" -> com.thealgothrim.overworld.traffic.CameraChime.play(context)
+      // How fast a virtual display like the car's runs, with and without asking for 60 Hz (logcat
+      // under DebugDrive). Works with the phone locked: nothing shows on its screen.
+      "com.thealgothrim.overworld.DEBUG_VDFPS" -> {
+        val done = goAsync()
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+          VirtualDisplayProbe.run(context.applicationContext, requested = 0f) { first ->
+            VirtualDisplayProbe.run(context.applicationContext, requested = 60f) { second ->
+              Log.i("DebugDrive", "virtual display: default $first, asking for 60 Hz $second")
+              done.finish()
+            }
+          }
+        }
+      }
+      // Free drive: the simulator moves the car along a route to --ef lat/lng (from --ef
+      // from_lat/from_lng) with no trip running. DEBUG_STOP ends it.
+      "com.thealgothrim.overworld.DEBUG_FREEDRIVE" -> {
+        val to = GeographicCoordinate(intent.getFloatExtra("lat", 0f).toDouble(), intent.getFloatExtra("lng", 0f).toDouble())
+        val from = GeographicCoordinate(intent.getFloatExtra("from_lat", 0f).toDouble(), intent.getFloatExtra("from_lng", 0f).toDouble())
+        val done = goAsync()
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+          try {
+            val route =
+                AppModule.ferrostarCore
+                    .getRoutes(
+                        uniffi.ferrostar.UserLocation(from, 6.0, null, java.time.Instant.now(), null),
+                        listOf(uniffi.ferrostar.Waypoint(coordinate = to, kind = uniffi.ferrostar.WaypointKind.BREAK)),
+                    )
+                    .first()
+                    .safeForCar()
+            AppModule.locationProvider.enableSimulationOn(route)
+            Log.i("DebugDrive", "free drive on a ${route.distance.toInt()} m route, no trip")
+          } catch (e: Exception) {
+            Log.w("DebugDrive", "free drive route failed", e)
+          } finally {
+            done.finish()
+          }
+        }
+      }
+      // The app's search for --es query (%s for spaces) from --ef lat/lng, the first six results as
+      // the car would list them. With --es nearby FUEL (a Nearby name) instead: that kind, from
+      // where the app thinks the car is (on a trip, along the route).
+      "com.thealgothrim.overworld.DEBUG_SEARCH" -> {
+        val done = goAsync()
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+          try {
+            val started = System.currentTimeMillis()
+            val kind = intent.getStringExtra("nearby")?.let { com.thealgothrim.overworld.search.Nearby.valueOf(it) }
+            val query = intent.getStringExtra("query")?.replace("%s", " ").orEmpty()
+            val near = GeographicCoordinate(intent.getFloatExtra("lat", 0f).toDouble(), intent.getFloatExtra("lng", 0f).toDouble())
+            val found = if (kind != null) vm.findNearby(kind) else AppModule.search.search(query, near)
+            val took = System.currentTimeMillis() - started
+            Log.i("DebugDrive", "search \"${kind ?: query}\": ${found.size} results in $took ms")
+            found.take(6).forEachIndexed { i, p ->
+              val km = com.thealgothrim.overworld.traffic.metres(vm.currentCoordinate ?: near, p.coordinate) / 1000
+              Log.i("DebugDrive", "  ${i + 1}. ${p.name} | ${p.note ?: "%.1f km".format(km)} | ${p.detail}")
+            }
+            // --ez stop true: on a trip, add the first one as a stop, as picking it in the car does.
+            if (intent.getBooleanExtra("stop", false)) {
+              found.firstOrNull()?.let { first ->
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                  vm.addStop(first) { ok ->
+                    val trip = AppModule.ferrostarCore.state.value.tripState as? uniffi.ferrostar.TripState.Navigating
+                    Log.i("DebugDrive", "stop at ${first.name}: $ok, waypoints now ${trip?.remainingWaypoints?.map { "%.4f,%.4f".format(it.coordinate.lat, it.coordinate.lng) }}, ${trip?.progress?.distanceRemaining?.toInt()} m left")
+                  }
+                }
+              }
+            }
+          } catch (e: Exception) {
+            Log.w("DebugDrive", "search failed", e)
+          } finally {
+            done.finish()
+          }
+        }
+      }
       // A camera at --ef lat/lng (and --ef heading), as if marked with + Cam there.
       "com.thealgothrim.overworld.DEBUG_CAMERA" ->
           AppModule.cameras.mark(

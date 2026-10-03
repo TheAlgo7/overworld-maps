@@ -11,6 +11,9 @@
                 <action android:name="com.thealgothrim.overworld.DEBUG_STATE" />
                 <action android:name="com.thealgothrim.overworld.DEBUG_CHIME" />
                 <action android:name="com.thealgothrim.overworld.DEBUG_CAMERA" />
+                <action android:name="com.thealgothrim.overworld.DEBUG_FREEDRIVE" />
+                <action android:name="com.thealgothrim.overworld.DEBUG_VDFPS" />
+                <action android:name="com.thealgothrim.overworld.DEBUG_SEARCH" />
             </intent-filter>
         </receiver>
     </application>
