@@ -3,6 +3,9 @@ package com.thealgothrim.overworld.map
 import android.util.DisplayMetrics
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.remember
@@ -20,8 +23,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import com.stadiamaps.ferrostar.core.NavigationUiState
-import com.stadiamaps.ferrostar.maplibreui.routeline.RouteOverlayBuilder
 import com.thealgothrim.overworld.theme.OverworldTheme
 import com.thealgothrim.overworld.theme.Skin
 import kotlinx.serialization.json.buildJsonObject
@@ -41,19 +42,18 @@ import org.maplibre.compose.expressions.value.SymbolAnchor
 import org.maplibre.compose.layers.Anchor
 import org.maplibre.compose.layers.LineLayer
 import org.maplibre.compose.layers.SymbolLayer
+import org.maplibre.compose.location.Location
 import org.maplibre.compose.sources.GeoJsonData
 import org.maplibre.compose.sources.GeoJsonOptions
+import org.maplibre.compose.sources.Source
 import org.maplibre.compose.sources.rememberGeoJsonSource
 import org.maplibre.compose.util.MaplibreComposable
 import org.maplibre.spatialk.geojson.Feature
 import org.maplibre.spatialk.geojson.FeatureCollection
 import org.maplibre.spatialk.geojson.Point
 import uniffi.ferrostar.GeographicCoordinate
-import uniffi.ferrostar.TripState
-import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.traffic.RouteLine
 import com.thealgothrim.overworld.traffic.TrafficSpan
-import androidx.compose.runtime.collectAsState
 import org.maplibre.compose.expressions.dsl.case
 import org.maplibre.compose.expressions.dsl.switch
 
@@ -76,35 +76,86 @@ internal fun iconSize(size: Dp): Dp {
 private fun widthByZoom(at10: Float, at18: Float) =
     interpolate(linear(), zoom(), 10 to const(at10.dp), 18 to const(at18.dp))
 
-/**
- * The route while driving is only the road still to go, starting at the player marker. The road
- * already driven disappears, the way the waypoint route does in GTA V and on the RDR2 minimap.
- */
-fun themedRouteOverlay(theme: OverworldTheme, car: Boolean) =
-    RouteOverlayBuilder(
-        navigationPath = { uiState: NavigationUiState ->
-          val geometry = uiState.routeGeometry
-          if (geometry != null && geometry.size >= 2) {
-            ThemedRouteLine(routeAhead(uiState) ?: geometry, theme, car)
-            val extras by AppModule.viewModel.extras.collectAsState()
-            val length = remember(geometry) { RouteLine(geometry).length }
-            val done = uiState.progress?.let { length - it.distanceRemaining } ?: 0.0
-            RouteTrafficLine(geometry, extras.trafficSpans, theme, car, from = done)
-          }
-        }
-    )
+// Everything here is composed again on every animation frame during a trip (the arrow glides
+// between GPS fixes). A source handed a new data object sends it to MapLibre again, which re-cuts
+// it into tiles, so each source keeps its data object until the data really changes. Sending the
+// whole route 60 times a second is what held the map near 30 fps on a trip.
 
-/** The route from the car's snapped position to the end, or null when not navigating. */
-private fun routeAhead(uiState: NavigationUiState): List<GeographicCoordinate>? {
-  val trip = uiState.tripState as? TripState.Navigating ?: return null
-  val steps = trip.remainingSteps
-  if (steps.isEmpty()) return null
-  val index = trip.currentStepGeometryIndex?.toInt() ?: 0
-  val points = mutableListOf(trip.snappedUserLocation.coordinates)
-  points += steps.first().geometry.drop(index + 1)
-  // Each step starts where the last one ended; skip the repeated point.
-  for (step in steps.drop(1)) points += step.geometry.drop(1)
-  return points.takeIf { it.size >= 2 }
+/**
+ * The route while driving: only the road still to go, starting at the player marker. The road
+ * already driven disappears, the way the waypoint route does in GTA V and on the RDR2 minimap.
+ *
+ * Two pieces: the far part from [NEAR_METRES] ahead to the end, sent to MapLibre once per
+ * [NEAR_METRES] driven, and the short near part from the arrow to there, which follows the arrow
+ * every frame.
+ */
+@Composable
+@MaplibreComposable
+fun ThemedRouteAhead(route: RoutePolyline, shown: DisplayedPosition, theme: OverworldTheme, car: Boolean, style: Any) {
+  val step by remember(shown) { derivedStateOf { ((shown.along ?: 0.0) / NEAR_METRES).toInt() } }
+  val cut = remember(route, step) { minOf(route.length, (step + 1) * NEAR_METRES) }
+  val far = rememberGeoJsonSource(remember(route, cut) { GeoJsonData.JsonString(lineJson(route.slice(cut, route.length))) })
+  fun nearData(along: Double) = GeoJsonData.JsonString(lineJson(route.slice(along.coerceAtMost(cut), cut)))
+  // The near part is handed to MapLibre straight from the animation, without composing anything.
+  val near =
+      rememberGeoJsonSource(
+          // Also fresh for a new map style: MapLibre gets this again when the style reloads.
+          remember(route, cut, style) { nearData(Snapshot.withoutReadObservation { shown.along } ?: 0.0) },
+          options = GeoJsonOptions(synchronousUpdate = true),
+      )
+  LaunchedEffect(near, route, cut) { snapshotFlow { shown.along ?: 0.0 }.collect { near.setData(nearData(it)) } }
+  routeLayers(listOf(near, far), "ow-trip", theme, car)
+}
+
+/** One distance for both pieces of the route ahead: 300 m is about 18 s at 60 km/h. */
+private const val NEAR_METRES = 300.0
+
+/**
+ * The themed route line over [sources], all casings under all lines so pieces of one route join
+ * without a seam.
+ */
+@Composable
+@MaplibreComposable
+private fun routeLayers(sources: List<Source>, id: String, theme: OverworldTheme, car: Boolean) {
+  // RDR2 inks its route inside the road, so the road's own ink shows along both edges; GTA V's
+  // route is as wide as the road.
+  val k = if (theme.skin == Skin.RDR) 0.72f else 1f
+  Anchor.Below(FIRST_LABEL_LAYER) {
+    val glow = theme.routeGlow
+    if (glow != null && !car) {
+      sources.forEachIndexed { i, source ->
+        LineLayer(
+            id = "$id-glow-$i",
+            source = source,
+            color = const(glow.copy(alpha = 0.45f)),
+            blur = const(8.dp),
+            width = widthByZoom(10f, 34f),
+            cap = const(LineCap.Round),
+            join = const(LineJoin.Round),
+        )
+      }
+    }
+    sources.forEachIndexed { i, source ->
+      LineLayer(
+          id = "$id-casing-$i",
+          source = source,
+          color = const(theme.routeCasing),
+          width = widthByZoom((if (car) 7f else 5.5f) * k, (if (car) 22f else 18f) * k),
+          cap = const(LineCap.Round),
+          join = const(LineJoin.Round),
+      )
+    }
+    sources.forEachIndexed { i, source ->
+      LineLayer(
+          id = "$id-line-$i",
+          source = source,
+          color = const(theme.routeLine),
+          width = widthByZoom((if (car) 4.5f else 3.5f) * k, (if (car) 15f else 12f) * k),
+          cap = const(LineCap.Round),
+          join = const(LineJoin.Round),
+      )
+    }
+  }
 }
 
 private fun lineJson(points: List<GeographicCoordinate>): String {
@@ -119,25 +170,33 @@ private fun lineJson(points: List<GeographicCoordinate>): String {
  */
 @Composable
 @MaplibreComposable
-fun RouteTrafficLine(points: List<GeographicCoordinate>, spans: List<TrafficSpan>, theme: OverworldTheme, car: Boolean, from: Double = 0.0) {
-  val json =
-      remember(points, spans, (from / 25).toInt()) {
-        val line = RouteLine(points)
+fun RouteTrafficLine(
+    points: List<GeographicCoordinate>,
+    spans: List<TrafficSpan>,
+    theme: OverworldTheme,
+    car: Boolean,
+    from: Double = 0.0,
+    id: String = "ow-route-traffic",
+) {
+  val line = remember(points) { RouteLine(points) }
+  // Trimmed behind the arrow every 25 m, not every frame.
+  val data =
+      remember(line, spans, (from / 25).toInt()) {
         val features =
             spans.filter { it.to > from }.joinToString(",") { span ->
               val coords = line.slice(maxOf(span.from, from), span.to).joinToString(",") { "[${it.lng},${it.lat}]" }
               """{"type":"Feature","properties":{"level":${span.level}},"geometry":{"type":"LineString","coordinates":[$coords]}}"""
             }
-        """{"type":"FeatureCollection","features":[$features]}"""
+        GeoJsonData.JsonString("""{"type":"FeatureCollection","features":[$features]}""")
       }
-  val source = rememberGeoJsonSource(GeoJsonData.JsonString(json))
+  val source = rememberGeoJsonSource(data)
   val (slow, heavy, closed) =
       if (theme.skin == Skin.RDR) Triple(Color(0xFFD08A1E), Color(0xFF4A0A10), Color(0xFF1E1E1C))
       else Triple(Color(0xFFFFB020), Color(0xFFFF3B30), Color(0xFF8F0E1A))
   val k = if (theme.skin == Skin.RDR) 0.72f else 1f
   Anchor.Below(FIRST_LABEL_LAYER) {
     LineLayer(
-        id = "ow-route-traffic",
+        id = id,
         source = source,
         color = switch(feature["level"].asNumber(), case(3, const(closed)), case(2, const(heavy)), fallback = const(slow)),
         width = widthByZoom((if (car) 4.5f else 3.5f) * k, (if (car) 15f else 12f) * k),
@@ -147,68 +206,34 @@ fun RouteTrafficLine(points: List<GeographicCoordinate>, spans: List<TrafficSpan
   }
 }
 
+/** A whole route drawn at once: the directions preview. */
 @Composable
 @MaplibreComposable
 fun ThemedRouteLine(points: List<GeographicCoordinate>, theme: OverworldTheme, car: Boolean) {
-  val json = remember(points) { lineJson(points) }
-  val source = rememberGeoJsonSource(GeoJsonData.JsonString(json))
-  // RDR2 inks its route inside the road, so the road's own ink shows along both edges; GTA V's
-  // route is as wide as the road.
-  val k = if (theme.skin == Skin.RDR) 0.72f else 1f
-  Anchor.Below(FIRST_LABEL_LAYER) {
-    val glow = theme.routeGlow
-    if (glow != null && !car) {
-      LineLayer(
-          id = "ow-route-glow",
-          source = source,
-          color = const(glow.copy(alpha = 0.45f)),
-          blur = const(8.dp),
-          width = widthByZoom(10f, 34f),
-          cap = const(LineCap.Round),
-          join = const(LineJoin.Round),
-      )
-    }
-    LineLayer(
-        id = "ow-route-casing",
-        source = source,
-        color = const(theme.routeCasing),
-        width = widthByZoom((if (car) 7f else 5.5f) * k, (if (car) 22f else 18f) * k),
-        cap = const(LineCap.Round),
-        join = const(LineJoin.Round),
-    )
-    LineLayer(
-        id = "ow-route-line",
-        source = source,
-        color = const(theme.routeLine),
-        width = widthByZoom((if (car) 4.5f else 3.5f) * k, (if (car) 15f else 12f) * k),
-        cap = const(LineCap.Round),
-        join = const(LineJoin.Round),
-    )
-  }
+  val source = rememberGeoJsonSource(remember(points) { GeoJsonData.JsonString(lineJson(points)) })
+  routeLayers(listOf(source), "ow-route", theme, car)
 }
 
 /** The player arrow: a flat chevron lying on the map, pointing along the route. */
 @Composable
 @MaplibreComposable
-fun ThemedPuck(uiState: NavigationUiState, theme: OverworldTheme, car: Boolean) {
-  val location = rememberDisplayedLocation(uiState) ?: return
-  var lastBearing by remember { mutableDoubleStateOf(0.0) }
-  val bearing = location.courseDegrees ?: lastBearing
-  LaunchedEffect(bearing) { lastBearing = bearing }
-
-  val position = location.position.value
+fun ThemedPuck(shown: DisplayedPosition, theme: OverworldTheme, car: Boolean, style: Any) {
+  // Moved every frame straight from the animation, without composing anything (see ThemedRouteAhead).
+  val lastBearing = remember { doubleArrayOf(0.0) }
+  fun puckData(location: Location): GeoJsonData {
+    val bearing = location.courseDegrees ?: lastBearing[0]
+    lastBearing[0] = bearing
+    val position = location.position.value
+    return GeoJsonData.Features(
+        FeatureCollection(Feature(geometry = Point(position.longitude, position.latitude), properties = buildJsonObject { put("bearing", bearing) }))
+    )
+  }
   val source =
       rememberGeoJsonSource(
-          GeoJsonData.Features(
-              FeatureCollection(
-                  Feature(
-                      geometry = Point(position.longitude, position.latitude),
-                      properties = buildJsonObject { put("bearing", bearing) },
-                  )
-              )
-          ),
+          remember(shown, style) { puckData(Snapshot.withoutReadObservation { shown.location }) },
           options = GeoJsonOptions(synchronousUpdate = true),
       )
+  LaunchedEffect(source, shown) { snapshotFlow { shown.location }.collect { source.setData(puckData(it)) } }
   val painter =
       remember(theme.id) {
         when (theme.puckShape) {
@@ -236,11 +261,7 @@ fun ThemedPuck(uiState: NavigationUiState, theme: OverworldTheme, car: Boolean) 
 fun ThemedDestination(at: GeographicCoordinate, theme: OverworldTheme, id: String = "ow-destination") {
   val source =
       rememberGeoJsonSource(
-          GeoJsonData.Features(
-              FeatureCollection(
-                  Feature(geometry = Point(at.lng, at.lat), properties = buildJsonObject {})
-              )
-          )
+          remember(at) { GeoJsonData.Features(FeatureCollection(Feature(geometry = Point(at.lng, at.lat), properties = buildJsonObject {}))) }
       )
   val painter =
       remember(theme.id) {

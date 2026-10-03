@@ -11,7 +11,10 @@ import androidx.compose.animation.core.TwoWayConverter
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import com.stadiamaps.ferrostar.core.NavigationUiState
 import kotlin.math.atan2
@@ -37,10 +40,30 @@ private val DISPLAY_LOCATION_ANIMATION_DURATION = 1000.milliseconds
 private const val DISPLAY_BEARING_LOOKBACK_METERS = 5.0
 private const val DISPLAY_BEARING_LOOKAHEAD_METERS = 15.0
 
+/**
+ * Where the arrow is drawn. On a trip also the route and how far along it the arrow is ([along],
+ * metres), measured on the same line, so the route ahead can start exactly under the arrow.
+ *
+ * [location] and [along] change every frame while the arrow glides between fixes. They are read
+ * only where they are drawn, so the rest of the map isn't composed again each frame.
+ */
+@Stable
+class DisplayedPosition(
+    val route: RoutePolyline?,
+    private val locationState: State<Location>,
+    private val alongState: State<Double?>,
+) {
+  val location: Location
+    get() = locationState.value
+
+  val along: Double?
+    get() = alongState.value
+}
+
 @Composable
-fun rememberDisplayedLocation(
+fun rememberDisplayedPosition(
     uiState: NavigationUiState,
-): Location? {
+): DisplayedPosition? {
   val userLocation = uiState.location?.toMapLibreLocation() ?: return null
   return rememberRouteSnappedLocation(uiState, userLocation)
 }
@@ -49,25 +72,25 @@ fun rememberDisplayedLocation(
 private fun rememberRouteSnappedLocation(
     uiState: NavigationUiState,
     userLocation: Location,
-): Location {
+): DisplayedPosition {
   val route =
       remember(uiState.routeGeometry) {
         uiState.routeGeometry?.takeIf { it.size >= 2 }?.let(::RoutePolyline)
       }
+  val raw = rememberUpdatedState(userLocation)
 
-  if (
-      !uiState.isNavigating() ||
-          uiState.routeDeviation !is RouteDeviation.NoDeviation ||
-          route == null
-  ) {
-    return userLocation
+  if (!uiState.isNavigating() || route == null) return remember(raw) { DisplayedPosition(null, raw, NotOnRoute) }
+  if (uiState.routeDeviation !is RouteDeviation.NoDeviation) {
+    // Off the route: the arrow goes where GPS says, and the route shows from Ferrostar's last
+    // point on it until the new route comes.
+    val along = rememberUpdatedState(uiState.progress?.let { route.length - it.distanceRemaining })
+    return remember(route, raw) { DisplayedPosition(route, raw, along) }
   }
 
   val targetProjection =
       remember(route, userLocation.position.value) { route.project(userLocation.position.value) }
   val animatedProgress =
       remember(route) { Animatable(targetProjection.progressMeters, DoubleToVector) }
-  val displayedProgress by animatedProgress.asState()
 
   LaunchedEffect(route, targetProjection.progressMeters) {
     val targetProgress = max(animatedProgress.value, targetProjection.progressMeters)
@@ -85,35 +108,52 @@ private fun rememberRouteSnappedLocation(
     )
   }
 
-  val displayedPosition = remember(route, displayedProgress) { route.positionAt(displayedProgress) }
-  // While on route, use the route tangent as the display bearing so puck and camera rotation stay
-  // stable even when course-over-ground is noisy.
-  val displayedBearing = remember(route, displayedProgress) { route.bearingAt(displayedProgress) }
-
-  return Location(
-      position =
-          PositionWithAccuracy(
-              value = displayedPosition,
-              accuracy = userLocation.position.accuracy,
-          ),
-      course =
-          BearingWithAccuracy(
-              value = Bearing.North + displayedBearing.degrees,
-              accuracy = userLocation.course?.accuracy,
-          ),
-      speed = userLocation.speed,
-      timestamp = TimeSource.Monotonic.markNow(),
-  )
+  return remember(route, raw) {
+    val location = derivedStateOf {
+      val progress = animatedProgress.value
+      val fix = raw.value
+      Location(
+          position = PositionWithAccuracy(value = route.positionAt(progress), accuracy = fix.position.accuracy),
+          // While on route, use the route tangent as the display bearing so puck and camera
+          // rotation stay stable even when course-over-ground is noisy.
+          course = BearingWithAccuracy(value = Bearing.North + route.bearingAt(progress).degrees, accuracy = fix.course?.accuracy),
+          speed = fix.speed,
+          timestamp = TimeSource.Monotonic.markNow(),
+      )
+    }
+    DisplayedPosition(route, location, derivedStateOf<Double?> { animatedProgress.value })
+  }
 }
 
-private class RoutePolyline(
+private object NotOnRoute : State<Double?> {
+  override val value: Double? = null
+}
+
+class RoutePolyline(
     routeGeometry: List<GeographicCoordinate>,
 ) {
   private val points = routeGeometry.map { Position(it.lng, it.lat) }
   private val cumulativeDistancesMeters = buildCumulativeDistances(points)
   private val totalLengthMeters = cumulativeDistancesMeters.last()
 
-  fun project(position: Position): RouteProjection {
+  val length: Double
+    get() = totalLengthMeters
+
+  /** The line between [from] and [to] metres along it. */
+  fun slice(from: Double, to: Double): List<GeographicCoordinate> {
+    val start = positionAt(from)
+    val end = positionAt(to)
+    val out = mutableListOf(GeographicCoordinate(start.latitude, start.longitude))
+    var i = segmentIndexAt(from.coerceIn(0.0, totalLengthMeters)) + 1
+    while (i < points.size && cumulativeDistancesMeters[i] < to) {
+      if (cumulativeDistancesMeters[i] > from) out += GeographicCoordinate(points[i].latitude, points[i].longitude)
+      i++
+    }
+    out += GeographicCoordinate(end.latitude, end.longitude)
+    return out
+  }
+
+  internal fun project(position: Position): RouteProjection {
     var bestDistanceSquared = Double.POSITIVE_INFINITY
     var bestProjection = RouteProjection(progressMeters = 0.0)
 
@@ -161,13 +201,16 @@ private class RoutePolyline(
     return bearingDegrees(positionAt(startProgress), positionAt(endProgress))
   }
 
+  /** The segment holding [progressMeters]; a binary search, as this runs several times a frame. */
   private fun segmentIndexAt(progressMeters: Double): Int {
-    for (index in 0 until cumulativeDistancesMeters.lastIndex) {
-      if (progressMeters <= cumulativeDistancesMeters[index + 1]) {
-        return index
-      }
+    var low = 0
+    var high = cumulativeDistancesMeters.lastIndex - 1
+    if (high < 0) return 0
+    while (low < high) {
+      val mid = (low + high) / 2
+      if (progressMeters <= cumulativeDistancesMeters[mid + 1]) high = mid else low = mid + 1
     }
-    return max(0, points.lastIndex - 1)
+    return max(0, low)
   }
 
   private fun projectOntoSegment(index: Int, position: Position): SegmentProjection {
@@ -209,7 +252,7 @@ private class RoutePolyline(
   }
 }
 
-private data class RouteProjection(
+internal data class RouteProjection(
     val progressMeters: Double,
 )
 

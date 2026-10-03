@@ -34,6 +34,8 @@ import com.thealgothrim.overworld.ui.gta.GtaBigMessage
 import com.thealgothrim.overworld.ui.rdr.RdrBigMessage
 import com.thealgothrim.overworld.ui.skin.spec
 import kotlin.math.abs
+import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -112,8 +114,16 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
 
   // GTA V's pause map names the area under the map's centre (bottom-left, with the scale bar).
   var mapArea by remember { mutableStateOf<String?>(null) }
-  val position = mapState.cameraState.position
-  val scale = metresPerDp(position.target.latitude, position.zoom)
+  // The camera moves every frame while driving. Read here directly, it redrew the whole screen
+  // each frame; this only changes the screen when the scale bar's value does (in 2% steps).
+  val scale by remember {
+    derivedStateOf {
+      val p = mapState.cameraState.position
+      val m = metresPerDp(p.target.latitude, p.zoom)
+      val step = 10.0.pow(kotlin.math.floor(kotlin.math.log10(m)) - 2) * 2
+      (m / step).roundToInt() * step
+    }
+  }
   LaunchedEffect(spec.gta) {
     if (!spec.gta) return@LaunchedEffect
     var looked: Pair<GeographicCoordinate, Double>? = null

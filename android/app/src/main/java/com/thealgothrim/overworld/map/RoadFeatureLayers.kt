@@ -39,11 +39,12 @@ fun RoadFeatureLayers(features: List<RoadFeature>, theme: OverworldTheme, car: B
   val byKind = remember(features) { features.groupBy { it.kind } }
   RoadFeatureKind.entries.forEach { kind ->
     val list = byKind[kind] ?: return@forEach
+    // Kept until the features change: this runs every frame of a trip (see ThemedLayers.kt).
     val source =
         rememberGeoJsonSource(
-            GeoJsonData.Features(
-                FeatureCollection(list.map { Feature(geometry = Point(it.at.lng, it.at.lat), properties = buildJsonObject {}) })
-            )
+            remember(list) {
+              GeoJsonData.Features(FeatureCollection(list.map { Feature(geometry = Point(it.at.lng, it.at.lat), properties = buildJsonObject {}) }))
+            }
         )
     val painter = remember(theme.id, kind) { RoadFeaturePainter(kind, theme.skin) }
     val size = iconSize(if (kind == RoadFeatureKind.TRAFFIC_LIGHT) (if (car) 22.dp else 18.dp) else if (car) 34.dp else 30.dp)

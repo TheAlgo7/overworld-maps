@@ -10,6 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +37,7 @@ import com.thealgothrim.overworld.theme.MapDetails
 import com.thealgothrim.overworld.theme.OverworldTheme
 import com.thealgothrim.overworld.traffic.RoadFeature
 import com.thealgothrim.overworld.traffic.RoadFeatureKind
+import com.thealgothrim.overworld.traffic.TrafficSpan
 import com.thealgothrim.overworld.ui.CarGameHud
 import com.thealgothrim.overworld.ui.PaperOverlay
 import com.thealgothrim.overworld.theme.StyleCache
@@ -45,7 +47,9 @@ import com.thealgothrim.overworld.theme.weight
 import org.maplibre.compose.map.MapOptions
 import org.maplibre.compose.map.OrnamentOptions
 import org.maplibre.compose.style.BaseStyle
+import org.maplibre.compose.util.MaplibreComposable
 import uniffi.ferrostar.GeographicCoordinate
+import uniffi.ferrostar.TripState
 
 /** The phone map: themed style, route, arrow and waypoint over Ferrostar's navigation camera. */
 @Composable
@@ -63,7 +67,6 @@ fun OverworldPhoneMap(
   val extras by AppModule.viewModel.extras.collectAsState()
   val trafficTiles = AppModule.traffic.flowTilesUrl?.takeIf { details.traffic }
   val baseStyle = remember(theme.id, trafficTiles) { BaseStyle.Json(StyleCache.json(context, theme, car = false, trafficTiles)) }
-  val route = remember(theme.id) { themedRouteOverlay(theme, car = false) }
   NavigationMapView(
       baseStyle = baseStyle,
       navigationMapState = mapState,
@@ -71,7 +74,8 @@ fun OverworldPhoneMap(
       // No MapLibre ornaments: its (i) attribution button moved around with the camera padding.
       // The OpenStreetMap credit is drawn by the screen instead (MapCredit).
       mapOptions = MapOptions(ornamentOptions = OrnamentOptions.AllDisabled),
-      routeOverlayBuilder = route,
+      // The route is drawn by OverworldLayers, which trims it at the arrow.
+      routeOverlayBuilder = null,
       navigationCameraOptions = cameraOptions,
       showDefaultPuck = false,
       onMapLongClick = { coordinate, _ ->
@@ -82,15 +86,7 @@ fun OverworldPhoneMap(
         }
       },
   ) { state ->
-    // Directions preview: the route before driving, drawn the same way as the live route.
-    if (!state.isNavigating() && previewRoute != null && previewRoute.size >= 2) {
-      ThemedRouteLine(previewRoute, theme, car = false)
-      RouteTrafficLine(previewRoute, extras.trafficSpans, theme, car = false)
-    }
-    RoadFeatureLayers(visibleFeatures(extras, details), theme, car = false)
-    val end = state.routeGeometry?.lastOrNull() ?: previewRoute?.lastOrNull() ?: pickedDestination
-    if (end != null) ThemedDestination(end, theme)
-    ThemedPuck(state, theme, car = false)
+    OverworldLayers(state, theme, car = false, extras, details, previewRoute, pickedDestination, style = baseStyle)
   }
 }
 
@@ -106,7 +102,6 @@ fun OverworldCarMap(
     cameraOptions: NavigationCameraOptions,
     surfaceAreaTracker: SurfaceAreaTracker,
 ) {
-  val context = LocalContext.current
   val uiState by viewModel.navigationUiState.collectAsState()
   surfaceAreaTracker.rememberGestureDelegate(mapState)
   val surfaceArea by screenSurfaceState(surfaceAreaTracker)
@@ -130,29 +125,9 @@ fun OverworldCarMap(
   val extras by AppModule.viewModel.extras.collectAsState()
   val trafficTiles = AppModule.traffic.flowTilesUrl?.takeIf { details.traffic }
   val planner by AppModule.viewModel.planner.collectAsState()
-  val baseStyle = remember(theme.id, trafficTiles) { BaseStyle.Json(StyleCache.json(context, theme, car = true, trafficTiles)) }
-  val route = remember(theme.id) { themedRouteOverlay(theme, car = true) }
 
   Box(Modifier.fillMaxSize()) {
-    NavigationMapView(
-        baseStyle = baseStyle,
-        navigationMapState = mapState,
-        uiState = rememberSmoothedUiState(uiState),
-        mapOptions = MapOptions(ornamentOptions = OrnamentOptions.AllDisabled),
-        navigationCameraOptions = cameraOptions,
-        routeOverlayBuilder = route,
-        showDefaultPuck = false,
-    ) { state ->
-      val preview = planner.preview
-      if (!state.isNavigating() && preview != null) {
-        ThemedRouteLine(preview.route.geometry, theme, car = true)
-        RouteTrafficLine(preview.route.geometry, extras.trafficSpans, theme, car = true)
-      }
-      RoadFeatureLayers(visibleFeatures(extras, details), theme, car = true)
-      val end = state.routeGeometry?.lastOrNull() ?: preview?.route?.geometry?.lastOrNull()
-      end?.let { ThemedDestination(it, theme) }
-      ThemedPuck(state, theme, car = true)
-    }
+    CarMapView(theme, uiState, mapState, cameraOptions, trafficTiles, extras, details, planner.preview?.route?.geometry)
 
     // Same paper as the phone, a little lighter so the roads stay crisp at a glance.
     if (theme.paperOverlay) PaperOverlay(strength = 0.75f)
@@ -195,6 +170,82 @@ fun OverworldCarMap(
       )
     }
   }
+}
+
+/**
+ * The map itself, in its own function: the arrow glides every frame, and only this part should run
+ * again for that, not the HUD and the paper drawn over it.
+ */
+@Composable
+private fun CarMapView(
+    theme: OverworldTheme,
+    uiState: NavigationUiState,
+    mapState: NavigationMapState,
+    cameraOptions: NavigationCameraOptions,
+    trafficTiles: String?,
+    extras: RouteExtras,
+    details: MapDetails,
+    previewRoute: List<GeographicCoordinate>?,
+) {
+  val context = LocalContext.current
+  val baseStyle = remember(theme.id, trafficTiles) { BaseStyle.Json(StyleCache.json(context, theme, car = true, trafficTiles)) }
+  NavigationMapView(
+      baseStyle = baseStyle,
+      navigationMapState = mapState,
+      uiState = rememberSmoothedUiState(uiState),
+      mapOptions = MapOptions(ornamentOptions = OrnamentOptions.AllDisabled),
+      navigationCameraOptions = cameraOptions,
+      routeOverlayBuilder = null,
+      showDefaultPuck = false,
+  ) { state ->
+    OverworldLayers(state, theme, car = true, extras, details, previewRoute, null, style = baseStyle)
+  }
+}
+
+/**
+ * Everything Overworld draws on the map, phone and car alike: the route (the preview, or on a
+ * trip the road still ahead from the arrow), traffic on it, lights, cameras and incidents, the
+ * waypoint and the arrow. On a trip this runs every frame.
+ */
+@Composable
+@MaplibreComposable
+private fun OverworldLayers(
+    state: NavigationUiState,
+    theme: OverworldTheme,
+    car: Boolean,
+    extras: RouteExtras,
+    details: MapDetails,
+    previewRoute: List<GeographicCoordinate>?,
+    pin: GeographicCoordinate?,
+    /** The map style in use; the arrow and the near route resend their data when it changes. */
+    style: Any,
+) {
+  val shown = rememberDisplayedPosition(state)
+  val trip = state.routeGeometry?.takeIf { state.isNavigating() && it.size >= 2 }
+  val route = shown?.route
+  if (trip != null && route != null) {
+    ThemedRouteAhead(route, shown, theme, car, style)
+    TripTrafficLine(trip, extras.trafficSpans, shown, theme, car)
+  } else if (previewRoute != null && previewRoute.size >= 2) {
+    ThemedRouteLine(previewRoute, theme, car)
+    RouteTrafficLine(previewRoute, extras.trafficSpans, theme, car)
+  }
+  RoadFeatureLayers(visibleFeatures(extras, details), theme, car)
+  val end = trip?.lastOrNull() ?: previewRoute?.lastOrNull() ?: pin
+  end?.let { ThemedDestination(it, theme) }
+  // Stops added on the way (Nearby during a trip) get the waypoint marker too.
+  (state.tripState as? TripState.Navigating)?.remainingWaypoints?.dropLast(1)?.forEachIndexed { i, stop ->
+    ThemedDestination(stop.coordinate, theme, id = "ow-stop-$i")
+  }
+  shown?.let { ThemedPuck(it, theme, car, style) }
+}
+
+/** Traffic on the trip's route, trimmed behind the arrow every 25 m (it composes only then). */
+@Composable
+@MaplibreComposable
+private fun TripTrafficLine(trip: List<GeographicCoordinate>, spans: List<TrafficSpan>, shown: DisplayedPosition, theme: OverworldTheme, car: Boolean) {
+  val from by remember(shown) { derivedStateOf { ((shown.along ?: 0.0) / 25).toInt() * 25.0 } }
+  RouteTrafficLine(trip, spans, theme, car, from = from, id = "ow-trip-traffic")
 }
 
 /** Road features the map should show, per the Layers switches, with the cameras marked by hand. */

@@ -32,24 +32,37 @@ import uniffi.ferrostar.UserLocation
  */
 @Composable
 fun rememberSmoothedUiState(uiState: NavigationUiState): NavigationUiState {
-  val smooth = rememberSmoothLocation(uiState.location)
   val onRoute =
       uiState.isNavigating() &&
           uiState.routeDeviation is RouteDeviation.NoDeviation &&
           (uiState.routeGeometry?.size ?: 0) >= 2
+  val smooth = rememberSmoothLocation(uiState.location, active = !onRoute)
   return if (onRoute || smooth == null) uiState else uiState.copy(location = smooth)
 }
 
+/**
+ * The gliding location. Only while [active]: reading the animation here recomposes the whole map
+ * every frame, which on a route is already Ferrostar's job, so then it stays idle.
+ */
 @Composable
-private fun rememberSmoothLocation(raw: UserLocation?): UserLocation? {
+private fun rememberSmoothLocation(raw: UserLocation?, active: Boolean): UserLocation? {
   val glide = remember { Glide() }
   val progress = remember { Animatable(1f) }
   // Unwrapped degrees, so turning from 350 to 10 goes through north instead of all the way round.
   val heading = remember { Animatable(0f) }
   var hasHeading by remember { mutableStateOf(false) }
 
-  LaunchedEffect(raw) {
+  LaunchedEffect(raw, active) {
     raw ?: return@LaunchedEffect
+    if (!active) {
+      // Ferrostar moves the arrow; forget the glide so it starts afresh off the route.
+      glide.from = null
+      glide.to = null
+      glide.lastFixAt = null
+      hasHeading = false
+      progress.snapTo(1f)
+      return@LaunchedEffect
+    }
     val now = SystemClock.elapsedRealtime()
     val shown = glide.at(progress.value)
     val previousFix = glide.to
@@ -80,6 +93,7 @@ private fun rememberSmoothLocation(raw: UserLocation?): UserLocation? {
   }
 
   raw ?: return null
+  if (!active) return raw
   val at = glide.at(progress.value) ?: raw.coordinates
   val course =
       if (hasHeading) CourseOverGround(((heading.value.roundToInt() % 360) + 360).rem(360).toUShort(), null)
