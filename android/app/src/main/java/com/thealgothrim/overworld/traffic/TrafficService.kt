@@ -271,6 +271,13 @@ class TrafficService(private val http: OkHttpClient) {
         val summary = found.optJSONObject("summary") ?: return@withContext null
         val travel = summary.optDouble("travelTimeInSeconds")
         if (travel.isNaN()) return@withContext null
+        // TomTom rebuilds our route from points along it. Should it have taken another way (a
+        // different length), its time belongs to that way, not ours: the routing server's stays.
+        val length = summary.optDouble("lengthInMeters", line.length)
+        if (line.length > 500 && kotlin.math.abs(length - line.length) > line.length * 0.2) {
+          Log.w(TAG, "route traffic for ${length.toInt()} m, asked ${line.length.toInt()} m; not used")
+          return@withContext null
+        }
         val free = summary.optDouble("noTrafficTravelTimeInSeconds", travel)
         // trafficDelayInSeconds only counts the queues (it reads 0 in an ordinary rush hour); the
         // traffic you feel is the gap to the empty-road time.

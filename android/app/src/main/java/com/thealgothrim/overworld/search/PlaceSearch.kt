@@ -1,7 +1,16 @@
 package com.thealgothrim.overworld.search
 
 import android.util.Log
+import com.thealgothrim.overworld.DriveLog
+import com.thealgothrim.overworld.traffic.RouteLine
+import com.thealgothrim.overworld.traffic.angleBetween
+import com.thealgothrim.overworld.traffic.bearing
 import com.thealgothrim.overworld.traffic.metres
+import kotlin.math.roundToInt
+import kotlinx.coroutines.withTimeoutOrNull
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import java.net.URLEncoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -17,16 +26,18 @@ data class Place(
     val name: String,
     val detail: String,
     val coordinate: GeographicCoordinate,
+    /** Shown instead of the straight-line distance, e.g. "On the way" or "+4 min" for a place along the trip. */
+    val note: String? = null,
 )
 
-/** Kinds of place to find nearby, with TomTom's category numbers. */
-enum class Nearby(val label: String, val tomtom: String, val osm: String) {
-  FUEL("Petrol & CNG", "7311", """node["amenity"="fuel"]"""),
-  FOOD("Food", "7315", """node["amenity"~"^(restaurant|fast_food|cafe)$"]"""),
-  PARKING("Parking", "7369,7313", """nwr["amenity"="parking"]"""),
-  TOILETS("Toilets", "9932005", """node["amenity"="toilets"]"""),
-  HOSPITAL("Hospitals", "7321", """nwr["amenity"~"^(hospital|clinic)$"]"""),
-  HOTEL("Hotels", "7314", """nwr["tourism"~"^(hotel|motel|guest_house)$"]"""),
+/** Kinds of place to find nearby, with TomTom's category numbers and the words for its route search. */
+enum class Nearby(val label: String, val tomtom: String, val words: String, val osm: String) {
+  FUEL("Petrol & CNG", "7311", "petrol station", """node["amenity"="fuel"]"""),
+  FOOD("Food", "7315", "restaurant", """node["amenity"~"^(restaurant|fast_food|cafe)$"]"""),
+  PARKING("Parking", "7369,7313", "parking", """nwr["amenity"="parking"]"""),
+  TOILETS("Toilets", "9932005", "toilet", """node["amenity"="toilets"]"""),
+  HOSPITAL("Hospitals", "7321", "hospital", """nwr["amenity"~"^(hospital|clinic)$"]"""),
+  HOTEL("Hotels", "7314", "hotel", """nwr["tourism"~"^(hotel|motel|guest_house)$"]"""),
 }
 
 /**
@@ -45,21 +56,50 @@ class PlaceSearch(private val http: OkHttpClient, private val tomtomKey: String)
     val q = query.trim()
     if (q.isEmpty()) return emptyList()
     written(q, near)?.let { return listOf(it) }
+    // Typing back over a word asks the same things again; answer those at once.
+    val key = "${q.lowercase()}|${near?.let { "%.2f,%.2f".format(it.lat, it.lng) }}"
+    cache.get(key)?.let { return it }
     return coroutineScope {
-      val tomtom = async { runCatching { tomtom(q, near) }.onFailure { Log.w(TAG, "TomTom search failed", it) }.getOrDefault(emptyList()) }
-      val osm = async { runCatching { photonSearch(q, near) }.onFailure { Log.w(TAG, "Photon search failed", it) }.getOrDefault(emptyList()) }
-      merge(q, tomtom.await(), osm.await())
+      // Each source gets a few seconds; a slow one doesn't hold up the other's answers.
+      val tomtom = async { withTimeoutOrNull(SOURCE_WAIT) { runCatching { tomtom(q, near) }.onFailure { Log.w(TAG, "TomTom search failed", it) }.getOrNull() } }
+      val osm = async { withTimeoutOrNull(SOURCE_WAIT) { runCatching { photonSearch(q, near) }.onFailure { Log.w(TAG, "Photon search failed", it) }.getOrNull() } }
+      val t = tomtom.await()
+      val o = osm.await()
+      val found = rank(q, t.orEmpty() + o.orEmpty())
+      DriveLog.note(
+          "search \"$q\" near ${DriveLog.at(near)}: TomTom ${t?.size ?: "failed"}, OpenStreetMap ${o?.size ?: "failed"}, " +
+              "first ${found.take(3).joinToString(" / ") { it.name }}"
+      )
+      // Only a full answer is kept; a source that failed is asked again next time.
+      if (t != null && o != null) cache.put(key, found)
+      found
     }
   }
 
-  /** The nearest places of a kind, closest first. */
-  suspend fun nearby(kind: Nearby, near: GeographicCoordinate): List<Place> =
+  /**
+   * The nearest places of a kind. On a trip ([ahead] is the road still to drive) the ones along the
+   * route come first, soonest reached first with their detour, like Google's search along route;
+   * the rest by distance. Moving with no trip, places behind the car ([heading]) count as farther.
+   */
+  suspend fun nearby(kind: Nearby, near: GeographicCoordinate, heading: Double? = null, ahead: List<GeographicCoordinate>? = null): List<Place> =
       withContext(Dispatchers.IO) {
-        val places =
-            if (tomtomKey.isNotBlank()) {
-              runCatching { tomtomNearby(kind, near) }.onFailure { Log.w(TAG, "TomTom nearby failed", it) }.getOrNull()
-            } else null
-        (places ?: overpassNearby(kind, near)).sortedBy { metres(near, it.coordinate) }
+        val onRoute =
+            if (tomtomKey.isNotBlank() && ahead != null && ahead.size >= 2) {
+              runCatching { tomtomAlongRoute(kind, ahead) }.onFailure { Log.w(TAG, "TomTom along-route failed", it) }.getOrNull().orEmpty()
+            } else emptyList()
+        if (onRoute.size >= MAX_ON_ROUTE) return@withContext onRoute.also { DriveLog.note("nearby ${kind.name} at ${DriveLog.at(near)}: ${it.size} along the route") }
+        val around =
+            (if (tomtomKey.isNotBlank()) runCatching { tomtomNearby(kind, near) }.onFailure { Log.w(TAG, "TomTom nearby failed", it) }.getOrNull() else null)
+                ?: overpassNearby(kind, near)
+        fun cost(p: Place): Double {
+          val d = metres(near, p.coordinate)
+          if (heading == null || d < 150) return d
+          val off = angleBetween(bearing(near, p.coordinate), heading)
+          return d * if (off > 100) 2.5 else if (off > 60) 1.4 else 1.0
+        }
+        val found = onRoute + around.filter { p -> onRoute.none { metres(it.coordinate, p.coordinate) < 60 } }.sortedBy(::cost)
+        DriveLog.note("nearby ${kind.name} at ${DriveLog.at(near)}: ${onRoute.size} along the route, ${found.size} in all, first ${found.firstOrNull()?.name}")
+        found
       }
 
   /**
@@ -115,21 +155,21 @@ class PlaceSearch(private val http: OkHttpClient, private val tomtomKey: String)
     coordinatesIn(q)?.let { (lat, lng) -> return Place("Pinned point", "%.5f, %.5f".format(lat, lng), GeographicCoordinate(lat, lng)) }
     val (code, town) = plusCodeIn(q) ?: return null
     // A short code is relative to a town; use here, or find the named town.
-    val ref = near ?: town.takeIf { it.isNotBlank() }?.let { t -> runCatching { photonSearch(t, null).firstOrNull()?.coordinate }.getOrNull() }
+    val ref = near ?: town.takeIf { it.isNotBlank() }?.let { t -> runCatching { photonSearch(t, null).firstOrNull()?.place?.coordinate }.getOrNull() }
     val (lat, lng) = decodePlusCode(code, ref?.lat, ref?.lng) ?: return null
     return Place(code, town, GeographicCoordinate(lat, lng))
   }
 
   // ---------------------------------------------------------------- TomTom
 
-  private suspend fun tomtom(q: String, near: GeographicCoordinate?): List<Place> =
+  private suspend fun tomtom(q: String, near: GeographicCoordinate?): List<Candidate> =
       withContext(Dispatchers.IO) {
         if (tomtomKey.isBlank()) return@withContext emptyList()
         val url =
             "https://api.tomtom.com/search/2/search/${URLEncoder.encode(q, "UTF-8").replace("+", "%20")}.json".toHttpUrl().newBuilder().apply {
               addQueryParameter("key", tomtomKey)
               addQueryParameter("countrySet", "IN")
-              addQueryParameter("limit", "8")
+              addQueryParameter("limit", "10")
               addQueryParameter("typeahead", "true")
               addQueryParameter("language", "en-GB")
               near?.let {
@@ -137,7 +177,19 @@ class PlaceSearch(private val http: OkHttpClient, private val tomtomKey: String)
                 addQueryParameter("lon", it.lng.toString())
               }
             }
-        parseTomTom(fetch(url.build().toString()))
+        val results = JSONObject(fetch(url.build().toString())).optJSONArray("results") ?: return@withContext emptyList()
+        (0 until results.length()).mapNotNull { i ->
+          val r = results.getJSONObject(i)
+          val place = tomtomPlace(r) ?: return@mapNotNull null
+          val kind =
+              when (r.optString("type")) {
+                "Geography" -> PlaceKind.AREA
+                "Street", "Cross Street" -> PlaceKind.STREET
+                "POI" -> PlaceKind.PLACE
+                else -> PlaceKind.ADDRESS
+              }
+          Candidate(place, kind, tomtom = true, rank = i, metres = near?.let { metres(it, place.coordinate) })
+        }
       }
 
   private fun tomtomNearby(kind: Nearby, near: GeographicCoordinate): List<Place> {
@@ -151,28 +203,66 @@ class PlaceSearch(private val http: OkHttpClient, private val tomtomKey: String)
             .addQueryParameter("categorySet", kind.tomtom)
             .addQueryParameter("language", "en-GB")
             .build()
-    return parseTomTom(fetch(url.toString()))
+    val results = JSONObject(fetch(url.toString())).optJSONArray("results") ?: return emptyList()
+    return (0 until results.length()).mapNotNull { tomtomPlace(results.getJSONObject(it)) }
   }
 
-  private fun parseTomTom(body: String): List<Place> {
-    val results = JSONObject(body).optJSONArray("results") ?: return emptyList()
-    return (0 until results.length()).mapNotNull { i ->
-      val r = results.getJSONObject(i)
-      val pos = r.optJSONObject("position") ?: return@mapNotNull null
-      val address = r.optJSONObject("address")
-      val street = address?.optString("freeformAddress").orEmpty()
-      val name =
-          r.optJSONObject("poi")?.optString("name")?.takeIf { it.isNotBlank() }
-              ?: street.substringBefore(',').takeIf { it.isNotBlank() }
-              ?: return@mapNotNull null
-      val detail = street.split(", ").filter { it.isNotBlank() && it != name }.take(3).joinToString(", ")
-      Place(name, detail, GeographicCoordinate(pos.getDouble("lat"), pos.getDouble("lon")))
-    }
+  /**
+   * Places of a kind along the road still to drive, within ten minutes' detour. Each says its
+   * detour and how far ahead it is; they come soonest reached first, a detour counting twice
+   * (there and back to the route).
+   */
+  private fun tomtomAlongRoute(kind: Nearby, ahead: List<GeographicCoordinate>): List<Place> {
+    val points = JSONArray(RouteLine(ahead).spaced(1000).map { JSONObject().put("lat", it.lat).put("lon", it.lng) })
+    val url =
+        "https://api.tomtom.com/search/2/searchAlongRoute/${URLEncoder.encode(kind.words, "UTF-8").replace("+", "%20")}.json".toHttpUrl().newBuilder()
+            .addQueryParameter("key", tomtomKey)
+            .addQueryParameter("maxDetourTime", "600")
+            .addQueryParameter("limit", "20")
+            .addQueryParameter("categorySet", kind.tomtom)
+            .addQueryParameter("sortBy", "detourTime")
+            .addQueryParameter("language", "en-GB")
+            .build()
+    val body = JSONObject().put("route", JSONObject().put("points", points)).toString()
+    val response =
+        http.newCall(Request.Builder().url(url).post(body.toRequestBody("application/json".toMediaType())).build()).execute().use { r ->
+          if (!r.isSuccessful) error("Route search failed (${r.code})")
+          r.body.string()
+        }
+    val results = JSONObject(response).optJSONArray("results") ?: return emptyList()
+    return (0 until results.length())
+        .mapNotNull { i ->
+          val r = results.getJSONObject(i)
+          val place = tomtomPlace(r) ?: return@mapNotNull null
+          val detour = r.optDouble("detourTime", 0.0).coerceAtLeast(0.0)
+          val along = r.optDouble("dist", Double.NaN).takeUnless { it.isNaN() }
+          val note =
+              listOfNotNull(
+                      if (detour < 60) "On the way" else "+${(detour / 60).roundToInt()} min",
+                      along?.let { "${formatKm(it)} ahead" },
+                  )
+                  .joinToString(" · ")
+          ((along ?: 0.0) / CITY_SPEED + 2 * detour) to place.copy(note = note)
+        }
+        .sortedBy { it.first }
+        .map { it.second }
+  }
+
+  private fun tomtomPlace(r: JSONObject): Place? {
+    val pos = r.optJSONObject("position") ?: return null
+    val address = r.optJSONObject("address")
+    val street = address?.optString("freeformAddress").orEmpty()
+    val name =
+        r.optJSONObject("poi")?.optString("name")?.takeIf { it.isNotBlank() }
+            ?: street.substringBefore(',').takeIf { it.isNotBlank() }
+            ?: return null
+    val detail = street.split(", ").filter { it.isNotBlank() && it != name }.take(3).joinToString(", ")
+    return Place(name, detail, GeographicCoordinate(pos.getDouble("lat"), pos.getDouble("lon")))
   }
 
   // ---------------------------------------------------------------- OpenStreetMap
 
-  private suspend fun photonSearch(q: String, near: GeographicCoordinate?): List<Place> =
+  private suspend fun photonSearch(q: String, near: GeographicCoordinate?): List<Candidate> =
       withContext(Dispatchers.IO) {
         val url =
             "$photon/api/".toHttpUrl().newBuilder().apply {
@@ -186,7 +276,7 @@ class PlaceSearch(private val http: OkHttpClient, private val tomtomKey: String)
                 addQueryParameter("location_bias_scale", "0.3")
               }
             }
-        parsePhoton(fetch(url.build().toString()))
+        parsePhotonCandidates(fetch(url.build().toString()), near)
       }
 
   private fun overpassNearby(kind: Nearby, near: GeographicCoordinate): List<Place> {
@@ -212,52 +302,52 @@ class PlaceSearch(private val http: OkHttpClient, private val tomtomKey: String)
   }
 
   /** [Place]s from a Photon answer, India first. */
-  private fun parsePhoton(body: String): List<Place> {
-    val features = JSONObject(body).optJSONArray("features") ?: return emptyList()
-    val places =
-        (0 until features.length()).mapNotNull { i ->
-          val f = features.getJSONObject(i)
-          val p = f.optJSONObject("properties") ?: return@mapNotNull null
-          val c = f.optJSONObject("geometry")?.optJSONArray("coordinates") ?: return@mapNotNull null
-          val street = listOfNotNull(p.opt("housenumber"), p.opt("street")).joinToString(" ")
-          val name =
-              p.optString("name").ifBlank { street }.ifBlank { p.optString("district") }
-                  .ifBlank { return@mapNotNull null }
-          val detail =
-              listOf(
-                      street.takeIf { it != name },
-                      p.optString("district"),
-                      p.optString("city"),
-                      p.optString("state"),
-                  )
-                  .filter { !it.isNullOrBlank() && it != name }
-                  .distinct()
-                  .take(3)
-                  .joinToString(", ")
-          val india = p.optString("countrycode").equals("IN", ignoreCase = true)
-          india to Place(name, if (india) detail else listOf(detail, p.optString("country")).filter { it.isNotBlank() }.joinToString(", "), GeographicCoordinate(lat = c.getDouble(1), lng = c.getDouble(0)))
-        }
-    return places.sortedByDescending { it.first }.map { it.second }
-  }
+  private fun parsePhoton(body: String): List<Place> =
+      parsePhotonCandidates(body, null).sortedBy { it.abroad }.map { it.place }
 
-  /**
-   * TomTom's answers and OpenStreetMap's in one list: names that match what was typed first, then
-   * TomTom's (it knows Indian businesses better), then OpenStreetMap's. The same spot twice is shown
-   * once. Places abroad (Photon's, after the Indian ones) only fill a short list.
-   */
-  private fun merge(q: String, tomtom: List<Place>, osm: List<Place>): List<Place> {
-    val words = q.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
-    fun matches(p: Place) = words.all { it in p.name.lowercase() }
-    val all = (tomtom.map { it to 0 } + osm.map { it to 1 })
-    val ranked = all.sortedWith(compareBy<Pair<Place, Int>>({ if (matches(it.first)) 0 else 1 }, { it.second }))
-    val out = mutableListOf<Place>()
-    for ((place, _) in ranked) {
-      if (out.none { metres(it.coordinate, place.coordinate) < 120 && it.name.equals(place.name, ignoreCase = true) }) out += place
+  private fun parsePhotonCandidates(body: String, near: GeographicCoordinate?): List<Candidate> {
+    val features = JSONObject(body).optJSONArray("features") ?: return emptyList()
+    return (0 until features.length()).mapNotNull { i ->
+      val f = features.getJSONObject(i)
+      val p = f.optJSONObject("properties") ?: return@mapNotNull null
+      val c = f.optJSONObject("geometry")?.optJSONArray("coordinates") ?: return@mapNotNull null
+      val street = listOfNotNull(p.opt("housenumber"), p.opt("street")).joinToString(" ")
+      val name =
+          p.optString("name").ifBlank { street }.ifBlank { p.optString("district") }
+              .ifBlank { return@mapNotNull null }
+      val detail =
+          listOf(
+                  street.takeIf { it != name },
+                  p.optString("district"),
+                  p.optString("city"),
+                  p.optString("state"),
+              )
+              .filter { !it.isNullOrBlank() && it != name }
+              .distinct()
+              .take(3)
+              .joinToString(", ")
+      val india = p.optString("countrycode").equals("IN", ignoreCase = true)
+      val at = GeographicCoordinate(lat = c.getDouble(1), lng = c.getDouble(0))
+      val kind =
+          when (p.optString("osm_key")) {
+            "place", "boundary" -> PlaceKind.AREA
+            "highway" -> if (p.optString("osm_value") in ROAD_KINDS) PlaceKind.STREET else PlaceKind.PLACE
+            else -> if (p.has("housenumber")) PlaceKind.ADDRESS else PlaceKind.PLACE
+          }
+      Candidate(
+          Place(name, if (india) detail else listOf(detail, p.optString("country")).filter { it.isNotBlank() }.joinToString(", "), at),
+          kind,
+          tomtom = false,
+          rank = i,
+          metres = near?.let { metres(it, at) },
+          abroad = !india,
+      )
     }
-    return out.take(10)
   }
 
   // ---------------------------------------------------------------- plumbing
+
+  private fun formatKm(metres: Double) = if (metres < 950) "${(metres / 50).roundToInt() * 50} m" else "%.1f km".format(metres / 1000)
 
   /** Follows a short link to the full one; returns the full URL and the start of the page. */
   private fun expand(link: String): Pair<String, String> =
@@ -272,8 +362,36 @@ class PlaceSearch(private val http: OkHttpClient, private val tomtomKey: String)
         response.body.string()
       }
 
+  /** Recent answers by query and area, for ten minutes. */
+  private val cache = AnswerCache()
+
+  private class AnswerCache {
+    private val entries =
+        object : LinkedHashMap<String, Pair<Long, List<Place>>>(32, 0.75f, true) {
+          override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, List<Place>>>) = size > 40
+        }
+
+    @Synchronized
+    fun get(key: String): List<Place>? = entries[key]?.takeIf { System.currentTimeMillis() - it.first < 600_000 }?.second
+
+    @Synchronized
+    fun put(key: String, places: List<Place>) {
+      entries[key] = System.currentTimeMillis() to places
+    }
+  }
+
   private companion object {
     const val TAG = "PlaceSearch"
+    const val SOURCE_WAIT = 3_500L
+    /** Enough places along the route that the ones around the car aren't needed. */
+    const val MAX_ON_ROUTE = 6
+    /** Metres a second, to weigh a place's distance ahead against its detour time. */
+    const val CITY_SPEED = 9.0
+    val ROAD_KINDS =
+        setOf(
+            "motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "service", "living_street", "road",
+            "motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link",
+        )
     const val BROWSER = "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36"
     val OVERPASS = listOf("https://overpass.kumi.systems/api/interpreter", "https://overpass-api.de/api/interpreter")
     val NEIGHBOURHOOD_KINDS = setOf("suburb", "neighbourhood", "quarter", "village", "town", "hamlet")

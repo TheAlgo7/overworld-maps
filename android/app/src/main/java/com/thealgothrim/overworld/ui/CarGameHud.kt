@@ -70,7 +70,9 @@ fun BoxScope.CarGameHud(
   val spec = theme.spec
   val progress = uiState.progress
   if (!uiState.isNavigating() || progress == null) {
-    val moving = (uiState.location?.speed?.value ?: 0.0) > FREE_DRIVE_SPEED
+    val estimate by AppModule.viewModel.estimatedKmh.collectAsState()
+    // GPS speed, or the speed worked out from movement when a fix has none.
+    val moving = (uiState.location?.speed?.value ?: estimate?.div(3.6) ?: 0.0) > FREE_DRIVE_SPEED
     when {
       preview != null -> PreviewCard(spec, preview, extras, Modifier.align(Alignment.TopStart))
       // Driving without a trip: the map, the speed and camera alerts, like Google's free drive.

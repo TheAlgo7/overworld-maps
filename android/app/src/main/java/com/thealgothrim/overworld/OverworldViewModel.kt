@@ -47,6 +47,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import uniffi.ferrostar.GeographicCoordinate
 import uniffi.ferrostar.Route
 import uniffi.ferrostar.TripState
@@ -191,7 +192,8 @@ class OverworldViewModel :
       var smooth: Double? = null
       navigationUiState.collect { state ->
         val location = state.location
-        if (location == null || location.speed != null || !state.isNavigating()) {
+        // With or without a trip: free driving needs the speed too.
+        if (location == null || location.speed != null) {
           _estimatedKmh.value = null
           last = null
           smooth = null
@@ -298,7 +300,7 @@ class OverworldViewModel :
     }
     searchJob =
         viewModelScope.launch {
-          delay(350)
+          delay(250)
           _planner.value = _planner.value.copy(searching = true)
           val results =
               runCatching { AppModule.search.search(query, currentCoordinate) }
@@ -312,15 +314,35 @@ class OverworldViewModel :
   fun searchNearby(kind: Nearby) {
     searchJob?.cancel()
     _planner.value = _planner.value.copy(query = kind.label, nearby = kind, results = emptyList(), searching = true, error = null)
-    val here = currentCoordinate ?: startPoint
     searchJob =
         viewModelScope.launch {
-          val found =
-              runCatching { AppModule.search.nearby(kind, here) }
-                  .onFailure { Log.w(TAG, "nearby ${kind.name} failed", it) }
-                  .getOrDefault(emptyList())
+          val found = findNearby(kind)
           _planner.value = _planner.value.copy(results = found, searching = false)
         }
+  }
+
+  /**
+   * Places of a kind for where the car is now: along the rest of the route on a trip, ahead of the
+   * car when it is moving without one, otherwise simply nearest.
+   */
+  suspend fun findNearby(kind: Nearby): List<Place> {
+    val state = navigationUiState.value
+    val here = currentCoordinate ?: startPoint
+    // Moving only by a recent fix: with the map covered (this list is on top of it) fixes pause, and
+    // the last speed would otherwise hold for as long as the car stood.
+    val fix = state.location
+    val recent = fix != null && java.time.Duration.between(fix.timestamp, Instant.now()).seconds < 2 * FRESH_FIX_SECONDS
+    val moving = recent && (fix?.speed?.value ?: estimatedKmh.value?.div(3.6) ?: 0.0) > 3.0
+    val heading = if (moving) fix?.courseOverGround?.degrees?.toDouble() ?: movementHeading else null
+    val ahead =
+        state.routeGeometry?.takeIf { state.isNavigating() && it.size >= 2 }?.let { geometry ->
+          val line = routeLine(geometry)
+          val left = state.progress?.distanceRemaining ?: line.length
+          line.slice((line.length - left).coerceAtLeast(0.0), line.length)
+        }
+    return runCatching { AppModule.search.nearby(kind, here, heading, ahead) }
+        .onFailure { Log.w(TAG, "nearby ${kind.name} failed", it) }
+        .getOrDefault(emptyList())
   }
 
   /**
@@ -368,8 +390,25 @@ class OverworldViewModel :
     _planner.value = PlannerState()
   }
 
-  private val origin: UserLocation
-    get() = lastLocation.value ?: UserLocation(AppModule.defaultStart, 6.0, null, Instant.now(), null)
+  /**
+   * Where a route starts: the newest fix there is. The map's own fixes pause while another car
+   * screen (Search, Nearby) covers it, so a fix older than a few seconds is checked against the
+   * phone's latest one first; a route from a stale point is wrong from its first metre.
+   */
+  private suspend fun freshOrigin(): UserLocation {
+    val known = lastLocation.value
+    if (known != null && java.time.Duration.between(known.timestamp, Instant.now()).seconds < FRESH_FIX_SECONDS) return known
+    val latest = withTimeoutOrNull(3_000) { runCatching { locationProvider.lastLocation() }.getOrNull() }?.toUserLocation()
+    val best = listOfNotNull(known, latest).maxByOrNull { it.timestamp }
+    return best ?: UserLocation(AppModule.defaultStart, 6.0, null, Instant.now(), null)
+  }
+
+  private fun noteStart(what: String, from: UserLocation, route: Route) {
+    DriveLog.note(
+        "$what from ${DriveLog.at(from.coordinates)} (fix ${java.time.Duration.between(from.timestamp, Instant.now()).seconds} s old, ±${from.horizontalAccuracy.toInt()} m) " +
+            "to ${DriveLog.at(route.geometry.lastOrNull())}: ${"%.1f".format(route.distance / 1000)} km, routing server ${DriveLog.minutes(route.steps.sumOf { it.duration })}"
+    )
+  }
 
   private val prefs by lazy { AppModule.context.getSharedPreferences("overworld", Context.MODE_PRIVATE) }
   private var savedFix: GeographicCoordinate? = null
@@ -396,8 +435,10 @@ class OverworldViewModel :
     _planner.value = _planner.value.copy(routing = true, error = null)
     viewModelScope.launch(Dispatchers.IO) {
       try {
+        val from = freshOrigin()
         val route =
-            core.getRoutes(origin, listOf(Waypoint(coordinate = place.coordinate, kind = WaypointKind.BREAK))).first()
+            core.getRoutes(from, listOf(Waypoint(coordinate = place.coordinate, kind = WaypointKind.BREAK))).first()
+        noteStart("preview of ${place.name}", from, route)
         val via =
             route.steps
                 .filter { !it.roadName.isNullOrBlank() }
@@ -467,10 +508,19 @@ class OverworldViewModel :
               e.copy(
                   incidents = incidents,
                   eta = fresh?.eta ?: e.eta,
-                  etaAtDistance = left,
+                  // Kept with the time it belongs to: pairing an old time with the distance left
+                  // now (a refresh that failed) showed the whole trip's time for the rest of it.
+                  etaAtDistance = if (fresh != null) left else e.etaAtDistance,
                   trafficSpans = fresh?.spans?.map { it.copy(from = it.from + done, to = it.to + done) } ?: e.trafficSpans,
               )
             }
+            val state = navigationUiState.value
+            DriveLog.note(
+                "${if (live) "trip" else "preview"} time: TomTom ${DriveLog.minutes(fresh?.eta?.travelSeconds)} for ${"%.1f".format(left / 1000)} km" +
+                    (if (fresh == null) " (no answer, kept ${DriveLog.minutes(_extras.value.eta?.travelSeconds)})" else "") +
+                    ", routing server ${DriveLog.minutes(state.progress?.durationRemaining)}, showing ${DriveLog.minutes(estimateSeconds(state, _extras.value))}" +
+                    ", at ${DriveLog.at(state.location?.coordinates)}"
+            )
             if (!live || !traffic.hasLiveTraffic) break
             delay(150_000)
           }
@@ -646,6 +696,7 @@ class OverworldViewModel :
     destinationName = place.name
     _area.value = null
     AppModule.saved.addRecent(place)
+    DriveLog.note("started ${if (_testDrive.value) "a test drive" else "a trip"} to ${place.name}")
     // The core's own state, not the UI's copy, which reaches the main thread a moment later.
     if (core.state.value.isNavigating()) core.replaceRoute(route = route) else core.startNavigation(route = route)
   }
@@ -658,13 +709,9 @@ class OverworldViewModel :
     _planner.value = _planner.value.copy(routing = true, error = null)
     viewModelScope.launch(Dispatchers.IO) {
       try {
-        val route =
-            core
-                .getRoutes(
-                    from?.let { UserLocation(it, 6.0, null, Instant.now(), null) } ?: origin,
-                    listOf(Waypoint(coordinate = destination, kind = WaypointKind.BREAK)),
-                )
-                .first()
+        val start = from?.let { UserLocation(it, 6.0, null, Instant.now(), null) } ?: freshOrigin()
+        val route = core.getRoutes(start, listOf(Waypoint(coordinate = destination, kind = WaypointKind.BREAK))).first()
+        noteStart("trip to ${name ?: "a point"}", start, route)
         withContext(Dispatchers.Main) {
           begin(route, Place(name ?: "Destination", "", destination))
           _planner.value = PlannerState()
@@ -673,6 +720,30 @@ class OverworldViewModel :
         Log.w(TAG, "routing failed", e)
         _planner.value =
             _planner.value.copy(routing = false, error = routeError(e))
+      }
+    }
+  }
+
+  /**
+   * On a trip: drive to [place] first, then on to where the trip was going, like Google Maps' Add
+   * stop (a petrol pump picked from Nearby). [onDone] says whether the new route was found.
+   */
+  fun addStop(place: Place, onDone: (Boolean) -> Unit = {}) {
+    val trip = core.state.value.tripState as? TripState.Navigating ?: return onDone(false)
+    viewModelScope.launch(Dispatchers.IO) {
+      val route =
+          runCatching {
+                core.getRoutes(trip.userLocation, listOf(Waypoint(coordinate = place.coordinate, kind = WaypointKind.BREAK)) + trip.remainingWaypoints).first()
+              }
+              .onFailure { Log.w(TAG, "routing via ${place.name} failed", it) }
+              .getOrNull()
+      withContext(Dispatchers.Main) {
+        if (route == null || !core.state.value.isNavigating()) return@withContext onDone(false)
+        val safe = route.safeForCar()
+        if (_testDrive.value) locationProvider.enableSimulationOn(safe)
+        core.replaceRoute(route = safe)
+        AppModule.saved.addRecent(place)
+        onDone(true)
       }
     }
   }
@@ -713,5 +784,7 @@ class OverworldViewModel :
     private const val TAG = "OverworldViewModel"
     /** How quickly a new arrival estimate takes over (a time constant, in seconds). */
     private const val ETA_EASE_SECONDS = 20.0
+    /** A fix younger than this is where the car is; an older one is checked against the phone's latest. */
+    private const val FRESH_FIX_SECONDS = 5L
   }
 }

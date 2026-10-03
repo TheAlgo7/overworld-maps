@@ -239,6 +239,13 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
                           .setOnClickListener { viewModel.stopNavigation() }
                           .build()
                   )
+                  // Petrol, food, toilets along the rest of the route; a pick becomes a stop.
+                  .addAction(
+                      Action.Builder()
+                          .setTitle(carContext.getString(R.string.nearby))
+                          .setOnClickListener { screenManager.push(CarNearbyScreen(carContext)) }
+                          .build()
+                  )
                   .build()
           )
           .setMapActionStrip(

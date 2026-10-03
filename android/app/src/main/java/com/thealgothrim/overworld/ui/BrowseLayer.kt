@@ -138,7 +138,8 @@ fun BoxScope.BrowseLayer(
                 spec,
                 place.name,
                 { focus.clearFocus(); onChoose(place) },
-                subtitle = place.detail,
+                // Along a trip the note ("On the way · 2.4 km ahead", "+3 min") leads.
+                subtitle = listOfNotNull(place.note, place.detail.takeIf { it.isNotBlank() }).joinToString("  ·  "),
                 icon = planner.nearby?.icon ?: GameIcon.PIN,
                 highlighted = i == 0,
                 trailing = here?.let { formatDistance(distanceMeters(it, place.coordinate)) },

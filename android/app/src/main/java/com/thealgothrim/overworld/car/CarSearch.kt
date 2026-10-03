@@ -1,6 +1,7 @@
 package com.thealgothrim.overworld.car
 
 import androidx.car.app.CarContext
+import androidx.car.app.CarToast
 import androidx.car.app.Screen
 import androidx.car.app.model.Action
 import androidx.car.app.model.CarIcon
@@ -21,6 +22,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.lifecycleScope
+import com.stadiamaps.ferrostar.core.isNavigating
 import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.search.Nearby
 import com.thealgothrim.overworld.search.Place
@@ -37,11 +39,20 @@ import kotlinx.coroutines.launch
 // Android Auto's keyboard while parked) and one-tap nearby places for emergencies. Picking a place
 // shows the themed route preview on the map with Start, like a place picked on the phone.
 
-/** Shows [place]'s route preview on the car map and closes the search screens. */
+/**
+ * Shows [place]'s route preview on the car map and closes the search screens. On a trip the place
+ * becomes a stop on the way instead, and the trip goes on to its destination after it.
+ */
 private fun Screen.preview(place: Place) {
   val vm = AppModule.viewModel
-  vm.choose(place)
-  vm.directions()
+  if (vm.navigationUiState.value.isNavigating()) {
+    vm.addStop(place) { ok ->
+      CarToast.makeText(carContext, if (ok) "Stopping at ${place.name} on the way" else "Couldn't find a route there", CarToast.LENGTH_LONG).show()
+    }
+  } else {
+    vm.choose(place)
+    vm.directions()
+  }
   screenManager.popToRoot()
 }
 
@@ -49,7 +60,8 @@ private fun Screen.placeRows(places: List<Place>, empty: String = "Nothing found
   val here = AppModule.viewModel.currentCoordinate ?: AppModule.viewModel.startPoint
   val list = ItemList.Builder().setNoItemsMessage(empty)
   places.take(MAX_ROWS).forEach { place ->
-    val away = formatDistance(metres(here, place.coordinate))
+    // Along a trip: "On the way · 2.4 km ahead" or "+3 min", not the straight-line distance.
+    val away = place.note ?: formatDistance(metres(here, place.coordinate))
     list.addItem(
         Row.Builder()
             .setTitle(place.name)
@@ -86,7 +98,7 @@ class CarSearchScreen(carContext: CarContext) : Screen(carContext) {
   override fun onGetTemplate(): Template {
     val callback =
         object : SearchTemplate.SearchCallback {
-          override fun onSearchTextChanged(searchText: String) = find(searchText, 450)
+          override fun onSearchTextChanged(searchText: String) = find(searchText, 300)
 
           override fun onSearchSubmitted(searchText: String) = find(searchText, 0)
         }
@@ -126,8 +138,7 @@ class CarNearbyListScreen(carContext: CarContext, private val kind: Nearby) : Sc
 
   init {
     lifecycleScope.launch {
-      val here = AppModule.viewModel.currentCoordinate ?: AppModule.viewModel.startPoint
-      places = runCatching { AppModule.search.nearby(kind, here) }.getOrDefault(emptyList())
+      places = AppModule.viewModel.findNearby(kind)
       invalidate()
     }
   }

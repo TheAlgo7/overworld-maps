@@ -51,10 +51,14 @@ class CarSearchTest {
     waitFor("plus code not read") { rows() == listOf("F5QR+3F") }
   }
 
+  /** Standing still with no trip: simply closest first (moving, places ahead of the car come first). */
   @Test
   fun nearbyPetrolPumpsComeClosestFirst() {
     val context = instrumentation.targetContext
     AppModule.init(context)
+    // An earlier test's simulated drive leaves a moving fix; wait until it is too old to count.
+    main { AppModule.viewModel.stopNavigation() }
+    Thread.sleep(11_000)
     val grid = main { CarNearbyScreen(TestCarContext.createCarContext(context)).onGetTemplate() } as GridTemplate
     assertEquals(Nearby.entries.size, grid.singleList!!.items.size)
 
@@ -64,6 +68,37 @@ class CarSearchTest {
     val km = main { rows() }.map { it.texts.first().toString().substringBefore(" ").toDouble().let { d -> if (it.texts.first().toString().contains(" km")) d else d / 1000 } }
     assertEquals("not closest first: $km", km.sorted(), km)
     android.util.Log.i("CarSearchTest", "petrol: " + main { rows() }.joinToString { it.title.toString() + " " + it.texts.first() })
+  }
+
+  /** On a trip, Nearby lists places along the route with their detour, and a pick becomes a stop. */
+  @Test
+  fun nearbyOnATripIsAlongTheRouteAndAddsAStop() {
+    val context = instrumentation.targetContext
+    AppModule.init(context)
+    val vm = AppModule.viewModel
+    val chhatarpur = uniffi.ferrostar.GeographicCoordinate(28.5065, 77.1745)
+    main {
+      vm.setTestDrive(true)
+      vm.startNavigation(chhatarpur, "Chhatarpur", from = uniffi.ferrostar.GeographicCoordinate(28.4950, 77.0890))
+    }
+    waitFor("trip didn't start") { AppModule.ferrostarCore.state.value.tripState is uniffi.ferrostar.TripState.Navigating }
+    try {
+      val list = main { CarNearbyListScreen(TestCarContext.createCarContext(context), Nearby.FUEL).also { ScreenController(it).moveToState(Lifecycle.State.RESUMED) } }
+      fun rows() = (list.onGetTemplate() as ListTemplate).let { t -> if (t.isLoading) emptyList() else t.singleList!!.items.map { it as Row } }
+      waitFor("no petrol pumps") { rows().isNotEmpty() }
+      val first = main { rows() }.first()
+      val note = first.texts.first().toString()
+      assertTrue("first isn't along the route: $note", note.startsWith("On the way") || note.startsWith("+"))
+
+      main { first.onClickDelegate!!.sendClick(NoopCallback) }
+      waitFor("no stop added") {
+        (AppModule.ferrostarCore.state.value.tripState as? uniffi.ferrostar.TripState.Navigating)?.remainingWaypoints?.size == 2
+      }
+      val last = (AppModule.ferrostarCore.state.value.tripState as uniffi.ferrostar.TripState.Navigating).remainingWaypoints.last().coordinate
+      assertEquals("the trip no longer ends at Chhatarpur", chhatarpur.lat, last.lat, 0.001)
+    } finally {
+      main { vm.stopNavigation(); vm.setTestDrive(false) }
+    }
   }
 
   private object NoopCallback : androidx.car.app.OnDoneCallback
