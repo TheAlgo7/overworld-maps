@@ -17,8 +17,8 @@ android {
         // The Car App Library needs 29 (Android 10).
         minSdk 29
         targetSdk 36
-        versionCode 7
-        versionName "0.3.2"
+        versionCode 8
+        versionName "0.4.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         // Live traffic (TomTom free tier). Put tomtomKey=... in local.properties.
