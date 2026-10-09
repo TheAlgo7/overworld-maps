@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>Turn-by-turn navigation on real roads, drawn like the map in GTA V or Red Dead Redemption 2.</strong><br>
+  <strong>Turn-by-turn navigation on real roads, drawn like the map in GTA V, Red Dead Redemption 2 or GTA VI.</strong><br>
   Built for Android Auto on a car's wide screen, with the same worlds on the phone.
 </p>
 
@@ -28,7 +28,7 @@
 
 ## Why Overworld Maps
 
-Games have spent twenty years making maps people want to look at. Car navigation still draws grey lines on beige. Overworld Maps draws the real roads under your car in the style of a game's map and HUD: GTA V's near-black pause map with its purple waypoint route, or Red Dead's parchment and ink with a red trail.
+Games have spent twenty years making maps people want to look at. Car navigation still draws grey lines on beige. Overworld Maps draws the real roads under your car in the style of a game's map and HUD: GTA V's near-black pause map with its purple waypoint route, Red Dead's parchment and ink with a red trail, or GTA VI's pale sat-nav minimap with raised buildings and a pink route.
 
 It is a personal project, built first for one car: a Tata Curvv with a 10.25-inch 1920x720 HARMAN screen and wireless Android Auto. The phone app covers everything else, down to a ride on the bike.
 
@@ -36,17 +36,21 @@ It is a personal project, built first for one car: a Tata Curvv with a 10.25-inc
 |---|---|---|
 | **GTA V** | The pause map: near-black land, flat grey roads, ice-pale water, no labels, the game's shop blips, a flat waypoint-purple route, a scale bar and area name in the corner. GTA menus and HUD. | Ready |
 | **Red Dead 2** | Parchment and ink: ink roads, dotted railways, pencil place names, hatched forest, paper grain, a red route. Red Dead menus and HUD. | Ready |
-| **GTA VI** | Night-navy land, sand boulevards, a coral route. | Waiting for the game's real map UI |
+| **GTA VI** | The minimap from Rockstar's 2026 Extended Look: pale warm-grey ground, broad roads with lane dashes, raised 3D buildings, grey-teal water, no names, and a pink route that fades in just ahead of the marker. It follows the sun: dim and warm at golden hour, violet slate at night. Rounded dark-glass HUD. | Ready |
 | **Next** | Minecraft, Genshin Impact, Fortnite OG, Zelda: Breath of the Wild, Cyberpunk 2077. | Planned |
 
 ## Screenshots
 
-**In the car** (Android Auto, 1920x720):
+**In the car** (the Curvv's 1920x720 screen; Android Auto adds its own buttons at the right):
 
 <table>
   <tr>
-    <td align="center"><img src="docs/readme/car-gta-limit.png" width="420" alt="GTA V world on the car screen, over the speed limit"><br><sub>GTA V: over the limit, the sign turns red</sub></td>
+    <td align="center"><img src="docs/readme/car-gta-limit.png" width="420" alt="GTA V world on the car screen, over the speed limit"><br><sub>GTA V: over the limit, the speed and the sign turn red</sub></td>
     <td align="center"><img src="docs/readme/car-rdr.png" width="420" alt="Red Dead world on the car screen"><br><sub>Red Dead 2: the same drive in ink</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/readme/car-gta6.png" width="420" alt="GTA VI world on the car screen, with raised buildings"><br><sub>GTA VI: raised buildings, a pink route</sub></td>
+    <td align="center"><img src="docs/readme/car-gta6-night.png" width="420" alt="GTA VI world on the car screen at night"><br><sub>GTA VI after dark: the map follows the sun</sub></td>
   </tr>
 </table>
 
@@ -58,21 +62,23 @@ It is a personal project, built first for one car: a Tata Curvv with a 10.25-inc
     <td align="center"><img src="docs/readme/phone-gta-preview.png" width="160" alt="Route preview with live traffic"><br><sub>Route preview, live traffic</sub></td>
     <td align="center"><img src="docs/readme/phone-gta-drive.png" width="160" alt="Driving in the GTA V world"><br><sub>Driving: GTA V</sub></td>
     <td align="center"><img src="docs/readme/phone-rdr-drive.png" width="160" alt="Driving in the Red Dead world"><br><sub>Driving: Red Dead 2</sub></td>
-    <td align="center"><img src="docs/readme/phone-rdr-settings.png" width="160" alt="Settings as the game's pause menu"><br><sub>Settings is the pause menu</sub></td>
+    <td align="center"><img src="docs/readme/phone-gta6-drive.png" width="160" alt="Driving in the GTA VI world"><br><sub>Driving: GTA VI</sub></td>
+    <td align="center"><img src="docs/readme/phone-gta6-settings.png" width="160" alt="Settings as the game's pause menu"><br><sub>Settings is the pause menu</sub></td>
   </tr>
 </table>
 
 ## Features
 
-- **The car screen comes first.** Our HUD owns the left of the Android Auto screen and Android Auto keeps the right: the turn card with "Then" and road alerts top-left, the time card with the speedometer and speed-limit sign bottom-left, the street name along the bottom. The route preview is a themed card with Start and Cancel drawn in the game's style.
+- **The car screen comes first.** Our HUD owns the left of the Android Auto screen and Android Auto keeps the right: the turn card with "Then" and road alerts top-left, the time card bottom-left with the speedometer standing on it and the speed-limit sign beside it, the street name along the bottom. The route preview is a themed card with Start and Cancel drawn in the game's style.
 - **Free drive.** With no trip the car map still follows you heading-up and glides between GPS fixes, with your speed and camera alerts, like Google Maps' free drive.
 - **Find places on the car screen.** Search (Android Auto's keyboard while parked) and **Nearby**: petrol and CNG, food, parking, toilets, hospitals and hotels, closest first.
 - **Places Google knows.** Search finds Indian places first (TomTom's business listings and OpenStreetMap), reads plus codes like `F5QR+3F New Delhi` from any Google Maps page, and takes a place shared from Google Maps (Share > Overworld) for the ones only Google has.
-- **The route behaves like the games'.** The road already driven disappears behind the marker, as on GTA V's radar and Red Dead's minimap.
+- **The route behaves like the games'.** The road already driven disappears behind the marker, as on GTA V's radar and Red Dead's minimap; GTA VI's fades in just ahead of it. The markers are drawn small, the way the games draw their blips.
 - **Traffic only where it matters.** Like Google's route line: amber where slow, red for jams, darkest where closed, and only on your route. Traffic on every road is one switch away in Layers, off by default.
 - **Road alerts.** Traffic lights on the route, speed cameras ahead (every kind OpenStreetMap has, plus the ones you mark with **+ Cam** while driving, and an optional beep), and accidents, road works and closures that run along the route (not side streets it crosses), with how much time the traffic adds.
-- **Speed-limit signs for each world**, turning red at 5 km/h over.
-- **Google Maps layout, game look.** Search, Home, Work and Saved, a place sheet, a route preview, a Layers sheet with theme cards. Settings is the game's pause menu.
+- **Speed-limit signs for each world**, turning red at 5 km/h over, along with the speed.
+- **GTA VI follows the sun.** Its map is pale by day, warm at golden hour and violet at night, worked out from where you are, or held at one in Settings. Its buildings stand up in 3D; a Layers switch lays them flat.
+- **Google Maps layout, game look.** Search, Home, Work and Saved, a place sheet, a route preview, a Layers sheet with theme cards. Settings is the game's pause menu, in four groups (map, driving, places, about); anything that forgets a place asks for a second tap.
 - **Navigation requests in the car.** When Android Auto hands Overworld a destination ("navigate to India Gate", or an address from a message), it drives there, by place name or by coordinates, even with a trip already running.
 - **Made for Indian roads.** Metric, a 12-hour clock, and turn arrows for left-hand traffic: roundabouts circle clockwise and U-turns curl right.
 - **Costs nothing to run.** OpenFreeMap tiles, public routing and search, and an optional free TomTom key for traffic.
@@ -110,9 +116,9 @@ flowchart LR
 
 ## Game fonts and art
 
-The games' own fonts (Pricedown, Chalet, RDR Lino, RDR Catalogue, Hapna Slab Serif) and Rockstar's map blips are commercial or Rockstar Games property, so they are **not in this repository**. The app loads them from `android/app/src/local/` when that folder exists (it's gitignored) and otherwise uses free stand-ins with similar shapes: Barlow, Barlow Condensed, Passion One, Chakra Petch and IM FELL English, with redrawn vector icons. A clone builds and runs; it just looks a little less like the games. The screenshots above come from the author's build, which has them.
+The games' own fonts (Pricedown, Chalet, RDR Lino, RDR Catalogue, Hapna Slab Serif) and Rockstar's map blips are commercial or Rockstar Games property, so they are **not in this repository**. The app loads them from `android/app/src/local/` when that folder exists (it's gitignored) and otherwise uses free stand-ins with similar shapes: Barlow, Barlow Condensed, Passion One and IM FELL English, with redrawn vector icons. A clone builds and runs; it just looks a little less like the games. The screenshots above come from the author's build, which has them. GTA VI's interface is set in Inter and Barlow Condensed, both open fonts, so it looks the same in every build.
 
-The speed-limit signs and the app icon are the author's own artwork.
+The speed-limit signs, the player markers and the app icon are the author's own artwork.
 
 ## Build it
 
@@ -159,9 +165,11 @@ adb shell am broadcast -n com.thealgothrim.overworld.debug/com.thealgothrim.over
 
 The drive starts where the phone is. Add `--ef from_lat 28.6315 --ef from_lng 77.2167` to start somewhere else, here on Connaught Place's Outer Circle, a good test for roundabouts. `--es query "India%sGate"` drives to a place by name, the way a request from Android Auto arrives, and `--ez test false` makes it a real trip on the phone's GPS. `-a com.thealgothrim.overworld.DEBUG_STATE` logs what the app holds (trip, simulator, route extras, voice) under the `DebugDrive` tag.
 
-**Tests** (`android/app/src/androidTest`, need a phone or emulator with internet): real Delhi and Chandigarh routes run through Android Auto's builders step by step, navigation requests in every link form, trips stopped as they start, search and Nearby on the car screen, and the car screen itself. `.\gradlew.bat :app:testDebugUnitTest` checks plus codes, typed coordinates and Google Maps links without a device. Run them on an emulator, since `connectedDebugAndroidTest` uninstalls the app afterwards. Put the emulator in Delhi first (`adb emu geo fix 77.2167 28.6315`); by default it thinks it's in California. Then install both APKs from `assembleDebug assembleDebugAndroidTest` and run `adb shell am instrument -w com.thealgothrim.overworld.debug.test/androidx.test.runner.AndroidJUnitRunner`.
+**Tests** (`android/app/src/androidTest`, need a phone or emulator with internet): real Delhi and Chandigarh routes run through Android Auto's builders step by step, navigation requests in every link form, trips stopped as they start, search and Nearby on the car screen, and the car screen itself. `.\gradlew.bat :app:testDebugUnitTest` checks plus codes, typed coordinates, Google Maps links and the sun times behind GTA VI's day and night without a device. Run them on an emulator, since `connectedDebugAndroidTest` uninstalls the app afterwards. Put the emulator in Delhi first (`adb emu geo fix 77.2167 28.6315`); by default it thinks it's in California. Then install both APKs from `assembleDebug assembleDebugAndroidTest` and run `adb shell am instrument -w com.thealgothrim.overworld.debug.test/androidx.test.runner.AndroidJUnitRunner`.
 
 Map icons and labels don't draw on the emulator's default software GPU. Start it on the computer's GPU: `emulator -avd <name> -gpu host`.
+
+To check a world's car screen without a head unit, debug builds have `CarPreviewActivity`: the car map and HUD in a plain window. Set an emulator to the Curvv's screen (`adb shell wm size 1920x720` and `adb shell wm density 200`), open it with `adb shell am start -n com.thealgothrim.overworld.debug/com.thealgothrim.overworld.CarPreviewActivity`, and start a test drive as above (`--es time night` holds GTA VI at night).
 
 ## Put it in the car
 
@@ -179,10 +187,10 @@ Internal app sharing (a link per upload, debug builds allowed) only works once t
 
 ```text
 android/              the app (Kotlin, Jetpack Compose, Android Auto)
-  app/src/main/       code, map styles, sprites, glyphs, speed-limit signs
+  app/src/main/       code, map styles, sprites, glyphs, speed-limit signs, player markers
   app/src/local/      game fonts and blips for personal builds (gitignored, optional)
 prototype/            web preview of the themes on a recorded Delhi drive; themes.js is the theme source
-tools/                style export, sprite, glyph, icon and sign builders, build script, DHU preset
+tools/                style export, sprite, glyph, icon, sign and marker builders, build script, DHU preset
 docs/readme/          the images on this page (tools/readme_hero.py draws the banner)
 licenses/             licence texts for the bundled fonts
 ```
@@ -194,23 +202,24 @@ licenses/             licence texts for the bundled fonts
 | `tools/make_glyphs.py` | Builds Red Dead's map-label fonts as MapLibre SDF glyphs |
 | `tools/make_icon.py` | Builds the adaptive app icon from the artwork in `tools/icon/` |
 | `tools/make_limit_signs.py` | Cuts the speed-limit sign sheets in `tools/signs/` into app drawables |
+| `tools/make_pucks.py` | Builds the player markers from the drawings in `tools/blips/`, centred and never stretched |
 | `tools/build-install.ps1` | Builds the debug APK and installs it |
 | `tools/make_route.py` | Re-records the prototype's demo route |
 
 ## Known limits
 
-- Tested on a Galaxy S24 Ultra and on the Desktop Head Unit at the Curvv's screen size. The first run in the real car is waiting on the Play step above.
+- Driven in the Curvv over wireless Android Auto and used on a Galaxy S24 Ultra; tested on the Desktop Head Unit and an emulator at the Curvv's screen size.
 - The public routing and search servers are fair-use: fine for one driver, not for a public app with many users.
 - OpenStreetMap knows few of Delhi's speed cameras (about 9 speed cameras and 40 enforcement cameras in the NCR core). Radarbot's list is its own and can't be used, so cameras you mark fill the gaps on your roads.
 - Small places only Google lists (a house, a small church) aren't in OpenStreetMap or TomTom. Share them from Google Maps, or type their plus code.
-- GTA V hides map labels, like the game's pause map. Red Dead's label glyphs cover Latin scripts only.
+- GTA V and GTA VI hide map labels, like the games' maps. Red Dead's label glyphs cover Latin scripts only.
 - No offline maps yet (OpenFreeMap has no India extract download; Protomaps PMTiles would be the way).
 - Android refuses the background location service if a trip starts while the app isn't on screen. The app then keeps navigating while the phone or car screen shows it, instead of crashing.
 - Contour lines like Red Dead's paper map aren't possible from OpenFreeMap, which has no contour layer.
 
 ## Credits
 
-Map data © OpenStreetMap contributors (ODbL). Tiles: OpenFreeMap, OpenMapTiles schema. Routing and traffic lights: Valhalla on the FOSSGIS server. Speed cameras: Overpass API. Live traffic (optional): TomTom. Search: Photon by komoot. Navigation: Ferrostar by Stadia Maps (BSD 3-Clause). Turn arrows: Mapbox Directions Icons (CC0). Fonts: Barlow, Barlow Condensed, Chakra Petch, IM FELL English, Passion One, Crimson Text, Merriweather, Raleway (SIL Open Font License) and Homemade Apple (Apache 2.0). Details in `THIRD_PARTY_NOTICES.txt` and `licenses/`.
+Map data © OpenStreetMap contributors (ODbL). Tiles: OpenFreeMap, OpenMapTiles schema. Routing and traffic lights: Valhalla on the FOSSGIS server. Speed cameras: Overpass API. Live traffic (optional): TomTom. Search: Photon by komoot. Navigation: Ferrostar by Stadia Maps (BSD 3-Clause). Turn arrows: Mapbox Directions Icons (CC0). Fonts: Barlow, Barlow Condensed, Inter, IM FELL English, Passion One, Crimson Text, Merriweather, Raleway (SIL Open Font License) and Homemade Apple (Apache 2.0). Details in `THIRD_PARTY_NOTICES.txt` and `licenses/`.
 
 Overworld Maps is a fan project. It is not affiliated with or endorsed by Rockstar Games or Take-Two Interactive. Grand Theft Auto and Red Dead Redemption are their trademarks, named here only to say which game each look is modelled on.
 

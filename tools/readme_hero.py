@@ -1,10 +1,11 @@
 """Render docs/readme/hero.png (1600x820) for the README from the real screenshots in docs/readme.
 
-The screenshots themselves are captured by hand: the car shots from the Desktop Head Unit
-(tools/dhu/tata_curvv.ini, cropped to the 1920x720 screen), the phone shots from the emulator
-(`emulator -avd overworld -gpu host`, status bar in demo mode, test drives via DebugDriveReceiver).
+The screenshots themselves are captured by hand on the emulator (`emulator -avd overworld -gpu host`,
+test drives via DebugDriveReceiver, never near home): the car shots in the debug-only
+CarPreviewActivity at the Curvv's 1920x720 and 200 dpi, scaled to 1440x540; the phone shots with the
+status bar in demo mode, scaled to 540x1200.
 
-Usage: python tools/readme_hero.py   (needs Playwright with Chrome)
+Usage: python tools/readme_hero.py   (needs Playwright with Microsoft Edge)
 """
 from pathlib import Path
 
@@ -38,10 +39,10 @@ h1 {{ font-family: BarlowCondensed; font-weight: 400; font-size: 96px; line-heig
     <img class="icon" src="{ICON.as_uri()}">
     <h1>Overworld<br>Maps</h1>
     <p class="lead">Real roads, drawn like an <span style="white-space: nowrap">open-world game map.</span></p>
-    <p class="meta"><b>GTA V</b> and <b>Red Dead 2</b> worlds<br>Android Auto first, phone too</p>
+    <p class="meta"><b>GTA V</b>, <b>Red Dead 2</b> and <b>GTA VI</b> worlds<br>Android Auto first, phone too</p>
   </div>
   <div class="cars">
-    <img class="car" src="{(SHOTS / "car-gta-city.png").as_uri()}">
+    <img class="car" src="{(SHOTS / "car-gta6.png").as_uri()}">
     <img class="car" src="{(SHOTS / "car-rdr.png").as_uri()}">
   </div>
 </div></body></html>"""
@@ -52,7 +53,7 @@ def main():
     page_file.write_text(HTML, encoding="utf-8")
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(channel="chrome")
+            browser = p.chromium.launch(channel="msedge")
             page = browser.new_page(viewport={"width": 1600, "height": 820})
             page.goto(page_file.as_uri())
             page.wait_for_load_state("networkidle")
