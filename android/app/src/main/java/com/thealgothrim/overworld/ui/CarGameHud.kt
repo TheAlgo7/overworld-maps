@@ -4,6 +4,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.thealgothrim.overworld.AppModule
@@ -75,7 +76,7 @@ fun BoxScope.CarGameHud(
   if (!uiState.isNavigating() || progress == null) {
     val estimate by AppModule.viewModel.estimatedKmh.collectAsState()
     // GPS speed, or the speed worked out from movement when a fix has none.
-    val moving = (uiState.location?.speed?.value ?: estimate?.div(3.6) ?: 0.0) > FREE_DRIVE_SPEED
+    val moving = rememberFreeDriving(uiState.location?.speed?.value ?: estimate?.div(3.6) ?: 0.0)
     when {
       preview != null -> PreviewCard(spec, preview, extras, Modifier.align(Alignment.TopStart))
       // Driving without a trip: the map, the speed and camera alerts, like Google's free drive.
@@ -275,5 +276,29 @@ private fun IdleCard(spec: SkinSpec, modifier: Modifier) {
   }
 }
 
+/**
+ * Free driving (no trip) from the speed in m/s, held through slow traffic: crawling along, the speed
+ * kept dipping under the line and the HUD flipped between the speedometer and "Where to?" with every
+ * fix. On at once above [FREE_DRIVE_SPEED]; off only once the car has stood still for
+ * [STOPPED_HOLD_MS] (a long red light, parked).
+ */
+@Composable
+private fun rememberFreeDriving(speed: Double): Boolean {
+  val fast = speed > FREE_DRIVE_SPEED
+  val stopped = speed < STOPPED_SPEED
+  var driving by remember { mutableStateOf(fast) }
+  LaunchedEffect(fast, stopped) {
+    if (fast) driving = true
+    else if (stopped) {
+      delay(STOPPED_HOLD_MS)
+      driving = false
+    }
+  }
+  return driving
+}
+
 /** About 11 km/h: faster than this with no trip, the car is free driving. */
 private const val FREE_DRIVE_SPEED = 3.0
+/** About 4 km/h: slower than this the car is standing. */
+private const val STOPPED_SPEED = 1.0
+private const val STOPPED_HOLD_MS = 20_000L

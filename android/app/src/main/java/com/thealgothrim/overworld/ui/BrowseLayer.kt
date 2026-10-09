@@ -42,6 +42,7 @@ import com.thealgothrim.overworld.search.Nearby
 import com.thealgothrim.overworld.search.Place
 import com.thealgothrim.overworld.ui.skin.icon
 import com.thealgothrim.overworld.search.SavedState
+import com.thealgothrim.overworld.search.samePlace
 import com.thealgothrim.overworld.ui.skin.GameIcon
 import com.thealgothrim.overworld.ui.skin.GameIconView
 import com.thealgothrim.overworld.ui.skin.SkinChip
@@ -293,8 +294,9 @@ private fun PlaceSheet(
       val tags =
           listOfNotNull(
               here?.let { "${formatDistance(distanceMeters(it, place.coordinate))} away" },
-              "Home".takeIf { saved.home?.let { h -> h.name == place.name } == true },
-              "Work".takeIf { saved.work?.let { w -> w.name == place.name } == true },
+              // By the spot, not the name: with Home saved from a dropped pin, every "Dropped pin" said Home.
+              "Home".takeIf { saved.home?.samePlace(place) == true },
+              "Work".takeIf { saved.work?.samePlace(place) == true },
               "Saved".takeIf { saved.isStarred(place) },
           )
       if (tags.isNotEmpty()) SkinText(tags.joinToString("  ·  "), spec.body, 14.sp, spec.good, Modifier.padding(top = 6.dp))

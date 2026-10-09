@@ -1,6 +1,5 @@
 package com.thealgothrim.overworld
 
-import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -9,6 +8,7 @@ import android.content.IntentFilter
 import android.content.ServiceConnection
 import android.os.IBinder
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.stadiamaps.ferrostar.core.NavigationState
 import com.stadiamaps.ferrostar.core.service.FerrostarForegroundService
 import com.stadiamaps.ferrostar.core.service.ForegroundNotificationBuilder
@@ -47,7 +47,6 @@ class SafeForegroundServiceManager(
         }
       }
 
-  @SuppressLint("UnspecifiedRegisterReceiverFlag")
   override fun startService(stopNavigation: () -> Unit) {
     stopService()
     stopNavigating = stopNavigation
@@ -58,10 +57,18 @@ class SafeForegroundServiceManager(
 
     val intent = Intent(context, FerrostarForegroundService::class.java)
     try {
-      context.registerReceiver(
+      // Every app built on Ferrostar sends the same Stop action, so any of them (or the other build
+      // of this app, side by side on the phone) could end this trip, and so could any app at all.
+      // Now only a sender holding END_TRIP can: this app's own notification. It has to stay
+      // exported: Ferrostar's Stop intent names no app, and Android 14 delivers such a broadcast to
+      // exported receivers only (not exported, the notification's Stop did nothing).
+      ContextCompat.registerReceiver(
+          context,
           stopReceiver,
           IntentFilter(ForegroundNotificationBuilder.STOP_NAVIGATION_INTENT),
-          Context.RECEIVER_EXPORTED,
+          "${context.packageName}.permission.END_TRIP",
+          null,
+          ContextCompat.RECEIVER_EXPORTED,
       )
       receiverRegistered = true
       if (!started) {

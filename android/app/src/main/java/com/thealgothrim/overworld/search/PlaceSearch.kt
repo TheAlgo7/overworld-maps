@@ -1,6 +1,7 @@
 package com.thealgothrim.overworld.search
 
 import android.util.Log
+import java.io.IOException
 import com.thealgothrim.overworld.DriveLog
 import com.thealgothrim.overworld.traffic.RouteLine
 import com.thealgothrim.overworld.traffic.angleBetween
@@ -12,13 +13,18 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import java.net.URLEncoder
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import org.json.JSONObject
 import uniffi.ferrostar.GeographicCoordinate
 
@@ -85,12 +91,18 @@ class PlaceSearch(private val http: OkHttpClient, private val tomtomKey: String)
       withContext(Dispatchers.IO) {
         val onRoute =
             if (tomtomKey.isNotBlank() && ahead != null && ahead.size >= 2) {
-              runCatching { tomtomAlongRoute(kind, ahead) }.onFailure { Log.w(TAG, "TomTom along-route failed", it) }.getOrNull().orEmpty()
+              runCatching { tomtomAlongRoute(kind, ahead) }
+                  .onFailure { if (it is CancellationException) throw it; Log.w(TAG, "TomTom along-route failed", it) }
+                  .getOrNull()
+                  .orEmpty()
             } else emptyList()
         if (onRoute.size >= MAX_ON_ROUTE) return@withContext onRoute.also { DriveLog.note("nearby ${kind.name} at ${DriveLog.at(near)}: ${it.size} along the route") }
         val around =
-            (if (tomtomKey.isNotBlank()) runCatching { tomtomNearby(kind, near) }.onFailure { Log.w(TAG, "TomTom nearby failed", it) }.getOrNull() else null)
-                ?: overpassNearby(kind, near)
+            (if (tomtomKey.isNotBlank()) {
+              runCatching { tomtomNearby(kind, near) }
+                  .onFailure { if (it is CancellationException) throw it; Log.w(TAG, "TomTom nearby failed", it) }
+                  .getOrNull()
+            } else null) ?: overpassNearby(kind, near)
         fun cost(p: Place): Double {
           val d = metres(near, p.coordinate)
           if (heading == null || d < 150) return d
@@ -146,6 +158,9 @@ class PlaceSearch(private val http: OkHttpClient, private val tomtomKey: String)
           !district.isNullOrBlank() -> district
           else -> listOf("locality", "city").map { p.optString(it) }.firstOrNull { it.isNotBlank() }
         }
+            // Some OpenStreetMap names are typed loosely ("Barodia Scheme , Jaipur").
+            ?.replace(Regex("""\s+,"""), ",")
+            ?.trim()
       }
 
   // ---------------------------------------------------------------- written places
@@ -192,7 +207,7 @@ class PlaceSearch(private val http: OkHttpClient, private val tomtomKey: String)
         }
       }
 
-  private fun tomtomNearby(kind: Nearby, near: GeographicCoordinate): List<Place> {
+  private suspend fun tomtomNearby(kind: Nearby, near: GeographicCoordinate): List<Place> {
     val url =
         "https://api.tomtom.com/search/2/nearbySearch/.json".toHttpUrl().newBuilder()
             .addQueryParameter("key", tomtomKey)
@@ -212,7 +227,7 @@ class PlaceSearch(private val http: OkHttpClient, private val tomtomKey: String)
    * detour and how far ahead it is; they come soonest reached first, a detour counting twice
    * (there and back to the route).
    */
-  private fun tomtomAlongRoute(kind: Nearby, ahead: List<GeographicCoordinate>): List<Place> {
+  private suspend fun tomtomAlongRoute(kind: Nearby, ahead: List<GeographicCoordinate>): List<Place> {
     val points = JSONArray(RouteLine(ahead).spaced(1000).map { JSONObject().put("lat", it.lat).put("lon", it.lng) })
     val url =
         "https://api.tomtom.com/search/2/searchAlongRoute/${URLEncoder.encode(kind.words, "UTF-8").replace("+", "%20")}.json".toHttpUrl().newBuilder()
@@ -224,11 +239,7 @@ class PlaceSearch(private val http: OkHttpClient, private val tomtomKey: String)
             .addQueryParameter("language", "en-GB")
             .build()
     val body = JSONObject().put("route", JSONObject().put("points", points)).toString()
-    val response =
-        http.newCall(Request.Builder().url(url).post(body.toRequestBody("application/json".toMediaType())).build()).execute().use { r ->
-          if (!r.isSuccessful) error("Route search failed (${r.code})")
-          r.body.string()
-        }
+    val response = http.newCall(Request.Builder().url(url).post(body.toRequestBody("application/json".toMediaType())).build()).body()
     val results = JSONObject(response).optJSONArray("results") ?: return emptyList()
     return (0 until results.length())
         .mapNotNull { i ->
@@ -279,15 +290,12 @@ class PlaceSearch(private val http: OkHttpClient, private val tomtomKey: String)
         parsePhotonCandidates(fetch(url.build().toString()), near)
       }
 
-  private fun overpassNearby(kind: Nearby, near: GeographicCoordinate): List<Place> {
+  private suspend fun overpassNearby(kind: Nearby, near: GeographicCoordinate): List<Place> {
     val query = "[out:json][timeout:20];${kind.osm}(around:5000,${near.lat},${near.lng});out center 40;"
     val body =
         OVERPASS.firstNotNullOfOrNull { server ->
-          runCatching {
-                http.newCall(Request.Builder().url(server).post(okhttp3.FormBody.Builder().add("data", query).build()).build()).execute().use { r ->
-                  if (r.isSuccessful) r.body.string() else null
-                }
-              }
+          runCatching { http.newCall(Request.Builder().url(server).post(okhttp3.FormBody.Builder().add("data", query).build()).build()).body() }
+              .onFailure { if (it is CancellationException) throw it }
               .getOrNull()
         } ?: return emptyList()
     val elements = JSONObject(body).optJSONArray("elements") ?: return emptyList()
@@ -356,10 +364,28 @@ class PlaceSearch(private val http: OkHttpClient, private val tomtomKey: String)
           .execute()
           .use { r -> r.request.url.toString() to r.peekBody(400_000).string() }
 
-  private fun fetch(url: String): String =
-      http.newCall(Request.Builder().url(url).build()).execute().use { response ->
-        if (!response.isSuccessful) error("Search failed (${response.code})")
-        response.body.string()
+  private suspend fun fetch(url: String): String = http.newCall(Request.Builder().url(url).build()).body()
+
+  /**
+   * The call's answer, or an error. Sent with enqueue rather than execute() so a search that is
+   * called off (its few seconds are up, or the next letter was typed) also drops the request: a
+   * blocking execute() ran on to OkHttp's 20 s whatever the wait around it said.
+   */
+  private suspend fun Call.body(): String =
+      suspendCancellableCoroutine { done ->
+        done.invokeOnCancellation { cancel() }
+        enqueue(
+            object : Callback {
+              override fun onFailure(call: Call, e: IOException) = done.resumeWith(Result.failure(e))
+
+              override fun onResponse(call: Call, response: Response) =
+                  done.resumeWith(
+                      runCatching {
+                        response.use { r -> if (r.isSuccessful) r.body.string() else throw IOException("Search failed (${r.code})") }
+                      }
+                  )
+            }
+        )
       }
 
   /** Recent answers by query and area, for ten minutes. */

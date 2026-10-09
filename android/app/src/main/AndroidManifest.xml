@@ -9,6 +9,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
+    <!-- Ending a trip from its notification, for this app alone (see SafeForegroundServiceManager). -->
+    <permission
+        android:name="${applicationId}.permission.END_TRIP"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="${applicationId}.permission.END_TRIP" />
+
     <!-- Android Auto: a navigation app that draws its own map. -->
     <uses-permission android:name="androidx.car.app.MAP_TEMPLATES" />
     <uses-permission android:name="androidx.car.app.ACCESS_SURFACE" />

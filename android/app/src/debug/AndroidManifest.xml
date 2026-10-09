@@ -2,9 +2,11 @@
 <!-- Debug builds only: lets adb start a simulated trip for testing the car screen. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
+        <!-- DUMP: adb's shell holds it and ordinary apps can't, so only adb can send these. -->
         <receiver
             android:name=".DebugDriveReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="android.permission.DUMP">
             <intent-filter>
                 <action android:name="com.thealgothrim.overworld.DEBUG_DRIVE" />
                 <action android:name="com.thealgothrim.overworld.DEBUG_STOP" />

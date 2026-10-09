@@ -211,12 +211,15 @@ class TrafficService(private val http: OkHttpClient) {
 
   // ------------------------------------------------------------------ TomTom
 
-  suspend fun incidents(route: List<GeographicCoordinate>): List<RoadFeature> =
+  /** Live incidents on [route], placed in metres along all of it; [from]: how far the car has come. */
+  suspend fun incidents(route: List<GeographicCoordinate>, from: Double = 0.0): List<RoadFeature> =
       withContext(Dispatchers.IO) {
         if (!hasLiveTraffic || route.size < 2) return@withContext emptyList()
         val line = RouteLine(route)
-        // TomTom limits a query to 10,000 km²; long trips ask about the next stretch only.
-        val box = line.boundingBox(maxAreaKm2 = 9000.0, pad = 0.01)
+        // TomTom limits a query to 10,000 km²; long trips ask about the next stretch only, from
+        // where the car is. Measured from the start, a long trip got none past its first 100 km.
+        val ahead = if (from > 50.0) RouteLine(line.slice(from, line.length)) else line
+        val box = ahead.boundingBox(maxAreaKm2 = 9000.0, pad = 0.01)
         val fields = "{incidents{type,geometry{type,coordinates},properties{iconCategory,magnitudeOfDelay,events{description},delay,from,to}}}"
         val url =
             "https://api.tomtom.com/traffic/services/5/incidentDetails?key=$tomtomKey" +

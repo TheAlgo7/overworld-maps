@@ -16,6 +16,8 @@ import com.stadiamaps.ferrostar.core.location.SimulatedLocationProvider
 import com.stadiamaps.ferrostar.core.location.toAndroidLocation
 import com.stadiamaps.ferrostar.core.withJsonOptions
 import com.stadiamaps.ferrostar.googleplayservices.FusedNavigationLocationProvider
+import com.stadiamaps.ferrostar.ui.formatters.DistanceMeasurementSystem
+import com.stadiamaps.ferrostar.ui.formatters.LocalizedDistanceFormatter
 import com.thealgothrim.overworld.search.PlaceSearch
 import com.thealgothrim.overworld.search.SavedPlaces
 import com.thealgothrim.overworld.traffic.MyCameras
@@ -93,7 +95,12 @@ object AppModule {
             foregroundServiceManager =
                 SafeForegroundServiceManager(
                     appContext,
-                    DefaultForegroundNotificationBuilder(appContext),
+                    // In km like the rest of the app: by default it follows the phone's language,
+                    // and with English (US) the trip notification counted miles.
+                    DefaultForegroundNotificationBuilder(
+                        appContext,
+                        distanceFormatter = LocalizedDistanceFormatter(distanceMeasurementSystemOverride = DistanceMeasurementSystem.SI),
+                    ),
                 ),
             navigationControllerConfig =
                 NavigationControllerConfig(

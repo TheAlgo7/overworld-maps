@@ -31,6 +31,7 @@ import com.thealgothrim.overworld.ui.formatDistance
 import com.thealgothrim.overworld.ui.skin.GameIcon
 import com.thealgothrim.overworld.ui.skin.drawGameIcon
 import com.thealgothrim.overworld.ui.skin.icon
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -90,7 +91,11 @@ class CarSearchScreen(carContext: CarContext) : Screen(carContext) {
     job =
         lifecycleScope.launch {
           delay(wait)
-          results = runCatching { AppModule.search.search(text, AppModule.viewModel.currentCoordinate) }.getOrDefault(emptyList())
+          // Dropped for the next letter typed is not "Nothing found" (it showed until the next answer).
+          results =
+              runCatching { AppModule.search.search(text, AppModule.viewModel.currentCoordinate) }
+                  .onFailure { if (it is CancellationException) throw it }
+                  .getOrDefault(emptyList())
           invalidate()
         }
   }

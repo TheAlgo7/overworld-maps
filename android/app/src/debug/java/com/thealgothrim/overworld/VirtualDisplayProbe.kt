@@ -9,6 +9,7 @@ import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.hardware.display.VirtualDisplayConfig
 import android.media.ImageReader
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.View
@@ -27,7 +28,8 @@ object VirtualDisplayProbe {
     reader.setOnImageAvailableListener({ r -> r.acquireLatestImage()?.close(); produced++ }, main)
     val dm = context.getSystemService(DisplayManager::class.java)
     val display: VirtualDisplay =
-        if (requested > 0f) {
+        // Asking for a refresh rate needs Android 14; before that the probe measures the default twice.
+        if (requested > 0f && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
           dm.createVirtualDisplay(
               VirtualDisplayConfig.Builder("ow-probe", 1920, 720, 200).setSurface(reader.surface).setRequestedRefreshRate(requested).build(),
               null,

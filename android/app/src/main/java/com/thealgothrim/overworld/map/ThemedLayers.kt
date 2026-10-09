@@ -125,7 +125,7 @@ fun ThemedRouteAhead(route: RoutePolyline, shown: DisplayedPosition, theme: Over
           faded?.setData(fadeData(it))
         }
   }
-  routeLayers(listOf(near, far), "ow-trip", theme, car, faded)
+  RouteLayers(listOf(near, far), "ow-trip", theme, car, faded)
 }
 
 /** One distance for both pieces of the route ahead: 300 m is about 18 s at 60 km/h. */
@@ -148,7 +148,7 @@ private fun routeWidth(theme: OverworldTheme) =
  */
 @Composable
 @MaplibreComposable
-private fun routeLayers(sources: List<Source>, id: String, theme: OverworldTheme, car: Boolean, faded: Source? = null) {
+private fun RouteLayers(sources: List<Source>, id: String, theme: OverworldTheme, car: Boolean, faded: Source? = null) {
   val k = routeWidth(theme)
   val lineAt10 = (if (car) 4.5f else 3.5f) * k
   val lineAt18 = (if (car) 15f else 12f) * k
@@ -286,7 +286,7 @@ fun RouteTrafficLine(
 @MaplibreComposable
 fun ThemedRouteLine(points: List<GeographicCoordinate>, theme: OverworldTheme, car: Boolean) {
   val source = rememberGeoJsonSource(remember(points) { GeoJsonData.JsonString(lineJson(points)) })
-  routeLayers(listOf(source), "ow-route", theme, car)
+  RouteLayers(listOf(source), "ow-route", theme, car)
 }
 
 /**

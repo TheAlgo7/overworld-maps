@@ -29,6 +29,7 @@ import com.thealgothrim.overworld.traffic.TrafficEta
 import com.thealgothrim.overworld.traffic.TrafficSpan
 import java.time.Instant
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -308,7 +309,9 @@ class OverworldViewModel :
           _planner.value = _planner.value.copy(searching = true)
           val results =
               runCatching { AppModule.search.search(query, currentCoordinate) }
-                  .onFailure { Log.w(TAG, "search failed", it) }
+                  // A search dropped for the next letter typed is not an empty answer: read as one,
+                  // it blanked the list ("No places found") until the next search came back.
+                  .onFailure { if (it is CancellationException) throw it; Log.w(TAG, "search failed", it) }
                   .getOrDefault(emptyList())
           _planner.value = _planner.value.copy(results = results, searching = false)
         }
@@ -345,7 +348,7 @@ class OverworldViewModel :
           line.slice((line.length - left).coerceAtLeast(0.0), line.length)
         }
     return runCatching { AppModule.search.nearby(kind, here, heading, ahead) }
-        .onFailure { Log.w(TAG, "nearby ${kind.name} failed", it) }
+        .onFailure { if (it is CancellationException) throw it; Log.w(TAG, "nearby ${kind.name} failed", it) }
         .getOrDefault(emptyList())
   }
 
@@ -375,6 +378,7 @@ class OverworldViewModel :
 
   fun choose(place: Place) {
     searchJob?.cancel()
+    routeJob?.cancel()
     _planner.value = PlannerState(destination = place)
   }
 
@@ -391,6 +395,7 @@ class OverworldViewModel :
   }
 
   fun clearDestination() {
+    routeJob?.cancel()
     _planner.value = PlannerState()
   }
 
@@ -456,30 +461,40 @@ class OverworldViewModel :
     prefs.edit().putString("last_fix", "${at.lat},${at.lng}").apply()
   }
 
+  private var routeJob: Job? = null
+
   /** Directions: fetch the route and show it with time, distance and the main road. */
   fun directions() {
     val place = _planner.value.destination ?: return
-    _planner.value = _planner.value.copy(routing = true, error = null)
-    viewModelScope.launch(Dispatchers.IO) {
-      try {
-        val from = freshOrigin()
-        val route =
-            core.getRoutes(from, listOf(Waypoint(coordinate = place.coordinate, kind = WaypointKind.BREAK))).first()
-        noteStart("preview of ${place.name}", from, route)
-        val via =
-            route.steps
-                .filter { !it.roadName.isNullOrBlank() }
-                .groupBy { it.roadName!! }
-                .maxByOrNull { (_, steps) -> steps.sumOf { it.distance } }
-                ?.key
-        val preview = RoutePreview(place, route, route.steps.sumOf { it.duration }, route.distance, via)
-        _planner.value = _planner.value.copy(routing = false, preview = preview)
-        launch(Dispatchers.Main) { loadExtras(route.geometry, live = false) }
-      } catch (e: Exception) {
-        Log.w(TAG, "routing failed", e)
-        _planner.value = _planner.value.copy(routing = false, error = routeError(e))
-      }
-    }
+    // Tapped again while the route is on its way: it would only be asked for twice.
+    if (routeJob?.isActive == true) return
+    _planner.update { it.copy(routing = true, error = null) }
+    routeJob =
+        viewModelScope.launch(Dispatchers.IO) {
+          // Only while the place is still the one on screen: closed or swapped for another while
+          // the route was coming, its preview used to pop up anyway a moment later.
+          fun stillShown(state: PlannerState) = state.destination?.coordinate == place.coordinate
+          try {
+            val from = freshOrigin()
+            val route =
+                core.getRoutes(from, listOf(Waypoint(coordinate = place.coordinate, kind = WaypointKind.BREAK))).first()
+            noteStart("preview of ${place.name}", from, route)
+            val via =
+                route.steps
+                    .filter { !it.roadName.isNullOrBlank() }
+                    .groupBy { it.roadName!! }
+                    .maxByOrNull { (_, steps) -> steps.sumOf { it.distance } }
+                    ?.key
+            val preview = RoutePreview(place, route, route.steps.sumOf { it.duration }, route.distance, via)
+            _planner.update { if (stillShown(it)) it.copy(routing = false, preview = preview) else it }
+            if (_planner.value.preview === preview) launch(Dispatchers.Main) { loadExtras(route.geometry, live = false) }
+          } catch (e: CancellationException) {
+            throw e
+          } catch (e: Exception) {
+            Log.w(TAG, "routing failed", e)
+            _planner.update { if (stillShown(it)) it.copy(routing = false, error = routeError(e)) else it }
+          }
+        }
   }
 
   /** Voice guidance on or off, remembered for next time (it starts off). */
@@ -529,7 +544,7 @@ class OverworldViewModel :
             val left = navigationUiState.value.progress?.distanceRemaining?.takeIf { live } ?: line.length
             val done = (line.length - left).coerceAtLeast(0.0)
             val ahead = if (done > 50.0) line.slice(done, line.length) else route
-            val incidents = runCatching { traffic.incidents(route) }.getOrDefault(emptyList())
+            val incidents = runCatching { traffic.incidents(route, from = done) }.getOrDefault(emptyList())
             val fresh = runCatching { traffic.routeTraffic(ahead) }.getOrNull()
             _extras.update { e ->
               e.copy(

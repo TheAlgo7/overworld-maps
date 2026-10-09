@@ -283,7 +283,10 @@ private fun TurnBanner(spec: SkinSpec, uiState: NavigationUiState, hazard: Hazar
 private fun TripProgressBar(spec: SkinSpec, uiState: NavigationUiState) {
   val progress = uiState.progress ?: return
   val routeLength = remember(uiState.routeGeometry) { uiState.routeGeometry?.let(::lengthMeters) ?: 0.0 }
-  val done = if (routeLength > 0) (1 - progress.distanceRemaining / routeLength).toFloat().coerceIn(0f, 1f) else 0f
+  // Against the whole trip, kept from its first route: a new route after a detour starts where the
+  // car is, and measured against that the bar dropped back to empty.
+  val tripLength = remember(uiState.routeGeometry?.lastOrNull()) { routeLength }
+  val done = if (tripLength > 0) (1 - progress.distanceRemaining / tripLength).toFloat().coerceIn(0f, 1f) else 0f
   if (spec.vi) {
     ViProgress(done, Modifier.padding(horizontal = 16.dp).padding(top = 12.dp))
   } else if (spec.gta) {

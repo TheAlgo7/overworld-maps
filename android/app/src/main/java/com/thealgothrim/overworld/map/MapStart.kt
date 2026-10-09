@@ -16,6 +16,9 @@ import org.maplibre.spatialk.geojson.Position
  * user before any trip (the car follows heading-up, the phone north-up).
  */
 @Composable
+// The camera is placed while composing, once per map state, on purpose: Ferrostar takes no starting
+// position, and an effect would run after the first frame, which then shows the whole world.
+@Suppress("RememberReturnType")
 fun rememberOverworldMapState(
     cameraOptions: NavigationCameraOptions,
     initialCameraMode: NavigationCameraMode = NavigationCameraMode.FOLLOW_USER,
