@@ -53,6 +53,7 @@ import com.thealgothrim.overworld.theme.Skin
 import com.thealgothrim.overworld.traffic.RoadFeatureKind
 import com.thealgothrim.overworld.traffic.TrafficEta
 import com.thealgothrim.overworld.ui.rdr.Rdr
+import com.thealgothrim.overworld.ui.vi.Vi
 import com.thealgothrim.overworld.ui.skin.SkinSpec
 import com.thealgothrim.overworld.ui.skin.SkinText
 import com.thealgothrim.overworld.ui.skin.skinPanel
@@ -79,9 +80,9 @@ fun trafficNote(eta: TrafficEta?): String? {
 fun CardDivider(spec: SkinSpec) {
   Box(
       Modifier.fillMaxWidth()
-          .padding(horizontal = if (spec.gta) 0.dp else 5.dp)
+          .padding(horizontal = when (spec.skin) { Skin.GTA -> 0.dp; Skin.GTA6 -> 16.dp; Skin.RDR -> 5.dp })
           .height(1.dp)
-          .background(if (spec.gta) Color(0x24FFFFFF) else Rdr.Grey.copy(alpha = 0.35f))
+          .background(when (spec.skin) { Skin.GTA -> Color(0x24FFFFFF); Skin.GTA6 -> Color(0x1FFFFFFF); Skin.RDR -> Rdr.Grey.copy(alpha = 0.35f) })
   )
 }
 
@@ -116,38 +117,113 @@ fun HazardRow(spec: SkinSpec, hazard: HazardAhead, modifier: Modifier = Modifier
 private const val OVER_BY = 5
 
 /**
- * Speed while driving, floating on the map with no box: the current speed in outlined numerals
- * (like the street name) and the road's limit sign beside it, in the theme's own sign. Over the
- * limit, the sign's ring and the speed turn red. The speed comes from GPS, or on a test drive is
- * worked out from the simulated movement.
+ * The car's speed (km/h) and the road's limit right now. The speed comes from GPS, or on a test
+ * drive is worked out from the simulated movement; the limit from the route's annotations.
  */
+data class SpeedNow(val kmh: Int?, val limit: Int?) {
+  /** Past the limit by [OVER_BY] or more: the speed and the sign's ring turn red. */
+  val over: Boolean
+    get() = kmh != null && limit != null && kmh >= limit + OVER_BY
+}
+
 @Composable
-fun SpeedBadge(spec: SkinSpec, uiState: NavigationUiState, modifier: Modifier = Modifier, big: Boolean = false) {
+fun rememberSpeedNow(uiState: NavigationUiState): SpeedNow {
   val estimate by AppModule.viewModel.estimatedKmh.collectAsState()
   val kmh = uiState.location?.speed?.value?.let { (it * 3.6).roundToInt().coerceAtLeast(0) } ?: estimate
   val limit = (uiState.currentAnnotation?.speed as? Speed.Value)?.let {
     if (it.unit.name.contains("MILE", ignoreCase = true)) (it.value * 1.609).roundToInt() else it.value.roundToInt()
   }
+  return SpeedNow(kmh, limit)
+}
+
+/** The red of each game's over-limit sign ring, for the speed too. */
+private fun SkinSpec.overRed(): Color = when (skin) { Skin.GTA -> Color(0xFFE8262B); Skin.GTA6 -> Color(0xFFF92F45); Skin.RDR -> Color(0xFFCC0000) }
+
+private fun SkinSpec.hudWhite(): Color = when (skin) { Skin.GTA -> Gta.White; Skin.GTA6 -> Vi.White; Skin.RDR -> Rdr.White }
+
+private fun SkinSpec.speedFont() = when (skin) { Skin.GTA -> GameFonts.condensed; Skin.GTA6 -> Vi.condensedBold; Skin.RDR -> GameFonts.lino }
+
+private fun SkinSpec.unitFont() = when (skin) { Skin.GTA -> GameFonts.condensed; Skin.GTA6 -> Vi.condensed; Skin.RDR -> GameFonts.hapna }
+
+/**
+ * Speed on the phone, floating on the map with no box: the current speed in outlined numerals
+ * (like the street name) with the road's limit sign beside it, in the theme's own sign. Over the
+ * limit, the sign's ring and the speed turn red.
+ */
+@Composable
+fun SpeedBadge(spec: SkinSpec, uiState: NavigationUiState, modifier: Modifier = Modifier) {
+  val speed = rememberSpeedNow(uiState)
+  val kmh = speed.kmh
+  val limit = speed.limit
   if (kmh == null && limit == null) return
-  val over = kmh != null && limit != null && kmh >= limit + OVER_BY
-  val red = if (spec.gta) Color(0xFFE8262B) else Color(0xFFCC0000)
-  // Car (big): speed and sign stand on the bottom line of the cards beside them. Phone: centred.
-  Row(modifier.padding(horizontal = 4.dp), verticalAlignment = if (big) Alignment.Bottom else Alignment.CenterVertically) {
+  Row(modifier.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
     if (kmh != null) {
-      SpeedReadout(
-          spec,
-          kmh,
-          color = if (over) red else if (spec.gta) Gta.White else Rdr.White,
-          height = if (big) 66.dp else 56.dp,
-          big = big,
-      )
-      if (limit != null) Spacer(Modifier.width(if (big) 12.dp else 10.dp))
+      SpeedReadout(spec, kmh, color = if (speed.over) spec.overRed() else spec.hudWhite(), height = 56.dp)
+      if (limit != null) Spacer(Modifier.width(10.dp))
     }
-    if (limit != null) LimitSign(spec, limit, over, if (big) 66.dp else 56.dp, Modifier)
+    if (limit != null) LimitSign(spec, limit, speed.over, 56.dp, Modifier)
   }
 }
 
+/**
+ * The car screen's speedometer: the speed in big outlined numerals with the unit beside it on the
+ * same line, like a car's digital speedometer. It stands above the time card in the bottom-left
+ * corner; red past the limit. Nothing when there's no speed yet.
+ */
+@Composable
+fun Speedometer(spec: SkinSpec, speed: SpeedNow, modifier: Modifier = Modifier) {
+  val kmh = speed.kmh ?: return
+  val measurer = rememberTextMeasurer()
+  val density = androidx.compose.ui.platform.LocalDensity.current
+  val outline = with(density) { (if (spec.rdr) 1.5.dp else 2.dp).toPx() }
+  val text = kmh.toString()
+  val number = measurer.measure(text, TextStyle(fontFamily = spec.speedFont(), fontSize = 44.sp))
+  val unitText = if (spec.rdr) "KM/H" else "km/h"
+  val unit = measurer.measure(unitText, TextStyle(fontFamily = spec.unitFont(), fontSize = 16.sp))
+  // Placed by the letters' own outlines: line boxes carry uneven space above and below.
+  val numberInk = number.multiParagraph.getPathForRange(0, text.length).getBounds()
+  val unitInk = unit.multiParagraph.getPathForRange(0, unitText.length).getBounds()
+  val gap = with(density) { 6.dp.toPx() }
+  val width = with(density) { (numberInk.width + gap + unitInk.width + outline * 2).toDp() }
+  val height = with(density) { (numberInk.height + outline * 2).toDp() }
+  val fill = if (speed.over) spec.overRed() else spec.hudWhite()
+  Canvas(modifier.width(width).height(height)) {
+    // Number and unit stand on one line (their ink bottoms).
+    val foot = size.height - outline
+    val numberAt = Offset(outline - numberInk.left, foot - numberInk.bottom)
+    val unitAt = Offset(outline + numberInk.width + gap - unitInk.left, foot - unitInk.bottom)
+    val edge = Stroke(width = outline * 2, join = androidx.compose.ui.graphics.StrokeJoin.Round)
+    drawText(number, Color.Black, numberAt, drawStyle = edge)
+    // The stroke style sticks to the laid-out text, so the fill has to be asked for explicitly.
+    drawText(number, fill, numberAt, drawStyle = Fill)
+    drawText(unit, Color.Black, unitAt, drawStyle = Stroke(width = 1.5.dp.toPx() * 2, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+    drawText(unit, if (spec.rdr) Rdr.GreyLight else fill, unitAt, drawStyle = Fill)
+  }
+}
+
+/** The road's limit sign on the car screen, in the theme's art; red ring past the limit. */
+@Composable
+fun SpeedLimitSign(spec: SkinSpec, speed: SpeedNow, modifier: Modifier = Modifier) {
+  val limit = speed.limit ?: return
+  LimitSign(spec, limit, speed.over, 66.dp, modifier)
+}
+
 /** Gaurav's signs (tools/signs/, cut by tools/make_limit_signs.py): (normal, over the limit). */
+private val GTA6_SIGNS =
+    mapOf(
+        10 to (R.drawable.limit_gta6_10 to R.drawable.limit_gta6_10_over),
+        20 to (R.drawable.limit_gta6_20 to R.drawable.limit_gta6_20_over),
+        30 to (R.drawable.limit_gta6_30 to R.drawable.limit_gta6_30_over),
+        40 to (R.drawable.limit_gta6_40 to R.drawable.limit_gta6_40_over),
+        50 to (R.drawable.limit_gta6_50 to R.drawable.limit_gta6_50_over),
+        60 to (R.drawable.limit_gta6_60 to R.drawable.limit_gta6_60_over),
+        70 to (R.drawable.limit_gta6_70 to R.drawable.limit_gta6_70_over),
+        80 to (R.drawable.limit_gta6_80 to R.drawable.limit_gta6_80_over),
+        90 to (R.drawable.limit_gta6_90 to R.drawable.limit_gta6_90_over),
+        100 to (R.drawable.limit_gta6_100 to R.drawable.limit_gta6_100_over),
+        110 to (R.drawable.limit_gta6_110 to R.drawable.limit_gta6_110_over),
+        120 to (R.drawable.limit_gta6_120 to R.drawable.limit_gta6_120_over),
+    )
 private val GTA_SIGNS =
     mapOf(
         10 to (R.drawable.limit_gta_10 to R.drawable.limit_gta_10_over),
@@ -185,39 +261,34 @@ private val RDR_SIGNS =
  */
 /** The GTA art's numbers are a heavy, wide sans; Barlow SemiBold is the closest bundled face. */
 private val GTA_SIGN_FONT = androidx.compose.ui.text.font.FontFamily(androidx.compose.ui.text.font.Font(R.font.barlow_semibold))
+/** The GTA VI art's numbers are a bold grotesk, like Inter Bold. */
+private val GTA6_SIGN_FONT = androidx.compose.ui.text.font.FontFamily(androidx.compose.ui.text.font.Font(R.font.inter_bold))
 
 private data class NumberBox(val x: Float, val y: Float, val height: Float, val width: Float)
 private val GTA_NUMBER = NumberBox(0.501f, 0.521f, 0.412f, 0.522f) to NumberBox(0.501f, 0.513f, 0.415f, 0.618f)
 private val RDR_NUMBER = NumberBox(0.502f, 0.509f, 0.448f, 0.413f) to NumberBox(0.502f, 0.508f, 0.420f, 0.520f)
+private val GTA6_NUMBER = NumberBox(0.506f, 0.469f, 0.330f, 0.492f) to NumberBox(0.502f, 0.483f, 0.325f, 0.613f)
 
 /**
- * The current speed over "KM/H", outlined like the street name. Drawn as one block centred by the
- * letters' own outlines, so it lines up with the limit sign and the time card beside it (text
- * line boxes carry uneven space above and below, which left it sitting high).
+ * The phone's speed: the number over "km/h", outlined like the street name, drawn as one block
+ * centred by the letters' own outlines so it lines up with the limit sign beside it (text line
+ * boxes carry uneven space above and below, which left it sitting high).
  */
 @Composable
-private fun SpeedReadout(spec: SkinSpec, kmh: Int, color: Color, height: Dp, big: Boolean) {
+private fun SpeedReadout(spec: SkinSpec, kmh: Int, color: Color, height: Dp) {
   val measurer = rememberTextMeasurer()
   val density = androidx.compose.ui.platform.LocalDensity.current
-  val outline = with(density) { (if (spec.gta) 2.dp else 1.5.dp).toPx() }
-  val number =
-      measurer.measure(
-          kmh.toString(),
-          TextStyle(fontFamily = if (spec.gta) GameFonts.condensed else GameFonts.lino, fontSize = if (big) 38.sp else 30.sp),
-      )
-  val unit =
-      measurer.measure(
-          if (spec.gta) "km/h" else "KM/H",
-          TextStyle(fontFamily = if (spec.gta) GameFonts.condensed else GameFonts.hapna, fontSize = if (big) 13.sp else 11.sp),
-      )
+  val outline = with(density) { (if (spec.rdr) 1.5.dp else 2.dp).toPx() }
+  // GTA VI: the mission HUD's bold condensed numerals, like its race timer.
+  val number = measurer.measure(kmh.toString(), TextStyle(fontFamily = spec.speedFont(), fontSize = 30.sp))
+  val unit = measurer.measure(if (spec.rdr) "KM/H" else "km/h", TextStyle(fontFamily = spec.unitFont(), fontSize = 11.sp))
   val numberInk = number.multiParagraph.getPathForRange(0, kmh.toString().length).getBounds()
   val unitInk = unit.multiParagraph.getPathForRange(0, unit.layoutInput.text.length).getBounds()
   val width = with(density) { (maxOf(numberInk.width, unitInk.width, 44.dp.toPx()) + outline * 2).toDp() }
   Canvas(Modifier.width(width).height(height)) {
     val gap = 4.dp.toPx()
     val block = numberInk.height + gap + unitInk.height
-    // Car: the block's foot on the bottom line; phone: centred on the sign.
-    val top = if (big) size.height - block - outline else (size.height - block) / 2
+    val top = (size.height - block) / 2
     val numberAt = Offset(size.width / 2 - numberInk.center.x, top - numberInk.top)
     val unitAt = Offset(size.width / 2 - unitInk.center.x, top + numberInk.height + gap - unitInk.top)
     val edge = Stroke(width = outline * 2, join = androidx.compose.ui.graphics.StrokeJoin.Round)
@@ -225,7 +296,7 @@ private fun SpeedReadout(spec: SkinSpec, kmh: Int, color: Color, height: Dp, big
     // The stroke style sticks to the laid-out text, so the fill has to be asked for explicitly.
     drawText(number, color, numberAt, drawStyle = Fill)
     drawText(unit, Color.Black, unitAt, drawStyle = Stroke(width = 1.5.dp.toPx() * 2, join = androidx.compose.ui.graphics.StrokeJoin.Round))
-    drawText(unit, if (spec.gta) Gta.White else Rdr.GreyLight, unitAt, drawStyle = Fill)
+    drawText(unit, if (spec.rdr) Rdr.GreyLight else spec.hudWhite(), unitAt, drawStyle = Fill)
   }
 }
 
@@ -237,10 +308,13 @@ private fun SpeedReadout(spec: SkinSpec, kmh: Int, color: Color, height: Dp, big
 @Composable
 private fun LimitSign(spec: SkinSpec, limit: Int, over: Boolean, size: Dp, modifier: Modifier) {
   val redness by animateFloatAsState(if (over) 1f else 0f, tween(350), label = "limit")
-  val art = (if (spec.gta) GTA_SIGNS else RDR_SIGNS)[limit]
+  val art = when (spec.skin) { Skin.GTA -> GTA_SIGNS; Skin.GTA6 -> GTA6_SIGNS; Skin.RDR -> RDR_SIGNS }[limit]
   val blank =
-      if (spec.gta) R.drawable.limit_blank_gta to R.drawable.limit_blank_gta_over
-      else R.drawable.limit_blank_rdr to R.drawable.limit_blank_rdr_over
+      when (spec.skin) {
+        Skin.GTA -> R.drawable.limit_blank_gta to R.drawable.limit_blank_gta_over
+        Skin.GTA6 -> R.drawable.limit_blank_gta6 to R.drawable.limit_blank_gta6_over
+        Skin.RDR -> R.drawable.limit_blank_rdr to R.drawable.limit_blank_rdr_over
+      }
   val (normalId, overId) = art ?: blank
   val normal = ImageBitmap.imageResource(normalId)
   val red = ImageBitmap.imageResource(overId)
@@ -253,13 +327,13 @@ private fun LimitSign(spec: SkinSpec, limit: Int, over: Boolean, size: Dp, modif
     if (art != null) return@Canvas
 
     // An odd limit: the number fills exactly the box the art's numbers fill (height and width),
-    // so it reads like the rest of the set: bold and wide for GTA, tall and narrow for Red Dead.
+    // so it reads like the rest of the set: bold and wide for the GTAs, tall and narrow for Red Dead.
     val digits = limit.toString()
-    val place = (if (spec.gta) GTA_NUMBER else RDR_NUMBER).let { if (digits.length > 2) it.second else it.first }
+    val place = when (spec.skin) { Skin.GTA -> GTA_NUMBER; Skin.GTA6 -> GTA6_NUMBER; Skin.RDR -> RDR_NUMBER }.let { if (digits.length > 2) it.second else it.first }
     val style =
         TextStyle(
-            fontFamily = if (spec.gta) GTA_SIGN_FONT else GameFonts.lino,
-            color = if (spec.gta) Color.White else Color(0xFFE9DDC6),
+            fontFamily = when (spec.skin) { Skin.GTA -> GTA_SIGN_FONT; Skin.GTA6 -> GTA6_SIGN_FONT; Skin.RDR -> GameFonts.lino },
+            color = if (spec.rdr) Color(0xFFE9DDC6) else Color.White,
             fontSize = 100.sp,
         )
     val layout = measurer.measure(digits, style)

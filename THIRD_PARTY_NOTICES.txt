@@ -38,7 +38,7 @@ USED WITHIN THIS PROJECT
 
 FONTS
 
-Barlow, Barlow Condensed, Chakra Petch, IM FELL English, Passion One, Crimson Text,
+Barlow, Barlow Condensed, Inter, IM FELL English, Passion One, Crimson Text,
 Merriweather and Raleway: SIL Open Font License 1.1, see licenses/OFL.txt.
 
 Homemade Apple: Copyright (c) 2010 by Font Diner, Inc. Apache License 2.0,

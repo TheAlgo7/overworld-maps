@@ -16,5 +16,11 @@
                 <action android:name="com.thealgothrim.overworld.DEBUG_SEARCH" />
             </intent-filter>
         </receiver>
+        <!-- The car screen's map and HUD in a plain activity, for the emulator (see the class). -->
+        <activity
+            android:name=".CarPreviewActivity"
+            android:exported="true"
+            android:screenOrientation="landscape"
+            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
     </application>
 </manifest>

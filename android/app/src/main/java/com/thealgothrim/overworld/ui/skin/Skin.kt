@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -46,6 +47,8 @@ import com.thealgothrim.overworld.theme.OverworldTheme
 import com.thealgothrim.overworld.theme.Skin
 import com.thealgothrim.overworld.ui.gta.Gta
 import com.thealgothrim.overworld.ui.rdr.Rdr
+import com.thealgothrim.overworld.ui.vi.Vi
+import com.thealgothrim.overworld.ui.vi.viGlass
 
 /** Colours and type for the app chrome, taken from the game the theme is based on. */
 data class SkinSpec(
@@ -64,7 +67,22 @@ data class SkinSpec(
     val number: FontFamily,
     val upperTitles: Boolean,
 ) {
+  /** GTA V. GTA VI ([vi]) and Red Dead ([rdr]) each have their own look. */
   val gta get() = skin == Skin.GTA
+  val vi get() = skin == Skin.GTA6
+  val rdr get() = skin == Skin.RDR
+
+  /** Title letter spacing: Red Dead's engraved capitals spread out, GTA VI's condensed ones a little. */
+  val titleSpacing: TextUnit
+    get() =
+        when (skin) {
+          Skin.RDR -> 1.sp
+          Skin.GTA6 -> 0.6.sp
+          Skin.GTA -> 0.sp
+        }
+
+  /** Title sizes are set for GTA's fonts; Red Dead's serif reads smaller, so it goes up a size. */
+  fun titleSize(gta: TextUnit, rdr: TextUnit): TextUnit = if (this.rdr) rdr else gta
 
   fun title(text: String) = if (upperTitles) text.uppercase() else text
 }
@@ -82,6 +100,12 @@ val OverworldTheme.spec: SkinSpec
             SkinSpec(
                 skin, Rdr.White, Rdr.Grey, hudAccent, Rdr.RedDark, hudGood, Color(0xEB0E0C0A),
                 title = GameFonts.lino, body = GameFonts.hapna, big = GameFonts.lino, number = GameFonts.lino,
+                upperTitles = true,
+            )
+        Skin.GTA6 ->
+            SkinSpec(
+                skin, Vi.White, Vi.Sub, hudAccent, Vi.PinkDeep, hudGood, Vi.Glass,
+                title = Vi.condensed, body = Vi.sans, big = Vi.condensedBold, number = Vi.condensed,
                 upperTitles = true,
             )
       }
@@ -109,9 +133,13 @@ fun SkinText(
 
 // ---------------------------------------------------------------- surfaces
 
-/** A HUD panel: square black box for GTA, ink with an engraved inner rule for Red Dead. */
+/**
+ * A HUD panel: square black box for GTA V, ink with an engraved inner rule for Red Dead, rounded
+ * dark glass for GTA VI.
+ */
 fun Modifier.skinPanel(spec: SkinSpec, elevated: Boolean = true): Modifier =
-    this.then(if (elevated) Modifier.shadow(10.dp, RoundedCornerShape(0.dp), clip = false) else Modifier)
+    if (spec.vi) this.viGlass(elevated = elevated)
+    else this.then(if (elevated) Modifier.shadow(10.dp, RoundedCornerShape(0.dp), clip = false) else Modifier)
         .background(spec.panel)
         .then(
             if (spec.gta) Modifier
@@ -127,6 +155,12 @@ fun Modifier.skinPanel(spec: SkinSpec, elevated: Boolean = true): Modifier =
                 }
         )
 
+/**
+ * Room around a bottom sheet: GTA V's and Red Dead's run edge to edge; GTA VI's float off the
+ * edges like its top card, rounded all round.
+ */
+fun Modifier.sheetFloat(spec: SkinSpec): Modifier = if (spec.vi) this.padding(start = 12.dp, end = 12.dp, bottom = 12.dp) else this
+
 @Composable
 fun SkinPanel(spec: SkinSpec, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
   Column(modifier.skinPanel(spec), content = content)
@@ -139,8 +173,22 @@ fun SkinRoundButton(spec: SkinSpec, icon: GameIcon, onClick: () -> Unit, modifie
       modifier
           .size(52.dp)
           .shadow(8.dp, CircleShape, clip = false)
-          .background(if (spec.gta) Color(0xE6000000) else Rdr.OffBlack, CircleShape)
-          .then(if (spec.gta) Modifier else Modifier.border(1.5.dp, Rdr.Grey.copy(alpha = 0.7f), CircleShape))
+          .background(
+              when (spec.skin) {
+                Skin.GTA -> Color(0xE6000000)
+                Skin.GTA6 -> Vi.Glass
+                Skin.RDR -> Rdr.OffBlack
+              },
+              CircleShape,
+          )
+          .then(
+              when (spec.skin) {
+                Skin.GTA -> Modifier
+                Skin.GTA6 -> Modifier.border(1.dp, Vi.Hairline, CircleShape)
+                Skin.RDR -> Modifier.border(1.5.dp, Rdr.Grey.copy(alpha = 0.7f), CircleShape)
+              }
+          )
+          .clip(CircleShape)
           .clickable(onClick = onClick),
       contentAlignment = Alignment.Center,
   ) {
@@ -148,24 +196,30 @@ fun SkinRoundButton(spec: SkinSpec, icon: GameIcon, onClick: () -> Unit, modifie
   }
 }
 
-/** Primary action (Directions, Start): the theme's route colour. */
+/** Primary action (Directions, Start): the theme's route colour. GTA VI's pink takes dark text. */
 @Composable
 fun SkinPrimaryButton(spec: SkinSpec, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: GameIcon? = null) {
+  val ink = if (spec.vi) Vi.Ink else Color.White
   Row(
       modifier
           .height(50.dp)
-          .background(spec.accent)
-          .then(if (spec.gta) Modifier else Modifier.border(1.5.dp, Rdr.White.copy(alpha = 0.8f)))
+          .then(
+              when (spec.skin) {
+                Skin.GTA -> Modifier.background(spec.accent)
+                Skin.GTA6 -> Modifier.clip(RoundedCornerShape(12.dp)).background(spec.accent)
+                Skin.RDR -> Modifier.background(spec.accent).border(1.5.dp, Rdr.White.copy(alpha = 0.8f))
+              }
+          )
           .clickable(onClick = onClick)
           .padding(horizontal = 18.dp),
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.Center,
   ) {
     icon?.let {
-      GameIconView(it, Color.White, Modifier.size(22.dp))
+      GameIconView(it, ink, Modifier.size(22.dp))
       Spacer(Modifier.width(8.dp))
     }
-    SkinText(spec.title(label), spec.title, if (spec.gta) 18.sp else 21.sp, Color.White, spacing = if (spec.gta) 0.sp else 1.sp)
+    SkinText(spec.title(label), spec.title, spec.titleSize(if (spec.vi) 20.sp else 18.sp, 21.sp), ink, spacing = spec.titleSpacing)
   }
 }
 
@@ -174,8 +228,13 @@ fun SkinSecondaryButton(spec: SkinSpec, label: String, onClick: () -> Unit, modi
   Row(
       modifier
           .height(50.dp)
-          .background(if (spec.gta) Color(0x26FFFFFF) else Color(0x33000000))
-          .border(1.dp, spec.fg.copy(alpha = if (spec.gta) 0.25f else 0.6f))
+          .then(
+              when (spec.skin) {
+                Skin.GTA -> Modifier.background(Color(0x26FFFFFF)).border(1.dp, spec.fg.copy(alpha = 0.25f))
+                Skin.GTA6 -> Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0x1FFFFFFF)).border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(12.dp))
+                Skin.RDR -> Modifier.background(Color(0x33000000)).border(1.dp, spec.fg.copy(alpha = 0.6f))
+              }
+          )
           .clickable(onClick = onClick)
           .padding(horizontal = 16.dp),
       verticalAlignment = Alignment.CenterVertically,
@@ -185,13 +244,14 @@ fun SkinSecondaryButton(spec: SkinSpec, label: String, onClick: () -> Unit, modi
       GameIconView(it, spec.fg, Modifier.size(22.dp))
       Spacer(Modifier.width(8.dp))
     }
-    SkinText(spec.title(label), spec.title, if (spec.gta) 17.sp else 20.sp, spec.fg, spacing = if (spec.gta) 0.sp else 1.sp)
+    SkinText(spec.title(label), spec.title, spec.titleSize(if (spec.vi) 19.sp else 17.sp, 20.sp), spec.fg, spacing = spec.titleSpacing)
   }
 }
 
 /**
  * A list row (search results, saved places). The highlighted row takes the game's menu cursor:
- * GTA's white bar with black text, or Red Dead's rough off-white frame.
+ * GTA V's white bar with black text, Red Dead's rough off-white frame, or GTA VI's raised glass
+ * with a pink edge.
  */
 @Composable
 fun SkinRow(
@@ -211,6 +271,8 @@ fun SkinRow(
           .then(
               when {
                 highlighted && spec.gta -> Modifier.background(Gta.RowSelected)
+                highlighted && spec.vi ->
+                    Modifier.background(Vi.GlassRaised).drawBehind { drawRect(Vi.Pink, size = Size(3.dp.toPx(), size.height)) }
                 highlighted -> Modifier.background(Color(0x40000000)).border(1.5.dp, Rdr.White.copy(alpha = 0.9f))
                 else -> Modifier
               }
@@ -231,12 +293,18 @@ fun SkinRow(
   }
 }
 
-/** Divider between rows: a hairline for GTA, an engraved rule with a diamond for Red Dead. */
+/**
+ * Divider between rows: a hairline for GTA (inset on GTA VI's glass), an engraved rule with a
+ * diamond for Red Dead.
+ */
 @Composable
 fun SkinDivider(spec: SkinSpec, modifier: Modifier = Modifier) {
-  Canvas(modifier.fillMaxWidth().height(if (spec.gta) 1.dp else 9.dp)) {
+  Canvas(modifier.fillMaxWidth().height(if (spec.rdr) 9.dp else 1.dp)) {
     val y = size.height / 2f
-    if (spec.gta) {
+    if (spec.vi) {
+      val inset = 14.dp.toPx()
+      drawLine(Color(0x1FFFFFFF), Offset(inset, y), Offset(size.width - inset, y), strokeWidth = 1.dp.toPx())
+    } else if (spec.gta) {
       drawLine(Color(0x33FFFFFF), Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
     } else {
       drawLine(Rdr.Grey.copy(alpha = 0.45f), Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
@@ -254,16 +322,20 @@ fun SkinDivider(spec: SkinSpec, modifier: Modifier = Modifier) {
 fun SkinChip(spec: SkinSpec, label: String, icon: GameIcon, onClick: () -> Unit) {
   Row(
       Modifier.height(38.dp)
-          .shadow(6.dp, RoundedCornerShape(if (spec.gta) 0.dp else 2.dp), clip = false)
-          .background(spec.panel)
-          .then(if (spec.gta) Modifier else Modifier.border(1.dp, Rdr.Grey.copy(alpha = 0.5f)))
+          .then(
+              when (spec.skin) {
+                Skin.GTA -> Modifier.shadow(6.dp, RoundedCornerShape(0.dp), clip = false).background(spec.panel)
+                Skin.GTA6 -> Modifier.viGlass(corner = 19.dp)
+                Skin.RDR -> Modifier.shadow(6.dp, RoundedCornerShape(2.dp), clip = false).background(spec.panel).border(1.dp, Rdr.Grey.copy(alpha = 0.5f))
+              }
+          )
           .clickable(onClick = onClick)
-          .padding(horizontal = 12.dp),
+          .padding(horizontal = if (spec.vi) 14.dp else 12.dp),
       verticalAlignment = Alignment.CenterVertically,
   ) {
     GameIconView(icon, spec.fg, Modifier.size(18.dp))
     Spacer(Modifier.width(7.dp))
-    SkinText(spec.title(label), spec.title, if (spec.gta) 15.sp else 17.sp, spec.fg, spacing = if (spec.gta) 0.sp else 1.sp)
+    SkinText(spec.title(label), spec.title, spec.titleSize(if (spec.vi) 17.sp else 15.sp, 17.sp), spec.fg, spacing = spec.titleSpacing)
   }
 }
 

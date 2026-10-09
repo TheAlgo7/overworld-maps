@@ -2,12 +2,15 @@
 
 Each theme has two sheets of 12 finished signs (10, 20 ... 120 km/h): normal, and red for when
 the driver is over the limit. Every sign is cut out as is, number and all, into
-android/app/src/main/res/drawable-nodpi/limit_{gta,rdr}_<limit>{,_over}.png.
+android/app/src/main/res/drawable-nodpi/limit_{gta,rdr,gta6}_<limit>{,_over}.png.
 
 For limits the sheets don't have (25, 65...), the app draws the number itself on a blank sign made
 here from the art (limit_blank_{gta,rdr}{,_over}.png): the "10" sign with its number painted out,
 labels and ring kept. The number's size and centre are measured from the art and printed, so the
 app places odd limits exactly where the art puts its numbers.
+
+The GTA VI sheets (a white number over a pink "km/h" on a dark disc) are trimmed to their circle,
+which drops the odd speck left around the edge where the background was cut away.
 
 Run: python tools/make_limit_signs.py   (needs Pillow, numpy, scipy)
 """
@@ -28,11 +31,14 @@ SHEETS = {
     "gta_over": "GTA V-inspired design - Red borders.png",
     "rdr": "RDR 2 -inspired design.png",
     "rdr_over": "RDR 2 -inspired design - red borders.png",
+    "gta6": "GTA VI-inspired design.png",
+    "gta6_over": "GTA VI-inspired design - Red borders.png",
 }
 
 
-def signs(sheet: Path) -> list[np.ndarray]:
-    """The 12 signs on a sheet, in reading order, each centred on a transparent SIZE square."""
+def signs(sheet: Path, round_cut: bool = False) -> list[np.ndarray]:
+    """The 12 signs on a sheet, in reading order, each centred on a transparent SIZE square.
+    [round_cut]: clear everything outside the sign's circle."""
     rgba = np.asarray(Image.open(sheet).convert("RGBA"))
     labels, _ = ndimage.label(rgba[..., 3] > 128)
     boxes = [b for b in ndimage.find_objects(labels) if b[1].stop - b[1].start > 200]
@@ -42,6 +48,13 @@ def signs(sheet: Path) -> list[np.ndarray]:
     out = []
     for ys, xs in boxes:
         cell = rgba[ys, xs]
+        if round_cut:
+            cell = cell.copy()
+            h, w = cell.shape[:2]
+            yy, xx = np.mgrid[0:h, 0:w]
+            # Soft edge one pixel wide just outside the circle the sign fills.
+            r = np.hypot(yy - (h - 1) / 2, xx - (w - 1) / 2) - max(h, w) / 2
+            cell[..., 3] = (cell[..., 3] * np.clip(1 - r, 0, 1)).astype(np.uint8)
         side = max(cell.shape[:2])
         square = Image.new("RGBA", (side, side), (0, 0, 0, 0))
         square.paste(Image.fromarray(cell, "RGBA"), ((side - cell.shape[1]) // 2, (side - cell.shape[0]) // 2))
@@ -55,10 +68,13 @@ def number_box(sign: np.ndarray, theme: str) -> tuple[float, float, float, float
     h, w = lum.shape
     yy, xx = np.mgrid[0:h, 0:w]
     r = np.hypot(yy - h / 2, xx - w / 2) / (w / 2)
-    bright = (lum > 150) & (sign[..., 3] > 200) & (r < (0.66 if theme == "gta" else 0.70))
+    bright = (lum > 150) & (sign[..., 3] > 200) & (r < (0.66 if theme.startswith("gta") else 0.70))
     # GTA: skip the small grey LIMIT / KM/H labels (the number is pure white, the labels grey).
     if theme == "gta":
         bright &= lum > 215
+    # GTA VI: skip the pink "km/h" (the number is white in all three channels).
+    if theme == "gta6":
+        bright &= sign[..., :3].min(-1) > 200
     labels, n = ndimage.label(bright)
     sizes = ndimage.sum(np.ones_like(labels), labels, range(1, n + 1))
     keep = np.isin(labels, [i + 1 for i, s in enumerate(sizes) if s > 40])
@@ -87,7 +103,7 @@ for old in OUT.glob("limit_ring_rdr*.png"):
 for key, file in SHEETS.items():
     theme, _, state = key.partition("_")
     suffix = "_" + state if state else ""
-    cut = signs(SIGNS / file)
+    cut = signs(SIGNS / file, round_cut=theme == "gta6")
     for limit, img in zip(LIMITS, cut):
         Image.fromarray(img, "RGBA").save(OUT / f"limit_{theme}_{limit}{suffix}.png", optimize=True)
     # Where the art puts two- and three-digit numbers (averaged over the sheet).

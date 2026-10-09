@@ -42,14 +42,19 @@ import androidx.compose.ui.unit.sp
 import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.R
 import com.thealgothrim.overworld.theme.OverworldTheme
+import com.thealgothrim.overworld.theme.Skin
 import com.thealgothrim.overworld.theme.THEMES
 import com.thealgothrim.overworld.ui.rdr.Rdr
+import com.thealgothrim.overworld.ui.vi.Vi
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import com.thealgothrim.overworld.ui.skin.GameIcon
 import com.thealgothrim.overworld.ui.skin.GameIconView
 import com.thealgothrim.overworld.ui.skin.SkinDivider
 import com.thealgothrim.overworld.ui.skin.SkinPanel
 import com.thealgothrim.overworld.ui.skin.SkinSpec
 import com.thealgothrim.overworld.ui.skin.SkinText
+import com.thealgothrim.overworld.ui.skin.sheetFloat
 import com.thealgothrim.overworld.ui.skin.spec
 
 /**
@@ -72,16 +77,18 @@ fun BoxScope.MapLayersSheet(theme: OverworldTheme, onClose: () -> Unit) {
   SkinPanel(
       spec,
       Modifier.align(Alignment.BottomCenter)
+          // GTA VI's sheet floats above the gesture bar; the others reach the screen edge.
+          .then(if (spec.vi) Modifier.windowInsetsPadding(WindowInsets.navigationBars).sheetFloat(spec) else Modifier)
           .fillMaxWidth()
           // GTA panels are see-through; over the locate button and credit that reads as a glitch.
-          .background(Color.Black)
+          .then(if (spec.vi) Modifier.background(Color(0xFF1C1B26), RoundedCornerShape(14.dp)) else Modifier.background(Color.Black))
           .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
   ) {
     // The panel reaches the screen edge; its content stays above the gesture bar.
-    Column(Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {
+    Column(if (spec.vi) Modifier else Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {
     Column(Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
       Row(verticalAlignment = Alignment.CenterVertically) {
-        SkinText(spec.title("Map theme"), spec.title, if (spec.gta) 20.sp else 24.sp, spec.fg, Modifier.weight(1f), spacing = if (spec.gta) 0.sp else 1.sp)
+        SkinText(spec.title("Map theme"), spec.title, spec.titleSize(if (spec.vi) 22.sp else 20.sp, 24.sp), spec.fg, Modifier.weight(1f), spacing = spec.titleSpacing)
         Box(Modifier.size(36.dp).clickable(onClick = onClose), contentAlignment = Alignment.Center) {
           GameIconView(GameIcon.CLOSE, spec.fg, Modifier.size(22.dp))
         }
@@ -93,7 +100,7 @@ fun BoxScope.MapLayersSheet(theme: OverworldTheme, onClose: () -> Unit) {
         }
       }
       Spacer(Modifier.height(18.dp))
-      SkinText(spec.title("Map details"), spec.title, if (spec.gta) 16.sp else 19.sp, spec.sub, spacing = if (spec.gta) 0.sp else 1.sp)
+      SkinText(spec.title("Map details"), spec.title, spec.titleSize(if (spec.vi) 18.sp else 16.sp, 19.sp), spec.sub, spacing = spec.titleSpacing)
       Spacer(Modifier.height(4.dp))
       ToggleRow(
           spec, "Traffic on every road",
@@ -110,6 +117,14 @@ fun BoxScope.MapLayersSheet(theme: OverworldTheme, onClose: () -> Unit) {
           if (live) "Accidents, road works, closures and jams, with alerts ahead." else "Needs a free TomTom key.",
           checked = details.incidents && live, enabled = live,
       ) { store.setDetails(details.copy(incidents = !details.incidents)) }
+      if (theme.buildings3d) {
+        SkinDivider(spec)
+        ToggleRow(
+            spec, "3D buildings",
+            "Buildings stand up like on the GTA VI minimap. Off lays them flat, which is lighter work for the phone.",
+            checked = details.buildings3d,
+        ) { store.setDetails(details.copy(buildings3d = !details.buildings3d)) }
+      }
     }
     }
   }
@@ -118,22 +133,30 @@ fun BoxScope.MapLayersSheet(theme: OverworldTheme, onClose: () -> Unit) {
 @Composable
 private fun ThemeCard(spec: SkinSpec, t: OverworldTheme, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
   val frame = if (selected) spec.accent else spec.fg.copy(alpha = 0.25f)
+  // GTA VI's cards are rounded like the rest of its glass.
+  val shape = RoundedCornerShape(if (spec.vi) 10.dp else 0.dp)
   Column(modifier.clickable(onClick = onClick)) {
-    Box(Modifier.fillMaxWidth().aspectRatio(400f / 260f).border(if (selected) 3.dp else 1.dp, frame)) {
+    Box(Modifier.fillMaxWidth().aspectRatio(400f / 260f).clip(shape).border(if (selected) 3.dp else 1.dp, frame, shape)) {
       Image(
-          painterResource(if (t.id == "rdr2") R.drawable.theme_rdr2 else R.drawable.theme_gta5),
+          painterResource(
+              when (t.skin) {
+                Skin.RDR -> R.drawable.theme_rdr2
+                Skin.GTA6 -> R.drawable.theme_gta6
+                Skin.GTA -> R.drawable.theme_gta5
+              }
+          ),
           contentDescription = t.name,
           contentScale = ContentScale.Crop,
           modifier = Modifier.fillMaxSize().padding(if (selected) 3.dp else 1.dp),
       )
       if (selected) {
-        Box(Modifier.align(Alignment.TopEnd).padding(8.dp).size(26.dp).background(spec.accent), contentAlignment = Alignment.Center) {
-          Tick(Color.White)
+        Box(Modifier.align(Alignment.TopEnd).padding(8.dp).size(26.dp).clip(RoundedCornerShape(if (spec.vi) 8.dp else 0.dp)).background(spec.accent), contentAlignment = Alignment.Center) {
+          Tick(if (spec.vi) Vi.Ink else Color.White)
         }
       }
     }
     Spacer(Modifier.height(6.dp))
-    SkinText(t.name, spec.title, if (spec.gta) 16.sp else 19.sp, if (selected) spec.fg else spec.sub, spacing = if (spec.gta) 0.sp else 1.sp)
+    SkinText(t.name, spec.title, spec.titleSize(if (spec.vi) 18.sp else 16.sp, 19.sp), if (selected) spec.fg else spec.sub, spacing = spec.titleSpacing)
   }
 }
 
@@ -148,11 +171,12 @@ private fun ToggleRow(spec: SkinSpec, title: String, subtitle: String, checked: 
       SkinText(subtitle, spec.body, 13.sp, spec.sub, maxLines = 2)
     }
     Spacer(Modifier.width(12.dp))
+    val box = RoundedCornerShape(if (spec.vi) 7.dp else 0.dp)
     Box(
-        Modifier.size(26.dp).border(2.dp, if (enabled) spec.fg else spec.sub).then(if (checked) Modifier.background(spec.accent) else Modifier),
+        Modifier.size(26.dp).clip(box).border(2.dp, if (enabled) spec.fg else spec.sub, box).then(if (checked) Modifier.background(spec.accent) else Modifier),
         contentAlignment = Alignment.Center,
     ) {
-      if (checked) Tick(Color.White)
+      if (checked) Tick(if (spec.vi) Vi.Ink else Color.White)
     }
   }
 }
@@ -169,9 +193,12 @@ private fun Tick(color: Color) {
 /** The OpenStreetMap credit, fixed in place (MapLibre's own (i) button moved around). */
 @Composable
 fun MapCredit(spec: SkinSpec, modifier: Modifier = Modifier) {
+  // White over GTA V's dark map; dark over Red Dead's paper and GTA VI's pale daytime map.
+  val variant by AppModule.viewModel.mapVariant.collectAsState()
+  val light = when (spec.skin) { Skin.GTA -> true; Skin.RDR -> false; Skin.GTA6 -> variant != null }
   Text(
       "© OpenStreetMap",
-      color = if (spec.gta) Color.White.copy(alpha = 0.55f) else Rdr.OffBlack.copy(alpha = 0.55f),
+      color = if (light) Color.White.copy(alpha = 0.55f) else Rdr.OffBlack.copy(alpha = 0.55f),
       fontSize = 10.sp,
       modifier = modifier.padding(horizontal = 4.dp),
   )

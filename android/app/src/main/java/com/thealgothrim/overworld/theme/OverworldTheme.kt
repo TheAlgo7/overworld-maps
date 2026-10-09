@@ -15,10 +15,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-enum class HudFont { CONDENSED, SERIF, TECH }
+enum class HudFont { CONDENSED, SERIF }
 
-/** Which game's interface the app wears: GTA menus and HUD, or Red Dead's. */
-enum class Skin { GTA, RDR }
+/** Which game's interface the app wears: GTA V's menus and HUD, Red Dead's, or GTA VI's. */
+enum class Skin { GTA, RDR, GTA6 }
+
+/** A time-of-day palette of a theme's map (GTA VI's dusk and night): its own style files. */
+data class MapVariant(val page: Color, val land: Color, val dark: Boolean)
 
 /** One map identity. The values come from prototype/themes.js via tools/export-android.mjs. */
 data class OverworldTheme(
@@ -33,13 +36,14 @@ data class OverworldTheme(
     val routeLine: Color,
     val routeCasing: Color,
     val routeGlow: Color?,
-    val puckFill: Color,
-    /** Player marker shape: "chevron", "radar" (GTA V two-tone arrow) or "teardrop" (RDR2). */
-    val puckShape: String,
-    /** Right half of the GTA V radar arrow; null draws a single fill. */
-    val puckShade: Color?,
-    val puckStroke: Color,
-    /** Waypoint marker shape: "diamond", "quatrefoil" (GTA V) or "crossring" (RDR2). */
+    /** Metres over which the route fades in ahead of the arrow (GTA VI); 0 starts it solid. */
+    val routeFade: Double,
+    /**
+     * GTA VI's route has a brighter edge each side, [routeCasing] in colour and this share of the
+     * route's width; 0 draws the casing as a classic outline around the line.
+     */
+    val routeEdge: Float,
+    /** Waypoint marker shape: "diamond", "quatrefoil" (GTA V), "crossring" (RDR2) or "dot" (GTA VI). */
     val blipShape: String,
     val blipFill: Color,
     val blipCenter: Color,
@@ -53,9 +57,25 @@ data class OverworldTheme(
     val carCard: Color,
     val page: Color,
     val paperOverlay: Boolean,
+    /** Time-of-day palettes by name ("dusk", "night"); the base palette is the day. */
+    val variants: Map<String, MapVariant>,
+    /** The map raises its buildings (GTA VI); the Layers sheet can lay them flat. */
+    val buildings3d: Boolean,
 ) {
-  /** The phone style, or the calmer car cut (wider roads, no texture or glow, fewer labels). */
-  fun styleAsset(car: Boolean) = "styles/$id${if (car) "-car" else ""}.json"
+  /**
+   * The phone style, or the calmer car cut (wider roads, no texture or glow, fewer labels), in the
+   * palette for [variant] when the theme has one.
+   */
+  fun styleAsset(car: Boolean, variant: String? = null): String {
+    val v = variant?.takeIf { it in variants }
+    return "styles/$id${v?.let { "-$it" }.orEmpty()}${if (car) "-car" else ""}.json"
+  }
+
+  /** Whether the map is dark in [variant] (light text over it, not dark). */
+  fun isDark(variant: String?) = variant?.let { variants[it]?.dark } ?: dark
+
+  /** What shows behind the map while it loads, in [variant]. */
+  fun pageFor(variant: String?) = variant?.let { variants[it]?.page } ?: page
 
   fun display(text: String) = if (uppercase) text.uppercase() else text
 }
@@ -65,17 +85,13 @@ val HudFont.family: FontFamily
       when (this) {
         HudFont.CONDENSED -> GameFonts.condensed
         HudFont.SERIF -> GameFonts.lino
-        HudFont.TECH ->
-            FontFamily(
-                Font(R.font.chakra_petch_semibold_italic, FontWeight.SemiBold, FontStyle.Italic)
-            )
       }
 
 val HudFont.weight: FontWeight
   get() = if (this == HudFont.SERIF) FontWeight.Normal else FontWeight.SemiBold
 
 val HudFont.style: FontStyle
-  get() = if (this == HudFont.TECH) FontStyle.Italic else FontStyle.Normal
+  get() = FontStyle.Normal
 
 /** Plain UI text around the map. */
 val UiFont =
@@ -85,7 +101,30 @@ val UiFont =
         Font(R.font.barlow_semibold, FontWeight.SemiBold),
     )
 
-data class MapDetails(val traffic: Boolean, val signals: Boolean, val incidents: Boolean)
+/**
+ * Map details the Layers sheet switches. [buildings3d]: raised buildings in themes that have them
+ * (GTA VI); off draws them flat, which is lighter work for the phone.
+ */
+data class MapDetails(val traffic: Boolean, val signals: Boolean, val incidents: Boolean, val buildings3d: Boolean = true)
+
+/** The time-of-day setting for themes with day, dusk and night palettes. */
+enum class MapTime(val label: String) {
+  AUTO("Auto"),
+  DAY("Day"),
+  DUSK("Dusk"),
+  NIGHT("Night");
+
+  /** The palette to use, given what the sun says ([bySun]): null is the day palette. */
+  fun variant(bySun: String?): String? =
+      when (this) {
+        AUTO -> bySun
+        DAY -> null
+        DUSK -> "dusk"
+        NIGHT -> "night"
+      }
+
+  fun next() = entries[(ordinal + 1) % entries.size]
+}
 
 /** The selected theme, shared by the phone and the Android Auto screen. */
 class ThemeStore(context: Context) {
@@ -115,11 +154,22 @@ class ThemeStore(context: Context) {
     prefs.edit { putBoolean(KEY_CAR_HUD, on) }
   }
 
+  private val _mapTime =
+      MutableStateFlow(runCatching { MapTime.valueOf(prefs.getString(KEY_MAP_TIME, null) ?: "") }.getOrDefault(MapTime.AUTO))
+  /** Which time-of-day palette themes like GTA VI use: by the sun, or held at one. */
+  val mapTime: StateFlow<MapTime> = _mapTime.asStateFlow()
+
+  fun setMapTime(time: MapTime) {
+    _mapTime.value = time
+    prefs.edit { putString(KEY_MAP_TIME, time.name) }
+  }
+
   private val _details = MutableStateFlow(
       MapDetails(
           traffic = prefs.getBoolean("detail_traffic", false),
           signals = prefs.getBoolean("detail_signals", true),
           incidents = prefs.getBoolean("detail_incidents", true),
+          buildings3d = prefs.getBoolean("detail_buildings3d", true),
       )
   )
   /** Map details, like Google Maps' layers: live traffic, traffic lights and incidents. */
@@ -131,12 +181,14 @@ class ThemeStore(context: Context) {
       putBoolean("detail_traffic", d.traffic)
       putBoolean("detail_signals", d.signals)
       putBoolean("detail_incidents", d.incidents)
+      putBoolean("detail_buildings3d", d.buildings3d)
     }
   }
 
   companion object {
     private const val KEY = "theme"
     private const val KEY_CAR_HUD = "car_game_hud"
+    private const val KEY_MAP_TIME = "map_time"
 
     /** Ids before the 2026-09-28 rename. */
     private val LEGACY = mapOf("metro" to "gta5", "frontier" to "rdr2", "vice" to "gta6")
@@ -158,18 +210,45 @@ object StyleCache {
   /**
    * [trafficTiles]: TomTom flow tiles URL. When set, a live-traffic layer is added above the roads
    * and below the route: amber where roads are slower than usual, red where they are jammed, in
-   * tones that suit the theme.
+   * tones that suit the theme. [variant]: the time-of-day palette (see MapTime), if the theme has it.
+   * [flat]: draw the theme's raised buildings flat (the Layers sheet's 3D buildings switch).
    */
-  fun json(context: Context, theme: OverworldTheme, car: Boolean, trafficTiles: String? = null): String {
-    val asset = theme.styleAsset(car)
+  fun json(
+      context: Context,
+      theme: OverworldTheme,
+      car: Boolean,
+      trafficTiles: String? = null,
+      variant: String? = null,
+      flat: Boolean = false,
+  ): String {
+    val asset = theme.styleAsset(car, variant)
     val base =
         cache.getOrPut(asset) {
           val json = context.assets.open(asset).bufferedReader().use { it.readText() }
           val localSprite = runCatching { context.assets.list("sprites-local")?.isNotEmpty() == true }.getOrDefault(false)
           if (localSprite) json.replace("asset://sprites/overworld", "asset://sprites-local/overworld") else json
         }
-    if (trafficTiles == null) return base
-    return cache.getOrPut("$asset+traffic") { withTraffic(base, theme, car, trafficTiles) }
+    val flatten = flat && theme.buildings3d
+    val laid = if (flatten) cache.getOrPut("$asset+flat") { flatBuildings(base) } else base
+    if (trafficTiles == null) return laid
+    return cache.getOrPut("$asset${if (flatten) "+flat" else ""}+traffic") { withTraffic(laid, theme, car, trafficTiles) }
+  }
+
+  /** The style without its raised buildings: the flat footprints stay at every zoom instead. */
+  private fun flatBuildings(style: String): String {
+    val root = JSONObject(style)
+    val layers = root.getJSONArray("layers")
+    val out = JSONArray()
+    for (i in 0 until layers.length()) {
+      val layer = layers.getJSONObject(i)
+      when (layer.optString("id")) {
+        "building-3d" -> continue
+        "building" -> layer.remove("maxzoom")
+      }
+      out.put(layer)
+    }
+    root.put("layers", out)
+    return root.toString()
   }
 
   private fun withTraffic(style: String, theme: OverworldTheme, car: Boolean, tiles: String): String {

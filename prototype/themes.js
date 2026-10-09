@@ -46,10 +46,12 @@
         route: { line: "#a44cf2", casing: "#a44cf2", glow: null },
         // Shop blips: the game's white pictograms (T-shirt, scissors, spray gun...). No food or hotels:
         // the GTA map only marks shops and services you can use.
-        pois: { prefix: "gta-", minzoom: 15, size: 1,
+        // Small, as on the game's radar: about two thirds of the player marker.
+        pois: { prefix: "gta-", minzoom: 15, size: 0.72,
           only: ["bar", "doctor", "pharmacy", "bank", "barber", "clothes", "repair", "store", "fuel", "police", "theatre"] },
       },
-      // Radar arrow (radar_centre): white left half, #b3b3b3 right half, black outline.
+      // Radar arrow (radar_centre): white left half, #b3b3b3 right half, black outline. The app
+      // draws Gaurav's own drawing of it (tools/blips/); these colours are the web preview's.
       // Waypoint (radar_waypoint): four pointed petals in the waypoint colour, dark ring centre.
       marker: { fill: "#ffffff", shade: "#b3b3b3", stroke: "#000000", shape: "radar" },
       blip: { shape: "quatrefoil", fill: "#a44cf2", center: "#3a3a3a", stroke: "#000000" },
@@ -91,7 +93,8 @@
         patterns: { wood: "hatch", park: "stipple" }, patternsInCar: true, railDotsInCar: true,
         glow: null,
         roadLabels: false,
-        pois: true,
+        // The game's black-disc blips, small as on its map.
+        pois: { prefix: "poi-", size: 0.68 },
         // Android map lettering (bundled SDF glyphs, see tools/make_glyphs.py). The web preview
         // falls back to OpenFreeMap's Noto fonts below.
         fonts: { place: "RalewayBlack", city: "MerriweatherBlack", water: "CrimsonBoldItalic", pencil: "HomemadeApple" },
@@ -102,7 +105,8 @@
         },
         route: { line: "#cc0000", casing: "#7a0e1d", glow: null },
       },
-      // blip_code_center: off-white teardrop with a ring; blip_code_waypoint: red X through a ring.
+      // blip_code_center: off-white teardrop with a ring (the app's is Gaurav's teardrop with the
+      // game's ring, tools/make_pucks.py); blip_code_waypoint: red X through a ring.
       marker: { fill: "#d5d3d2", stroke: "#1b1a1a", shape: "teardrop" },
       blip: { shape: "crossring", fill: "#cc0000", center: "#cc0000", stroke: "#1b1a1a" },
       hud: {
@@ -113,47 +117,119 @@
       overlay: "paper",
     },
 
+    // GTA VI. Measured 2026-10-09 from Rockstar's official "An Extended Look" (the 4K download
+    // from rockstargames.com/VI): a sat-nav style minimap lit by the time of day. Pale warm-grey
+    // ground and broad lighter roads, raised cool-grey buildings, grey-teal water, no names, and
+    // one pink route and waypoint (#FB74A5, the same in every frame). At golden hour the same map
+    // goes dim and warm; at night it turns violet slate over near-black water. The app picks the
+    // palette from the sun ("variants" below).
     gta6: {
       id: "gta6",
-      skin: "gta",
-      // Paused 2026-09-28: GTA VI's real map UI isn't public yet, so there's nothing to match.
-      // Remove this line to bring it back in the web preview and the app.
-      paused: true,
+      skin: "gta6",
       name: "GTA VI",
-      blurb: "Night-navy land, sand boulevards, cyan water, one coral route. The beach-city night drive.",
-      page: "#0b1520",
-      dark: true,
+      blurb: "Pale sat-nav streets, raised buildings, one pink route. The Leonida minimap, turning violet at night.",
+      page: "#bcb4af",
+      dark: false,
       map: {
-        land: "#152737", residential: "#182c3e", industrial: "#1a2f42",
-        park: "#123a3a", wood: "#103535", grass: "#123a3a", sand: "#4a4536",
-        water: "#114a5e", waterway: "#114a5e",
-        waterLine: "#55c5d6", waterLineBlur: 3, waterLineOpacity: 0.6,
-        building: "#1d3448", buildingLine: null,
-        rail: "#2e4a60",
+        land: "#beb6b1", residential: "#beb6b1", industrial: "#b9b4b0",
+        park: "#8e9c8b", wood: "#879784", grass: "#93a190", sand: "#cec3b4",
+        water: "#739ba2", waterway: "#739ba2",
+        building: "#aeafb7", buildingLine: null,
+        // Raised blocks: real heights where OpenStreetMap has them, a low default where it doesn't.
+        buildings3d: { color: "#aeafb7", opacity: 0.94, heightScale: 1, minHeight: 4, maxHeight: 40 },
+        light: { color: "#ffffff", intensity: 0.42 },
+        rail: "#a3a0a0",
+        // Roads are wide surfaces, a shade lighter than the ground, with no outlines.
+        roadScale: 1.6,
         roads: {
-          motorway: { fill: "#eed3a3", casing: "#152737" },
-          major: { fill: "#d6bd92", casing: "#152737" },
-          mid: { fill: "#6f8aa0", casing: null },
-          minor: { fill: "#3a5268", casing: null },
-          service: { fill: "#2f4559", casing: null },
+          motorway: { fill: "#d4cbc6", casing: null },
+          major: { fill: "#d2c9c4", casing: null },
+          mid: { fill: "#cfc7c2", casing: null },
+          minor: { fill: "#ccc4bf", casing: null },
+          service: { fill: "#c6beb9", casing: null },
         },
-        glow: { groups: ["motorway", "major"], opacity: 0.28, blur: 6, spread: 3.2 },
+        // White dashed lane dividers along highways, like the minimap's multi-lane decks.
+        laneDashes: { color: "#ebe5e1", groups: ["motorway", "major"] },
+        glow: null,
+        labels: false,
         label: {
-          road: "#f7f5ef", roadHalo: "#152737", roadFont: "Noto Sans Regular",
-          place: "#f7f5ef", placeHalo: "#152737", placeFont: "Noto Sans Bold", placeSpacing: 0.18, upper: true,
-          water: "#8fe1ec", waterHalo: "#114a5e",
+          road: "#3a3640", roadHalo: "#d2c9c4", roadFont: "Noto Sans Regular",
+          place: "#2e2a33", placeHalo: "#beb6b1", placeFont: "Noto Sans Bold", placeSpacing: 0.08, upper: true,
+          water: "#2f5560", waterHalo: "#739ba2",
         },
-        route: { line: "#f46f98", casing: "#3a0f22", glow: "#f46f98" },
+        // A flat pink ribbon (#FB74A5) with a thin brighter pink edge each side (#FFA5D4, about a
+        // tenth of its width), the same by day, at golden hour and at night; it fades in just
+        // ahead of the arrow.
+        route: { line: "#fb74a5", casing: "#ffa5d4", edge: 0.1, glow: null, fade: 130 },
       },
-      marker: { fill: "#f7f5ef", stroke: "#55c5d6" },
+      variants: {
+        // Golden hour: the minimap dims and warms; roads keep their lead over the ground.
+        dusk: {
+          page: "#6e6c68",
+          dark: true,
+          map: {
+            land: "#6f6d69", residential: "#6f6d69", industrial: "#6b6a68",
+            park: "#5b6759", wood: "#566355", grass: "#5f6b5d", sand: "#7e7666",
+            water: "#2f5867", waterway: "#2f5867",
+            building: "#5d6370",
+            buildings3d: { color: "#5f6573", opacity: 0.94, heightScale: 1, minHeight: 4, maxHeight: 40 },
+            light: { color: "#fff0e2", intensity: 0.38 },
+            rail: "#5c5a58",
+            roads: {
+              motorway: { fill: "#857f6e", casing: null },
+              major: { fill: "#83806f", casing: null },
+              mid: { fill: "#7f7c72", casing: null },
+              minor: { fill: "#7b7a74", casing: null },
+              service: { fill: "#74736e", casing: null },
+            },
+            laneDashes: { color: "#a39d8c", groups: ["motorway", "major"] },
+          },
+        },
+        // Night: violet slate ground and roads, near-black navy water.
+        night: {
+          page: "#1f1e2a",
+          dark: true,
+          map: {
+            land: "#312c38", residential: "#312c38", industrial: "#2e2a36",
+            park: "#283130", wood: "#252d2c", grass: "#2a3332", sand: "#3a3540",
+            water: "#0d1120", waterway: "#0d1120",
+            building: "#3c3546",
+            buildings3d: { color: "#41394c", opacity: 0.95, heightScale: 1, minHeight: 4, maxHeight: 40 },
+            light: { color: "#ddd4ee", intensity: 0.3 },
+            rail: "#4a4552",
+            roads: {
+              motorway: { fill: "#4c4556", casing: null },
+              major: { fill: "#4a4353", casing: null },
+              mid: { fill: "#46404f", casing: null },
+              minor: { fill: "#433d4b", casing: null },
+              service: { fill: "#3d3845", casing: null },
+            },
+            laneDashes: { color: "#625b6e", groups: ["motorway", "major"] },
+          },
+        },
+      },
+      // The official minimap's player: a white arrow on a dark disc with a black rim, flat on the
+      // screen (the app draws Gaurav's drawing of it, tools/blips/). Waypoint: a pink dot.
+      marker: { fill: "#ffffff", shade: "#c9c9cc", stroke: "#000000", shape: "disc" },
+      blip: { shape: "dot", fill: "#fb74a5", center: "#fb74a5", stroke: "#2a0f1c" },
       hud: {
-        bg: "rgba(16,31,45,0.88)", fg: "#f7f5ef", sub: "#a9c6d3", accent: "#f46f98", good: "#55c5d6",
-        border: "rgba(85,197,214,0.45)", font: "'Chakra Petch', sans-serif", fontKey: "tech", weight: 600, upper: true,
-        card: "#a63d65",
+        // Dark slate glass, like the mission HUD's boxes; mint for good news (the ally blip).
+        bg: "rgba(28,27,38,0.86)", fg: "#f1f3f7", sub: "#a1a6b4", accent: "#fb74a5", good: "#4be3c4",
+        border: "rgba(255,255,255,0.14)", font: "'Barlow Condensed', sans-serif", fontKey: "condensed", weight: 600, upper: true,
+        card: "#7a2d52",
       },
       overlay: null,
     },
   };
+
+  /** The theme's map palette for a time-of-day variant ("dusk", "night"), or its base palette. */
+  function paletteFor(theme, variant) {
+    const v = variant && theme.variants && theme.variants[variant];
+    if (!v) return theme.map;
+    const m = Object.assign({}, theme.map, v.map);
+    m.roads = Object.assign({}, theme.map.roads, v.map.roads);
+    return m;
+  }
 
   // Road groups over OpenMapTiles transportation classes, drawn bottom to top.
   const GROUPS = [
@@ -213,7 +289,7 @@
 
   function buildStyle(theme, opts) {
     const car = !!(opts && opts.car);
-    const m = theme.map;
+    const m = paletteFor(theme, opts && opts.variant);
     const L = m.label;
     const labelScale = car ? 1.18 : 1;
     const text = (s) => (L.upper ? ["upcase", s] : s);
@@ -289,8 +365,10 @@
 
     layers.push({
       id: "building", type: "fill", source: "omt", "source-layer": "building", minzoom: 14,
+      // Raised buildings take over from the flat footprints as they grow (see building-3d).
+      ...(m.buildings3d ? { maxzoom: 16 } : {}),
       paint: Object.assign(
-        { "fill-color": m.building, "fill-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0, 15, car ? 0.6 : 0.9] },
+        { "fill-color": m.building, "fill-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0, 15, car && !m.buildings3d ? 0.6 : 0.9] },
         m.buildingLine ? { "fill-outline-color": m.buildingLine } : {}
       ),
     });
@@ -339,7 +417,41 @@
     }
     layers.push(...roadLayers(m, car, "tunnel"));
     layers.push(...roadLayers(m, car, null));
+    if (m.laneDashes) {
+      // Lane dividers down the middle of each carriageway (OpenStreetMap draws dual carriageways
+      // as one line per direction, so the middle of the line is between its lanes).
+      const classes = GROUPS.filter((g) => m.laneDashes.groups.includes(g.key)).flatMap((g) => g.classes);
+      layers.push({
+        id: "lane-dashes", type: "line", source: "omt", "source-layer": "transportation", minzoom: 15,
+        filter: ["all", ["match", ["get", "class"], classes, true, false], ["match", ["get", "brunnel"], ["tunnel"], false, true]],
+        layout: { "line-join": "round" },
+        paint: {
+          "line-color": m.laneDashes.color,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 15, 0.8, 18, 2.2],
+          "line-dasharray": [3, 3],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 15, 0, 15.6, 0.9],
+        },
+      });
+    }
     layers.push(...roadLayers(m, car, "bridge"));
+    if (m.buildings3d) {
+      // GTA VI's minimap raises its buildings. Heights come from OpenStreetMap (render_height,
+      // 5 m where nothing is tagged), capped so towers don't wall off the view, and grown in
+      // from zoom 14.5 to 16.
+      const B = m.buildings3d;
+      const height = ["min", B.maxHeight, ["max", B.minHeight, ["*", B.heightScale, ["coalesce", ["get", "render_height"], 5]]]];
+      layers.push({
+        id: "building-3d", type: "fill-extrusion", source: "omt", "source-layer": "building", minzoom: 14.5,
+        filter: ["!=", ["get", "hide_3d"], true],
+        paint: {
+          "fill-extrusion-color": B.color,
+          "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 14.5, 0, 16, height],
+          "fill-extrusion-base": ["interpolate", ["linear"], ["zoom"], 14.5, 0, 16, ["*", B.heightScale, ["coalesce", ["get", "render_min_height"], 0]]],
+          "fill-extrusion-opacity": B.opacity,
+          "fill-extrusion-vertical-gradient": false,
+        },
+      });
+    }
 
     // Route: remaining part of the trip. The app updates the source while driving.
     const R = m.route;
@@ -349,10 +461,14 @@
         paint: { "line-color": R.glow, "line-opacity": 0.45, "line-blur": 8, "line-width": ["interpolate", ["linear"], ["zoom"], 10, 10, 18, 34] },
       });
     }
-    layers.push({
-      id: "route-casing", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": R.casing, "line-width": ["interpolate", ["linear"], ["zoom"], 10, car ? 7 : 5.5, 18, car ? 22 : 18] },
-    });
+    if (R.casing) {
+      // A thin edge of R.edge of the width each side (GTA VI), or a classic outline.
+      const casing = R.edge ? [(car ? 4.5 : 3.5) / (1 - 2 * R.edge), (car ? 15 : 12) / (1 - 2 * R.edge)] : [car ? 7 : 5.5, car ? 22 : 18];
+      layers.push({
+        id: "route-casing", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": R.casing, "line-width": ["interpolate", ["linear"], ["zoom"], 10, casing[0], 18, casing[1]] },
+      });
+    }
     layers.push({
       id: "route-line", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" },
       paint: { "line-color": R.line, "line-width": ["interpolate", ["linear"], ["zoom"], 10, car ? 4.5 : 3.5, 18, car ? 15 : 12] },
@@ -470,9 +586,9 @@
       for (const l of layers.slice(firstLabel)) if (l.id !== "poi-blips") l.layout = Object.assign({}, l.layout, { visibility: "none" });
     }
 
-    return {
+    const style = {
       version: 8,
-      name: `Overworld ${theme.name}${car ? " (car)" : ""}`,
+      name: `Overworld ${theme.name}${opts && opts.variant ? ` ${opts.variant}` : ""}${car ? " (car)" : ""}`,
       glyphs: custom ? opts.glyphs : `${OFM}/fonts/{fontstack}/{range}.pbf`,
       sources: {
         omt: { type: "vector", url: `${OFM}/planet` },
@@ -480,6 +596,9 @@
       },
       layers,
     };
+    // Lights the raised buildings: walls a shade darker than roofs, tinted with the time of day.
+    if (m.light) style.light = { anchor: "viewport", color: m.light.color, intensity: m.light.intensity, position: [1.15, 210, 30] };
+    return style;
   }
 
   // Cartographic fill patterns, drawn at runtime (on Android these ship in the sprite).
@@ -501,5 +620,5 @@
     return g.getImageData(0, 0, size, size);
   }
 
-  window.Overworld = { THEMES, buildStyle, patternImage };
+  window.Overworld = { THEMES, buildStyle, patternImage, paletteFor };
 })();

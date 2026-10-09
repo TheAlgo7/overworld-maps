@@ -32,6 +32,7 @@ import com.thealgothrim.overworld.map.OverworldPhoneMap
 import com.thealgothrim.overworld.theme.Skin
 import com.thealgothrim.overworld.ui.gta.GtaBigMessage
 import com.thealgothrim.overworld.ui.rdr.RdrBigMessage
+import com.thealgothrim.overworld.ui.vi.ViBigMessage
 import com.thealgothrim.overworld.ui.skin.spec
 import kotlin.math.abs
 import kotlin.math.pow
@@ -58,6 +59,7 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
   val saved by AppModule.saved.state.collectAsState()
   val testDrive by viewModel.testDrive.collectAsState()
   val area by viewModel.area.collectAsState()
+  val variant by viewModel.mapVariant.collectAsState()
   val cameraOptions = navigationCameraOptions()
   val mapState = rememberOverworldMapState(cameraOptions)
   val scope = rememberCoroutineScope()
@@ -124,8 +126,9 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
       (m / step).roundToInt() * step
     }
   }
-  LaunchedEffect(spec.gta) {
-    if (!spec.gta) return@LaunchedEffect
+  // The GTA pause maps name the area at the map's centre (GtaMapCorner); Red Dead's doesn't.
+  LaunchedEffect(spec.rdr) {
+    if (spec.rdr) return@LaunchedEffect
     var looked: Pair<GeographicCoordinate, Double>? = null
     snapshotFlow { mapState.cameraState.position }
         .collectLatest { p ->
@@ -151,7 +154,7 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
     } else mapState.recenter(isNavigating = true)
   }
 
-  Box(Modifier.fillMaxSize().background(theme.page)) {
+  Box(Modifier.fillMaxSize().background(theme.pageFor(variant))) {
     OverworldPhoneMap(
         theme = theme,
         uiState = uiState,
@@ -224,10 +227,10 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
     }
 
     val arrivedVisible = arrivedAt != null
-    if (theme.skin == Skin.GTA) {
-      GtaBigMessage(arrivedVisible, "ARRIVED", arrivedAt.orEmpty(), Modifier.align(Alignment.Center))
-    } else {
-      RdrBigMessage(arrivedVisible, "ARRIVED", arrivedAt.orEmpty(), Modifier.align(Alignment.Center))
+    when (theme.skin) {
+      Skin.GTA -> GtaBigMessage(arrivedVisible, "ARRIVED", arrivedAt.orEmpty(), Modifier.align(Alignment.Center))
+      Skin.GTA6 -> ViBigMessage(arrivedVisible, "Arrived", arrivedAt.orEmpty(), Modifier.align(Alignment.Center))
+      Skin.RDR -> RdrBigMessage(arrivedVisible, "ARRIVED", arrivedAt.orEmpty(), Modifier.align(Alignment.Center))
     }
 
     if (settingsOpen) {

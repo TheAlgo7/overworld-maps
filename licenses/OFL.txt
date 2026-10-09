@@ -3,7 +3,7 @@ or as MapLibre glyph ranges built from them in android/app/src/main/assets/glyph
 Each is licensed under the SIL Open Font License, Version 1.1, copied below.
 
 Barlow, Barlow Condensed: Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow)
-Chakra Petch: Copyright 2018 The Chakra Petch Project Authors (https://github.com/m4rc1e/Chakra-Petch.git)
+Inter: Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter). Shipped as a Latin subset.
 IM FELL English: Copyright (c) 2007 Igino Marini (www.iginomarini.com), with Reserved Font Name "IM FELL English Roman"
 Passion One: Copyright (c) 2011 Fontstage (info@fontstage.com), with Reserved Font Name "Passion"
 Crimson Text: Copyright 2010 The Crimson Text Project Authors (https://github.com/googlefonts/Crimson)

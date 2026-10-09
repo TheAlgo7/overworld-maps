@@ -16,6 +16,8 @@ import uniffi.ferrostar.GeographicCoordinate
  *   adb shell am broadcast -n com.thealgothrim.overworld.debug/com.thealgothrim.overworld.DebugDriveReceiver \
  *     -a com.thealgothrim.overworld.DEBUG_DRIVE --es theme rdr2
  *   adb shell am broadcast -n com.thealgothrim.overworld.debug/com.thealgothrim.overworld.DebugDriveReceiver \
+ *     -a com.thealgothrim.overworld.DEBUG_DRIVE --es theme gta6 --es time night
+ *   adb shell am broadcast -n com.thealgothrim.overworld.debug/com.thealgothrim.overworld.DebugDriveReceiver \
  *     -a com.thealgothrim.overworld.DEBUG_STOP
  *
  * A place by name, the way Android Auto's "navigate to India Gate" arrives:
@@ -125,11 +127,17 @@ class DebugDriveReceiver : BroadcastReceiver() {
                 "simulating=${AppModule.locationProvider.isSimulating.value} testDrive=${vm.testDrive.value} " +
                 "extras: ${extras.signals.size} signals, ${extras.incidents.size} incidents, " +
                 "${extras.trafficSpans.size} traffic spans, eta=${extras.eta?.travelSeconds} " +
-                "voice=${AppModule.ttsObserver.tts != null} muted=${AppModule.ttsObserver.isMuted}",
+                "voice=${AppModule.ttsObserver.tts != null} muted=${AppModule.ttsObserver.isMuted} " +
+                "theme=${AppModule.themeStore.theme.value.id} fade=${AppModule.themeStore.theme.value.routeFade} " +
+                "palette=${vm.mapVariant.value ?: "day"} left=${ui.progress?.distanceRemaining?.toInt()} m",
         )
       }
       "com.thealgothrim.overworld.DEBUG_DRIVE" -> {
         intent.getStringExtra("theme")?.let { AppModule.themeStore.select(it) }
+        // --es time night (auto, day, dusk, night): GTA VI's time-of-day palette, as in Settings.
+        intent.getStringExtra("time")?.let { t ->
+          runCatching { com.thealgothrim.overworld.theme.MapTime.valueOf(t.uppercase()) }.getOrNull()?.let { AppModule.themeStore.setMapTime(it) }
+        }
         if (intent.hasExtra("lat") && intent.hasExtra("lng")) {
           val to = GeographicCoordinate(intent.getFloatExtra("lat", 0f).toDouble(), intent.getFloatExtra("lng", 0f).toDouble())
           // --ez test false: a real trip from the phone's GPS position instead of a simulated one.

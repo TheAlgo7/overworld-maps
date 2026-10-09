@@ -66,7 +66,11 @@ fun OverworldPhoneMap(
   val details by AppModule.themeStore.details.collectAsState()
   val extras by AppModule.viewModel.extras.collectAsState()
   val trafficTiles = AppModule.traffic.flowTilesUrl?.takeIf { details.traffic }
-  val baseStyle = remember(theme.id, trafficTiles) { BaseStyle.Json(StyleCache.json(context, theme, car = false, trafficTiles)) }
+  // GTA VI changes palette with the time of day (day, golden hour, night); the others keep a single palette.
+  val variant by AppModule.viewModel.mapVariant.collectAsState()
+  val flat = !details.buildings3d
+  val baseStyle =
+      remember(theme.id, trafficTiles, variant, flat) { BaseStyle.Json(StyleCache.json(context, theme, car = false, trafficTiles, variant, flat)) }
   NavigationMapView(
       baseStyle = baseStyle,
       navigationMapState = mapState,
@@ -162,9 +166,10 @@ fun OverworldCarMap(
             }
       }
       // OpenStreetMap attribution stays readable on the car screen too.
+      val variant by AppModule.viewModel.mapVariant.collectAsState()
       Text(
           text = "© OpenStreetMap contributors",
-          color = if (theme.dark) Color.White.copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.6f),
+          color = if (theme.isDark(variant)) Color.White.copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.6f),
           fontSize = 10.sp,
           modifier = Modifier.align(Alignment.BottomEnd),
       )
@@ -188,7 +193,10 @@ private fun CarMapView(
     previewRoute: List<GeographicCoordinate>?,
 ) {
   val context = LocalContext.current
-  val baseStyle = remember(theme.id, trafficTiles) { BaseStyle.Json(StyleCache.json(context, theme, car = true, trafficTiles)) }
+  val variant by AppModule.viewModel.mapVariant.collectAsState()
+  val flat = !details.buildings3d
+  val baseStyle =
+      remember(theme.id, trafficTiles, variant, flat) { BaseStyle.Json(StyleCache.json(context, theme, car = true, trafficTiles, variant, flat)) }
   NavigationMapView(
       baseStyle = baseStyle,
       navigationMapState = mapState,
@@ -232,19 +240,22 @@ private fun OverworldLayers(
   }
   RoadFeatureLayers(visibleFeatures(extras, details), theme, car)
   val end = trip?.lastOrNull() ?: previewRoute?.lastOrNull() ?: pin
-  end?.let { ThemedDestination(it, theme) }
+  end?.let { ThemedDestination(it, theme, car) }
   // Stops added on the way (Nearby during a trip) get the waypoint marker too.
   (state.tripState as? TripState.Navigating)?.remainingWaypoints?.dropLast(1)?.forEachIndexed { i, stop ->
-    ThemedDestination(stop.coordinate, theme, id = "ow-stop-$i")
+    ThemedDestination(stop.coordinate, theme, car, id = "ow-stop-$i")
   }
   shown?.let { ThemedPuck(it, theme, car, style) }
 }
 
-/** Traffic on the trip's route, trimmed behind the arrow every 25 m (it composes only then). */
+/**
+ * Traffic on the trip's route, trimmed behind the arrow every 25 m (it composes only then). Where
+ * the route fades in ahead of the arrow (GTA VI), the traffic colours start after the fade.
+ */
 @Composable
 @MaplibreComposable
 private fun TripTrafficLine(trip: List<GeographicCoordinate>, spans: List<TrafficSpan>, shown: DisplayedPosition, theme: OverworldTheme, car: Boolean) {
-  val from by remember(shown) { derivedStateOf { ((shown.along ?: 0.0) / 25).toInt() * 25.0 } }
+  val from by remember(shown, theme.routeFade) { derivedStateOf { (((shown.along ?: 0.0) + theme.routeFade) / 25).toInt() * 25.0 } }
   RouteTrafficLine(trip, spans, theme, car, from = from, id = "ow-trip-traffic")
 }
 

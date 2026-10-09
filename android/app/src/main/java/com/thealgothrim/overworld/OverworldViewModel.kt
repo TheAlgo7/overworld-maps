@@ -15,6 +15,9 @@ import com.stadiamaps.ferrostar.core.isNavigating
 import com.stadiamaps.ferrostar.core.location.toUserLocation
 import com.thealgothrim.overworld.search.Nearby
 import com.thealgothrim.overworld.search.Place
+import com.thealgothrim.overworld.theme.Daylight
+import com.thealgothrim.overworld.theme.MapTime
+import com.thealgothrim.overworld.theme.OverworldTheme
 import com.thealgothrim.overworld.traffic.CameraChime
 import com.thealgothrim.overworld.traffic.angleBetween
 import com.thealgothrim.overworld.traffic.bearing
@@ -41,6 +44,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -421,6 +425,29 @@ class OverworldViewModel :
               GeographicCoordinate(it[0], it[1])
             }
             ?: AppModule.defaultStart
+
+  /**
+   * The map's time-of-day palette for themes that have one (GTA VI): "dusk", "night", or null for
+   * the day palette. Follows the sun where the phone is, checked every minute, unless held at one
+   * in Settings. Declared after [startPoint]'s saved fix, which it reads while starting up.
+   */
+  val mapVariant: StateFlow<String?> =
+      combine(AppModule.themeStore.theme, AppModule.themeStore.mapTime, everyMinute()) { theme, time, _ -> variantFor(theme, time) }
+          .distinctUntilChanged()
+          .stateIn(viewModelScope, SharingStarted.Eagerly, variantFor(AppModule.themeStore.theme.value, AppModule.themeStore.mapTime.value))
+
+  private fun variantFor(theme: OverworldTheme, time: MapTime): String? {
+    if (theme.variants.isEmpty()) return null
+    val at = startPoint
+    return time.variant(Daylight.phase(Daylight.sunAltitude(at.lat, at.lng, Instant.now())))
+  }
+
+  private fun everyMinute() = flow {
+    while (true) {
+      emit(Unit)
+      delay(60_000)
+    }
+  }
 
   private fun rememberFix(at: GeographicCoordinate) {
     val last = savedFix

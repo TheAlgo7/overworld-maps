@@ -43,6 +43,9 @@ import com.thealgothrim.overworld.theme.OverworldTheme
 import com.thealgothrim.overworld.ui.gta.GtaText
 import com.thealgothrim.overworld.ui.rdr.Rdr
 import com.thealgothrim.overworld.ui.rdr.RdrText
+import com.thealgothrim.overworld.ui.vi.Vi
+import com.thealgothrim.overworld.ui.vi.ViText
+import com.thealgothrim.overworld.ui.vi.ViTurnTile
 import com.thealgothrim.overworld.ui.skin.GameIcon
 import com.thealgothrim.overworld.ui.skin.SkinPrimaryButton
 import com.thealgothrim.overworld.ui.skin.SkinSecondaryButton
@@ -79,9 +82,14 @@ fun BoxScope.CarGameHud(
       // The "Where to?" card comes back when the car stops.
       moving -> {
         hazard?.let { HazardRow(spec, it, Modifier.align(Alignment.TopStart).widthIn(max = 420.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 14.dp), textSize = 20.sp, icon = 40.dp) }
-        Row(Modifier.align(Alignment.BottomStart), verticalAlignment = Alignment.Bottom) {
-          SpeedBadge(spec, uiState, Modifier.padding(start = 4.dp), big = true)
-          CameraButton(spec, Modifier.padding(start = 12.dp))
+        val speed = rememberSpeedNow(uiState)
+        // The speedometer in the same corner as on a trip, over the limit sign and + Cam.
+        Column(Modifier.align(Alignment.BottomStart)) {
+          Speedometer(spec, speed, Modifier.padding(start = 6.dp, bottom = 8.dp))
+          Row(verticalAlignment = Alignment.Bottom) {
+            SpeedLimitSign(spec, speed, Modifier.padding(end = 12.dp))
+            CameraButton(spec, Modifier)
+          }
         }
       }
       else -> IdleCard(spec, Modifier.align(Alignment.TopStart))
@@ -93,18 +101,22 @@ fun BoxScope.CarGameHud(
 
   Row(Modifier.align(Alignment.BottomStart).fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
     val left = remaining ?: progress.durationRemaining
-    // The speed and limit sign stand on the time card's bottom line, like everything along the
-    // bottom of the car screen.
+    val speed = rememberSpeedNow(uiState)
+    // The speedometer stands on the time card, like a car's speedometer over its trip computer;
+    // the limit sign and + Cam stand on the card's bottom line, like everything along the bottom.
     Row(verticalAlignment = Alignment.Bottom) {
-      Column(
-          Modifier.widthIn(min = 230.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 14.dp),
-          verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
-      ) {
-        SkinText(formatDuration(left).uppercase(), spec.big, 34.sp, spec.trafficColor(extras.eta))
-        SkinText("${arrivalClock(left)}  ·  ${formatDistance(progress.distanceRemaining)}", spec.body, 19.sp, spec.fg)
-        trafficNote(extras.eta)?.let { SkinText(it, spec.body, 16.sp, spec.sub) }
+      Column {
+        Speedometer(spec, speed, Modifier.padding(start = 6.dp, bottom = 8.dp))
+        Column(
+            Modifier.widthIn(min = 230.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
+        ) {
+          SkinText(formatDuration(left).uppercase(), spec.big, 34.sp, spec.trafficColor(extras.eta))
+          SkinText("${arrivalClock(left)}  ·  ${formatDistance(progress.distanceRemaining)}", spec.body, 19.sp, spec.fg)
+          trafficNote(extras.eta)?.let { SkinText(it, spec.body, 16.sp, spec.sub) }
+        }
       }
-      SpeedBadge(spec, uiState, Modifier.padding(start = 12.dp), big = true)
+      SpeedLimitSign(spec, speed, Modifier.padding(start = 12.dp))
       CameraButton(spec, Modifier.padding(start = 12.dp))
     }
     Box(Modifier.weight(1f).padding(bottom = 6.dp), contentAlignment = Alignment.Center) {
@@ -112,6 +124,9 @@ fun BoxScope.CarGameHud(
       if (street.isNotEmpty()) {
         if (spec.gta) {
           GtaText(street.joinToString("  |  "), 24.sp, align = TextAlign.Center)
+        } else if (spec.vi) {
+          // GTA VI: the minimap's clean grotesk, white with a thin dark edge.
+          ViText(street.joinToString("  ·  "), 22.sp, font = Vi.sansSemiBold, align = TextAlign.Center)
         } else {
           RdrText(
               street.joinToString(",  ").uppercase(),
@@ -139,22 +154,32 @@ private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardA
 
   // One card, like Google's: the turn, then "Then", then any alert, split by hairlines.
   Column(modifier.width(IntrinsicSize.Max).widthIn(min = 300.dp, max = 420.dp).skinPanel(spec)) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-      Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) { content?.let { TurnArrow(it, uiState.remainingSteps?.firstOrNull()?.drivingSide, spec.fg) } }
+    Row(Modifier.fillMaxWidth().padding(horizontal = if (spec.vi) 16.dp else 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+      if (spec.vi) {
+        // GTA VI: the arrow, dark on a pink tile in the route's colour.
+        content?.let { ViTurnTile(it, uiState.remainingSteps?.firstOrNull()?.drivingSide, 66.dp) }
+      } else {
+        Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) { content?.let { TurnArrow(it, uiState.remainingSteps?.firstOrNull()?.drivingSide, spec.fg) } }
+      }
       Spacer(Modifier.width(18.dp))
-      Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+      Column(verticalArrangement = Arrangement.spacedBy(if (spec.vi) 2.dp else 4.dp)) {
         if (uiState.isCalculatingNewRoute == true) {
-          SkinText(spec.title("Rerouting"), spec.title, 28.sp, spec.fg)
+          SkinText(spec.title("Rerouting"), spec.title, if (spec.vi) 30.sp else 28.sp, spec.fg, spacing = if (spec.vi) spec.titleSpacing else androidx.compose.ui.unit.TextUnit.Unspecified)
         } else {
-          if (spec.gta) GtaText(distance, 40.sp) else RdrText(distance.uppercase(), 40.sp, spacing = 1.sp)
-          if (road.isNotEmpty()) SkinText(road, spec.body, 22.sp, spec.fg, maxLines = 2)
+          when {
+            spec.gta -> GtaText(distance, 40.sp)
+            // The mission HUD's bold condensed numbers.
+            spec.vi -> SkinText(distance, Vi.condensedBold, 42.sp, spec.fg, spacing = 0.4.sp)
+            else -> RdrText(distance.uppercase(), 40.sp, spacing = 1.sp)
+          }
+          if (road.isNotEmpty()) SkinText(road, if (spec.vi) Vi.sansMedium else spec.body, 22.sp, spec.fg, maxLines = 2)
         }
       }
     }
     then?.let {
       CardDivider(spec)
       Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        SkinText("Then", spec.body, 18.sp, spec.sub)
+        if (spec.vi) SkinText("THEN", Vi.condensed, 19.sp, spec.sub, spacing = 0.8.sp) else SkinText("Then", spec.body, 18.sp, spec.sub)
         Spacer(Modifier.width(10.dp))
         Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) { TurnArrow(it, next?.drivingSide, spec.fg) }
       }
@@ -198,7 +223,7 @@ private fun CameraButton(spec: SkinSpec, modifier: Modifier) {
   ) {
     GameIconView(GameIcon.CAMERA, spec.fg, Modifier.size(28.dp))
     Spacer(Modifier.width(8.dp))
-    SkinText(spec.title(if (saved) "Saved" else "+ Cam"), spec.title, 18.sp, if (saved) spec.good else spec.fg)
+    SkinText(spec.title(if (saved) "Saved" else "+ Cam"), spec.title, if (spec.vi) 20.sp else 18.sp, if (saved) spec.good else spec.fg, spacing = if (spec.vi) spec.titleSpacing else androidx.compose.ui.unit.TextUnit.Unspecified)
   }
 }
 
@@ -213,7 +238,7 @@ private fun PreviewCard(spec: SkinSpec, preview: RoutePreview, extras: RouteExtr
     }
   }
   Column(modifier.width(420.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 16.dp)) {
-    SkinText(spec.title(preview.place.name), spec.title, if (spec.gta) 28.sp else 30.sp, spec.fg, maxLines = 2, spacing = if (spec.gta) 0.sp else 1.sp)
+    SkinText(spec.title(preview.place.name), spec.title, spec.titleSize(if (spec.vi) 31.sp else 28.sp, 30.sp), spec.fg, maxLines = 2, spacing = spec.titleSpacing)
     Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.Bottom) {
       SkinText(formatDuration(seconds).uppercase(), spec.big, 32.sp, spec.trafficColor(extras.eta))
       Spacer(Modifier.width(10.dp))
@@ -245,7 +270,7 @@ private fun PreviewCard(spec: SkinSpec, preview: RoutePreview, extras: RouteExtr
 @Composable
 private fun IdleCard(spec: SkinSpec, modifier: Modifier) {
   Column(modifier.widthIn(max = 420.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 16.dp)) {
-    SkinText(spec.title("Where to?"), spec.title, if (spec.gta) 28.sp else 32.sp, spec.fg, spacing = if (spec.gta) 0.sp else 1.sp)
+    SkinText(spec.title("Where to?"), spec.title, spec.titleSize(if (spec.vi) 32.sp else 28.sp, 32.sp), spec.fg, spacing = spec.titleSpacing)
     SkinText("Tap Search or Nearby, or pick a place on your phone.", spec.body, 19.sp, spec.sub, Modifier.padding(top = 4.dp), maxLines = 2)
   }
 }

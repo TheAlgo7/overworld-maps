@@ -47,7 +47,8 @@ fun RoadFeatureLayers(features: List<RoadFeature>, theme: OverworldTheme, car: B
             }
         )
     val painter = remember(theme.id, kind) { RoadFeaturePainter(kind, theme.skin) }
-    val size = iconSize(if (kind == RoadFeatureKind.TRAFFIC_LIGHT) (if (car) 22.dp else 18.dp) else if (car) 34.dp else 30.dp)
+    // Smaller than the player marker, like the blips beside it on a game's radar.
+    val size = iconSize(if (kind == RoadFeatureKind.TRAFFIC_LIGHT) (if (car) 15.dp else 13.dp) else if (car) 24.dp else 21.dp)
     SymbolLayer(
         id = "ow-feature-${kind.name.lowercase()}",
         source = source,
@@ -64,6 +65,16 @@ fun RoadFeatureLayers(features: List<RoadFeature>, theme: OverworldTheme, car: B
 /** Badge colours for incident kinds, per game. */
 private fun badge(kind: RoadFeatureKind, skin: Skin): Pair<Color, Color> {
   // GTA V: HUD colours. Red Dead: dark discs like its blips, with the rim telling the kind.
+  // GTA VI: deep discs with white glyphs, like the wanted HUD's witness badges.
+  if (skin == Skin.GTA6) {
+    return when (kind) {
+      RoadFeatureKind.ACCIDENT, RoadFeatureKind.CLOSURE -> Color(0xFF8B1E1E) to Color.White
+      RoadFeatureKind.ROADWORKS, RoadFeatureKind.LANE_CLOSED, RoadFeatureKind.HAZARD -> Color(0xFF8A6212) to Color.White
+      RoadFeatureKind.JAM, RoadFeatureKind.BROKEN_DOWN -> Color(0xFF8E4313) to Color.White
+      RoadFeatureKind.FLOODING -> Color(0xFF1E4A8B) to Color.White
+      RoadFeatureKind.SPEED_CAMERA, RoadFeatureKind.TRAFFIC_LIGHT -> Color(0xFF26242F) to Color.White
+    }
+  }
   return if (skin == Skin.GTA) {
     when (kind) {
       RoadFeatureKind.ACCIDENT, RoadFeatureKind.CLOSURE -> Color(0xFFEB2427) to Color.White
@@ -79,7 +90,7 @@ private fun badge(kind: RoadFeatureKind, skin: Skin): Pair<Color, Color> {
 }
 
 private fun rim(kind: RoadFeatureKind, skin: Skin): Color =
-    if (skin == Skin.GTA) Color.Black
+    if (skin == Skin.GTA || skin == Skin.GTA6) Color.Black
     else
         when (kind) {
           RoadFeatureKind.ACCIDENT, RoadFeatureKind.CLOSURE -> Color(0xFFCC0000)

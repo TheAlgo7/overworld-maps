@@ -3,6 +3,8 @@ package com.thealgothrim.overworld.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -27,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.stadiamaps.ferrostar.core.NavigationUiState
@@ -38,6 +41,10 @@ import com.thealgothrim.overworld.ui.gta.GtaHudBars
 import com.thealgothrim.overworld.ui.gta.GtaText
 import com.thealgothrim.overworld.ui.rdr.Rdr
 import com.thealgothrim.overworld.ui.rdr.RdrText
+import com.thealgothrim.overworld.ui.vi.Vi
+import com.thealgothrim.overworld.ui.vi.ViProgress
+import com.thealgothrim.overworld.ui.vi.ViText
+import com.thealgothrim.overworld.ui.vi.ViTurnTile
 import com.thealgothrim.overworld.ui.skin.GameIcon
 import com.thealgothrim.overworld.ui.skin.GameIconView
 import com.thealgothrim.overworld.ui.skin.SkinDivider
@@ -47,6 +54,7 @@ import com.thealgothrim.overworld.ui.skin.SkinRoundButton
 import com.thealgothrim.overworld.ui.skin.SkinRow
 import com.thealgothrim.overworld.ui.skin.SkinSpec
 import com.thealgothrim.overworld.ui.skin.SkinText
+import com.thealgothrim.overworld.ui.skin.sheetFloat
 import com.thealgothrim.overworld.ui.skin.skinPanel
 
 // ================================================================ route preview
@@ -73,7 +81,7 @@ fun BoxScope.PreviewLayer(
     }
   }
 
-  SkinPanel(spec, Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+  SkinPanel(spec, Modifier.align(Alignment.BottomCenter).sheetFloat(spec).fillMaxWidth()) {
     Column(Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
       // Live-traffic time when TomTom is set up, otherwise the routing engine's estimate.
       val seconds = extras.eta?.travelSeconds ?: preview.durationSeconds
@@ -148,7 +156,7 @@ fun BoxScope.NavigationLayer(
         ) {
           GameIconView(GameIcon.NAVIGATE, spec.fg, Modifier.size(18.dp))
           Spacer(Modifier.width(8.dp))
-          SkinText(spec.title("Re-centre"), spec.title, 16.sp, spec.fg)
+          SkinText(spec.title("Re-centre"), spec.title, if (spec.vi) 18.sp else 16.sp, spec.fg, spacing = if (spec.vi) spec.titleSpacing else TextUnit.Unspecified)
         }
       }
       if (following) {
@@ -158,10 +166,10 @@ fun BoxScope.NavigationLayer(
           val street = listOfNotNull(uiState.currentStepRoadName?.takeIf { it.isNotBlank() }, area)
           Box(Modifier.weight(1f).padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
             if (street.isNotEmpty()) {
-              if (spec.gta) {
-                GtaText(street.joinToString("  |  "), 21.sp, align = TextAlign.Center)
-              } else {
-                RdrText(street.joinToString(",  ").uppercase(), 16.sp, color = Rdr.GreyLight, align = TextAlign.Center, spacing = 1.sp)
+              when {
+                spec.gta -> GtaText(street.joinToString("  |  "), 21.sp, align = TextAlign.Center)
+                spec.vi -> ViText(street.joinToString("  ·  "), 18.sp, font = Vi.sansSemiBold, align = TextAlign.Center)
+                else -> RdrText(street.joinToString(",  ").uppercase(), 16.sp, color = Rdr.GreyLight, align = TextAlign.Center, spacing = 1.sp)
               }
             }
           }
@@ -170,7 +178,7 @@ fun BoxScope.NavigationLayer(
     }
 
     if (progress != null) {
-      SkinPanel(spec, Modifier.fillMaxWidth()) {
+      SkinPanel(spec, Modifier.sheetFloat(spec).fillMaxWidth()) {
         TripProgressBar(spec, uiState)
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
           SheetIconButton(spec, GameIcon.CLOSE, onEnd, tint = spec.accent)
@@ -200,7 +208,15 @@ fun BoxScope.NavigationLayer(
 @Composable
 private fun SheetIconButton(spec: SkinSpec, icon: GameIcon, onClick: () -> Unit, tint: Color = spec.fg) {
   Box(
-      Modifier.size(48.dp).background(if (spec.gta) Color(0x26FFFFFF) else Color(0x33000000)).clickable(onClick = onClick),
+      Modifier.size(48.dp)
+          .then(
+              when {
+                spec.vi -> Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0x1FFFFFFF))
+                spec.gta -> Modifier.background(Color(0x26FFFFFF))
+                else -> Modifier.background(Color(0x33000000))
+              }
+          )
+          .clickable(onClick = onClick),
       contentAlignment = Alignment.Center,
   ) {
     GameIconView(icon, tint, Modifier.size(24.dp))
@@ -222,23 +238,32 @@ private fun TurnBanner(spec: SkinSpec, uiState: NavigationUiState, hazard: Hazar
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-      Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
-        content?.let { TurnArrow(it, uiState.remainingSteps?.firstOrNull()?.drivingSide, if (spec.gta) Gta.White else Rdr.White) }
+      if (spec.vi) {
+        // GTA VI: the arrow on a pink tile.
+        content?.let { ViTurnTile(it, uiState.remainingSteps?.firstOrNull()?.drivingSide, 56.dp) }
+      } else {
+        Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
+          content?.let { TurnArrow(it, uiState.remainingSteps?.firstOrNull()?.drivingSide, if (spec.gta) Gta.White else Rdr.White) }
+        }
       }
       Spacer(Modifier.width(14.dp))
       Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         if (uiState.isCalculatingNewRoute == true) {
-          SkinText(spec.title("Rerouting"), spec.title, 26.sp, spec.fg)
+          SkinText(spec.title("Rerouting"), spec.title, 26.sp, spec.fg, spacing = if (spec.vi) spec.titleSpacing else TextUnit.Unspecified)
         } else {
-          if (spec.gta) GtaText(distance, 34.sp) else RdrText(distance.uppercase(), 34.sp, spacing = 1.sp)
-          if (road.isNotEmpty()) SkinText(road, spec.body, 19.sp, spec.fg, maxLines = 2)
+          when {
+            spec.gta -> GtaText(distance, 34.sp)
+            spec.vi -> SkinText(distance, Vi.condensedBold, 34.sp, spec.fg, spacing = 0.4.sp)
+            else -> RdrText(distance.uppercase(), 34.sp, spacing = 1.sp)
+          }
+          if (road.isNotEmpty()) SkinText(road, if (spec.vi) Vi.sansMedium else spec.body, 19.sp, spec.fg, maxLines = 2)
         }
       }
     }
     then?.let {
       CardDivider(spec)
       Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        SkinText("Then", spec.body, 15.sp, spec.sub)
+        if (spec.vi) SkinText("THEN", Vi.condensed, 16.sp, spec.sub, spacing = 0.8.sp) else SkinText("Then", spec.body, 15.sp, spec.sub)
         Spacer(Modifier.width(8.dp))
         Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) { TurnArrow(it, next?.drivingSide, spec.fg) }
       }
@@ -250,13 +275,18 @@ private fun TurnBanner(spec: SkinSpec, uiState: NavigationUiState, hazard: Hazar
   }
 }
 
-/** Trip progress along the top of the sheet: GTA's health/armour bars, or Red Dead's red rule. */
+/**
+ * Trip progress along the top of the sheet: GTA V's health/armour bars, GTA VI's thin pink line,
+ * or Red Dead's red rule.
+ */
 @Composable
 private fun TripProgressBar(spec: SkinSpec, uiState: NavigationUiState) {
   val progress = uiState.progress ?: return
   val routeLength = remember(uiState.routeGeometry) { uiState.routeGeometry?.let(::lengthMeters) ?: 0.0 }
   val done = if (routeLength > 0) (1 - progress.distanceRemaining / routeLength).toFloat().coerceIn(0f, 1f) else 0f
-  if (spec.gta) {
+  if (spec.vi) {
+    ViProgress(done, Modifier.padding(horizontal = 16.dp).padding(top = 12.dp))
+  } else if (spec.gta) {
     val stepLength = uiState.remainingSteps?.firstOrNull()?.distance ?: 0.0
     val turn = if (stepLength > 0) (1 - progress.distanceToNextManeuver / stepLength).toFloat() else 0f
     GtaHudBars(done, turn, Modifier.fillMaxWidth())

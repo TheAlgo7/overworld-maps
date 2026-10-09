@@ -13,6 +13,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -23,6 +27,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import com.thealgothrim.overworld.R
 import com.thealgothrim.overworld.theme.OverworldTheme
 import com.thealgothrim.overworld.theme.Skin
 import kotlinx.serialization.json.buildJsonObject
@@ -48,6 +53,7 @@ import org.maplibre.compose.sources.GeoJsonOptions
 import org.maplibre.compose.sources.Source
 import org.maplibre.compose.sources.rememberGeoJsonSource
 import org.maplibre.compose.util.MaplibreComposable
+import kotlin.math.roundToInt
 import org.maplibre.spatialk.geojson.Feature
 import org.maplibre.spatialk.geojson.FeatureCollection
 import org.maplibre.spatialk.geojson.Point
@@ -87,39 +93,72 @@ private fun widthByZoom(at10: Float, at18: Float) =
  *
  * Two pieces: the far part from [NEAR_METRES] ahead to the end, sent to MapLibre once per
  * [NEAR_METRES] driven, and the short near part from the arrow to there, which follows the arrow
- * every frame.
+ * every frame. GTA VI's route fades in ahead of the arrow: its first [OverworldTheme.routeFade]
+ * metres are a third piece, drawn with a gradient, and the far part starts beyond the fade's reach.
  */
 @Composable
 @MaplibreComposable
 fun ThemedRouteAhead(route: RoutePolyline, shown: DisplayedPosition, theme: OverworldTheme, car: Boolean, style: Any) {
+  val fade = theme.routeFade
   val step by remember(shown) { derivedStateOf { ((shown.along ?: 0.0) / NEAR_METRES).toInt() } }
-  val cut = remember(route, step) { minOf(route.length, (step + 1) * NEAR_METRES) }
+  val cut = remember(route, step, fade) { minOf(route.length, (step + 1) * NEAR_METRES + fade) }
   val far = rememberGeoJsonSource(remember(route, cut) { GeoJsonData.JsonString(lineJson(route.slice(cut, route.length))) })
-  fun nearData(along: Double) = GeoJsonData.JsonString(lineJson(route.slice(along.coerceAtMost(cut), cut)))
-  // The near part is handed to MapLibre straight from the animation, without composing anything.
-  val near =
-      rememberGeoJsonSource(
-          // Also fresh for a new map style: MapLibre gets this again when the style reloads.
-          remember(route, cut, style) { nearData(Snapshot.withoutReadObservation { shown.along } ?: 0.0) },
-          options = GeoJsonOptions(synchronousUpdate = true),
-      )
-  LaunchedEffect(near, route, cut) { snapshotFlow { shown.along ?: 0.0 }.collect { near.setData(nearData(it)) } }
-  routeLayers(listOf(near, far), "ow-trip", theme, car)
+  fun fadeEnd(along: Double) = minOf(along.coerceAtMost(cut) + fade, cut)
+  fun nearData(along: Double) = GeoJsonData.JsonString(lineJson(route.slice(fadeEnd(along), cut)))
+  fun fadeData(along: Double) = GeoJsonData.JsonString(lineJson(route.slice(along.coerceAtMost(cut), fadeEnd(along))))
+  // Also fresh for a new map style: MapLibre gets these again when the style reloads.
+  val startAlong = remember(route, cut, style) { Snapshot.withoutReadObservation { shown.along } ?: 0.0 }
+  // The near pieces are handed to MapLibre straight from the animation, without composing anything.
+  val near = rememberGeoJsonSource(remember(route, cut, style) { nearData(startAlong) }, options = GeoJsonOptions(synchronousUpdate = true))
+  val faded =
+      if (fade > 0) {
+        rememberGeoJsonSource(
+            remember(route, cut, style) { fadeData(startAlong) },
+            // Line metrics give the gradient its 0..1 along the piece.
+            options = GeoJsonOptions(synchronousUpdate = true, lineMetrics = true),
+        )
+      } else null
+  LaunchedEffect(near, faded, route, cut) {
+    snapshotFlow { shown.along ?: 0.0 }
+        .collect {
+          near.setData(nearData(it))
+          faded?.setData(fadeData(it))
+        }
+  }
+  routeLayers(listOf(near, far), "ow-trip", theme, car, faded)
 }
 
 /** One distance for both pieces of the route ahead: 300 m is about 18 s at 60 km/h. */
 private const val NEAR_METRES = 300.0
 
+/** How wide a theme draws its route, as a share of the road. */
+private fun routeWidth(theme: OverworldTheme) =
+    when (theme.skin) {
+      // RDR2 inks its route inside the road, so the road's own ink shows along both edges.
+      Skin.RDR -> 0.72f
+      // GTA VI's ribbon runs down the middle of its broad roads, about a lane and a half wide.
+      Skin.GTA6 -> 0.7f
+      // GTA V's route is as wide as the road.
+      Skin.GTA -> 1f
+    }
+
 /**
  * The themed route line over [sources], all casings under all lines so pieces of one route join
- * without a seam.
+ * without a seam. [faded]: the piece just ahead of the arrow, drawn fading in (GTA VI).
  */
 @Composable
 @MaplibreComposable
-private fun routeLayers(sources: List<Source>, id: String, theme: OverworldTheme, car: Boolean) {
-  // RDR2 inks its route inside the road, so the road's own ink shows along both edges; GTA V's
-  // route is as wide as the road.
-  val k = if (theme.skin == Skin.RDR) 0.72f else 1f
+private fun routeLayers(sources: List<Source>, id: String, theme: OverworldTheme, car: Boolean, faded: Source? = null) {
+  val k = routeWidth(theme)
+  val lineAt10 = (if (car) 4.5f else 3.5f) * k
+  val lineAt18 = (if (car) 15f else 12f) * k
+  val lineWidth = widthByZoom(lineAt10, lineAt18)
+  // GTA VI: a thin brighter edge each side ([OverworldTheme.routeEdge] of the width); the others: a
+  // classic outline. Opaque either way, so the route's pieces join without a seam where they overlap.
+  val edge = theme.routeEdge
+  val casingWidth =
+      if (edge > 0f) widthByZoom(lineAt10 / (1 - 2 * edge), lineAt18 / (1 - 2 * edge))
+      else widthByZoom((if (car) 7f else 5.5f) * k, (if (car) 22f else 18f) * k)
   Anchor.Below(FIRST_LABEL_LAYER) {
     val glow = theme.routeGlow
     if (glow != null && !car) {
@@ -135,28 +174,64 @@ private fun routeLayers(sources: List<Source>, id: String, theme: OverworldTheme
         )
       }
     }
-    sources.forEachIndexed { i, source ->
-      LineLayer(
-          id = "$id-casing-$i",
-          source = source,
-          color = const(theme.routeCasing),
-          width = widthByZoom((if (car) 7f else 5.5f) * k, (if (car) 22f else 18f) * k),
-          cap = const(LineCap.Round),
-          join = const(LineJoin.Round),
-      )
+    if (theme.routeCasing.alpha > 0f) {
+      sources.forEachIndexed { i, source ->
+        LineLayer(
+            id = "$id-casing-$i",
+            source = source,
+            color = const(theme.routeCasing),
+            width = casingWidth,
+            cap = const(LineCap.Round),
+            join = const(LineJoin.Round),
+        )
+      }
+      faded?.let {
+        LineLayer(
+            id = "$id-casing-fade",
+            source = it,
+            gradient = fadeIn(theme.routeCasing),
+            width = casingWidth,
+            cap = const(LineCap.Butt),
+            join = const(LineJoin.Round),
+        )
+      }
     }
     sources.forEachIndexed { i, source ->
       LineLayer(
           id = "$id-line-$i",
           source = source,
           color = const(theme.routeLine),
-          width = widthByZoom((if (car) 4.5f else 3.5f) * k, (if (car) 15f else 12f) * k),
+          width = lineWidth,
           cap = const(LineCap.Round),
+          join = const(LineJoin.Round),
+      )
+    }
+    faded?.let {
+      LineLayer(
+          id = "$id-line-fade",
+          source = it,
+          gradient = fadeIn(theme.routeLine),
+          width = lineWidth,
+          // Square ends: a round cap would poke out solid in front of the arrow.
+          cap = const(LineCap.Butt),
           join = const(LineJoin.Round),
       )
     }
   }
 }
+
+/**
+ * Clear at the arrow to [color] at the end of the piece, easing in like GTA VI's route does just
+ * ahead of the player.
+ */
+private fun fadeIn(color: Color) =
+    interpolate(
+        linear(),
+        feature.lineProgress(),
+        0 to const(color.copy(alpha = 0f)),
+        0.5 to const(color.copy(alpha = color.alpha * 0.45f)),
+        1 to const(color),
+    )
 
 private fun lineJson(points: List<GeographicCoordinate>): String {
   val coords = points.joinToString(",") { "[${it.lng},${it.lat}]" }
@@ -193,7 +268,7 @@ fun RouteTrafficLine(
   val (slow, heavy, closed) =
       if (theme.skin == Skin.RDR) Triple(Color(0xFFD08A1E), Color(0xFF4A0A10), Color(0xFF1E1E1C))
       else Triple(Color(0xFFFFB020), Color(0xFFFF3B30), Color(0xFF8F0E1A))
-  val k = if (theme.skin == Skin.RDR) 0.72f else 1f
+  val k = routeWidth(theme)
   Anchor.Below(FIRST_LABEL_LAYER) {
     LineLayer(
         id = id,
@@ -214,7 +289,13 @@ fun ThemedRouteLine(points: List<GeographicCoordinate>, theme: OverworldTheme, c
   routeLayers(listOf(source), "ow-route", theme, car)
 }
 
-/** The player arrow: a flat chevron lying on the map, pointing along the route. */
+/**
+ * The player marker: Gaurav's drawing of each game's blip (tools/blips/, built by
+ * tools/make_pucks.py), turned to the way the car is heading. It stands flat to the screen like the
+ * games' radar blips, so the tilted 3D map never squashes it, and it is sized against the route the
+ * way the games size theirs (GTA V's arrow is about twice the route's width, GTA VI's disc a little
+ * over three times).
+ */
 @Composable
 @MaplibreComposable
 fun ThemedPuck(shown: DisplayedPosition, theme: OverworldTheme, car: Boolean, style: Any) {
@@ -234,31 +315,41 @@ fun ThemedPuck(shown: DisplayedPosition, theme: OverworldTheme, car: Boolean, st
           options = GeoJsonOptions(synchronousUpdate = true),
       )
   LaunchedEffect(source, shown) { snapshotFlow { shown.location }.collect { source.setData(puckData(it)) } }
-  val painter =
-      remember(theme.id) {
-        when (theme.puckShape) {
-          "teardrop" -> TeardropPainter(theme.puckFill, theme.puckStroke)
-          else -> ChevronPainter(theme.puckFill, theme.puckShade, theme.puckStroke, glow = theme.routeGlow != null)
-        }
-      }
-  val size = iconSize(if (car) 46.dp else 40.dp)
+  val art =
+      ImageBitmap.imageResource(
+          when (theme.skin) {
+            Skin.GTA -> R.drawable.puck_gta5
+            Skin.RDR -> R.drawable.puck_rdr2
+            Skin.GTA6 -> R.drawable.puck_gta6
+          }
+      )
+  val painter = remember(art) { ArtPainter(art) }
+  val size =
+      iconSize(
+          when (theme.skin) {
+            Skin.GTA -> if (car) 28.dp else 24.dp
+            // The teardrop's square has room for its shadow, so it takes a little more.
+            Skin.RDR -> if (car) 31.dp else 27.dp
+            Skin.GTA6 -> if (car) 30.dp else 26.dp
+          }
+      )
   SymbolLayer(
       id = "ow-puck",
       source = source,
       iconImage = image(painter, size = DpSize(size, size), drawAsSdf = false),
       iconAnchor = const(SymbolAnchor.Center),
       iconRotate = feature["bearing"].asNumber(const(0f)),
-      iconPitchAlignment = const(IconPitchAlignment.Map),
+      iconPitchAlignment = const(IconPitchAlignment.Viewport),
       iconRotationAlignment = const(IconRotationAlignment.Map),
       iconAllowOverlap = const(true),
       iconIgnorePlacement = const(true),
   )
 }
 
-/** The waypoint marker: the theme's blip (GTA V four petals, RDR2 crossed ring, or a diamond). */
+/** The waypoint marker: the theme's blip (GTA V four petals, RDR2 crossed ring, GTA VI pink dot, or a diamond). */
 @Composable
 @MaplibreComposable
-fun ThemedDestination(at: GeographicCoordinate, theme: OverworldTheme, id: String = "ow-destination") {
+fun ThemedDestination(at: GeographicCoordinate, theme: OverworldTheme, car: Boolean, id: String = "ow-destination") {
   val source =
       rememberGeoJsonSource(
           remember(at) { GeoJsonData.Features(FeatureCollection(Feature(geometry = Point(at.lng, at.lat), properties = buildJsonObject {}))) }
@@ -268,10 +359,20 @@ fun ThemedDestination(at: GeographicCoordinate, theme: OverworldTheme, id: Strin
         when (theme.blipShape) {
           "quatrefoil" -> QuatrefoilPainter(theme.blipFill, theme.blipCenter, theme.blipStroke)
           "crossring" -> CrossRingPainter(theme.blipFill, theme.blipStroke)
+          "dot" -> DotPainter(theme.blipFill, theme.blipStroke)
           else -> DiamondPainter(theme.blipFill, theme.blipStroke)
         }
       }
-  val size = iconSize(when (theme.blipShape) { "quatrefoil" -> 34.dp; "crossring" -> 38.dp; else -> 30.dp })
+  // About the player marker's size, as the games draw their waypoint blips; GTA VI's dot is smaller.
+  val size =
+      iconSize(
+          when (theme.blipShape) {
+            "quatrefoil" -> if (car) 26.dp else 22.dp
+            "crossring" -> if (car) 28.dp else 24.dp
+            "dot" -> if (car) 20.dp else 17.dp
+            else -> if (car) 24.dp else 20.dp
+          }
+      )
   SymbolLayer(
       id = id,
       source = source,
@@ -281,76 +382,6 @@ fun ThemedDestination(at: GeographicCoordinate, theme: OverworldTheme, id: Strin
       // Map labels under the waypoint step aside instead of printing through it.
       iconIgnorePlacement = const(false),
   )
-}
-
-internal class ChevronPainter(
-    private val fill: Color,
-    private val shade: Color?,
-    private val stroke: Color,
-    private val glow: Boolean,
-) : Painter() {
-  override val intrinsicSize: Size = Size.Unspecified
-
-  override fun DrawScope.onDraw() {
-    if (shade != null) {
-      drawRadarArrow(shade)
-      return
-    }
-    val w = size.width
-    val h = size.height
-    val path =
-        Path().apply {
-          moveTo(w * 0.5f, h * 0.1f)
-          lineTo(w * 0.84f, h * 0.88f)
-          lineTo(w * 0.5f, h * 0.7f)
-          lineTo(w * 0.16f, h * 0.88f)
-          close()
-        }
-    val base = size.minDimension * 0.06f
-    if (glow) {
-      for (i in 3 downTo 1) {
-        drawPath(path, stroke.copy(alpha = 0.16f), style = Stroke(width = base * (1 + i * 1.6f), join = StrokeJoin.Round))
-      }
-    } else {
-      drawPath(path, Color.Black.copy(alpha = 0.25f), style = Stroke(width = base * 2.6f, join = StrokeJoin.Round))
-    }
-    drawPath(path, stroke, style = Stroke(width = base * 1.4f, join = StrokeJoin.Round))
-    drawPath(path, fill)
-  }
-
-  /**
-   * The GTA V radar arrow, traced from its radar_centre sprite: a wide arrowhead with a curved
-   * notch at the back, black outline, white left half and grey right half.
-   */
-  private fun DrawScope.drawRadarArrow(shade: Color) {
-    val s = size.minDimension
-    val ox = (size.width - s) / 2f
-    val oy = (size.height - s) / 2f
-    fun p(x: Float, y: Float) = Offset(ox + x * s, oy + y * s)
-    // Kept inside the canvas by half the outline width so nothing clips.
-    val tip = p(0.5f, 0.08f)
-    val right = p(0.9f, 0.91f)
-    val left = p(0.1f, 0.91f)
-    val notch = p(0.5f, 0.69f)
-    val whole =
-        Path().apply {
-          moveTo(tip.x, tip.y)
-          lineTo(right.x, right.y)
-          p(0.62f, 0.69f).let { quadraticTo(it.x, it.y, notch.x, notch.y) }
-          p(0.38f, 0.69f).let { quadraticTo(it.x, it.y, left.x, left.y) }
-          close()
-        }
-    val rightHalf =
-        Path().apply {
-          moveTo(tip.x, tip.y)
-          lineTo(right.x, right.y)
-          p(0.62f, 0.69f).let { quadraticTo(it.x, it.y, notch.x, notch.y) }
-          close()
-        }
-    drawPath(whole, stroke, style = Stroke(width = s * 0.13f, join = StrokeJoin.Miter, miter = 3f))
-    drawPath(whole, fill)
-    drawPath(rightHalf, shade)
-  }
 }
 
 /**
@@ -393,37 +424,6 @@ internal class QuatrefoilPainter(
 }
 
 /**
- * The RDR2 player pointer, traced from blip_code_center: an off-white teardrop pointing the way you
- * face, with a ring punched through it and a rough dark outline.
- */
-internal class TeardropPainter(private val fill: Color, private val stroke: Color) : Painter() {
-  override val intrinsicSize: Size = Size.Unspecified
-
-  override fun DrawScope.onDraw() {
-    val s = size.minDimension
-    val ox = (size.width - s) / 2f
-    val oy = (size.height - s) / 2f
-    fun p(x: Float, y: Float) = Offset(ox + x * s, oy + y * s)
-    val drop =
-        Path().apply {
-          val tip = p(0.5f, 0.07f)
-          moveTo(tip.x, tip.y)
-          p(0.63f, 0.24f).let { a -> p(0.8f, 0.42f).let { b -> p(0.8f, 0.62f).let { c -> cubicTo(a.x, a.y, b.x, b.y, c.x, c.y) } } }
-          p(0.8f, 0.8f).let { a -> p(0.67f, 0.93f).let { b -> p(0.5f, 0.93f).let { c -> cubicTo(a.x, a.y, b.x, b.y, c.x, c.y) } } }
-          p(0.33f, 0.93f).let { a -> p(0.2f, 0.8f).let { b -> p(0.2f, 0.62f).let { c -> cubicTo(a.x, a.y, b.x, b.y, c.x, c.y) } } }
-          p(0.2f, 0.42f).let { a -> p(0.37f, 0.24f).let { b -> cubicTo(a.x, a.y, b.x, b.y, tip.x, tip.y) } }
-          close()
-        }
-    val hole = p(0.5f, 0.63f)
-    drawPath(drop, Color.Black.copy(alpha = 0.22f), style = Stroke(width = s * 0.2f, join = StrokeJoin.Round))
-    drawPath(drop, stroke, style = Stroke(width = s * 0.1f, join = StrokeJoin.Round))
-    drawPath(drop, fill)
-    drawCircle(stroke, s * 0.13f, hole)
-    drawCircle(fill.copy(alpha = 0f), s * 0.07f, hole, blendMode = androidx.compose.ui.graphics.BlendMode.Clear)
-  }
-}
-
-/**
  * The RDR2 waypoint, traced from blip_code_waypoint: a hand-drawn X struck through a ring, in the
  * waypoint red with a dark edge.
  */
@@ -446,6 +446,43 @@ internal class CrossRingPainter(private val color: Color, private val stroke: Co
     drawCircle(color, ring, c, style = Stroke(width = line))
     drawLine(color, a1, a2, strokeWidth = line, cap = androidx.compose.ui.graphics.StrokeCap.Round)
     drawLine(color, b1, b2, strokeWidth = line, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+  }
+}
+
+/** The GTA VI waypoint, from the official minimap: a pink dot with a thin dark edge. */
+internal class DotPainter(private val fill: Color, private val edge: Color) : Painter() {
+  override val intrinsicSize: Size = Size.Unspecified
+
+  override fun DrawScope.onDraw() {
+    val s = size.minDimension
+    val c = Offset(size.width / 2f, size.height / 2f)
+    drawCircle(Color.Black.copy(alpha = 0.25f), s * 0.48f, c + Offset(0f, s * 0.03f))
+    drawCircle(edge, s * 0.45f, c)
+    drawCircle(fill, s * 0.37f, c)
+  }
+}
+
+/**
+ * A PNG drawn into whatever size MapLibre asks for, keeping its proportions (never stretched) and
+ * centred. It is scaled down in halves first, so its outlines stay clean at the small sizes markers
+ * are drawn at; one straight scale from 192 px left them ragged.
+ */
+internal class ArtPainter(private val art: ImageBitmap) : Painter() {
+  override val intrinsicSize: Size = Size(art.width.toFloat(), art.height.toFloat())
+  private var cached: ImageBitmap? = null
+
+  override fun DrawScope.onDraw() {
+    val fit = minOf(size.width / art.width, size.height / art.height)
+    val w = (art.width * fit).roundToInt().coerceAtLeast(1)
+    val h = (art.height * fit).roundToInt().coerceAtLeast(1)
+    val scaled = cached?.takeIf { it.width == w && it.height == h } ?: downscale(art, w, h).also { cached = it }
+    drawImage(scaled, topLeft = Offset((size.width - w) / 2f, (size.height - h) / 2f))
+  }
+
+  private fun downscale(src: ImageBitmap, w: Int, h: Int): ImageBitmap {
+    var b = src.asAndroidBitmap()
+    while (b.width / 2 >= w && b.height / 2 >= h) b = android.graphics.Bitmap.createScaledBitmap(b, b.width / 2, b.height / 2, true)
+    return android.graphics.Bitmap.createScaledBitmap(b, w, h, true).asImageBitmap()
   }
 }
 

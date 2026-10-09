@@ -53,6 +53,7 @@ import com.thealgothrim.overworld.ui.skin.SkinRow
 import com.thealgothrim.overworld.ui.skin.SkinSecondaryButton
 import com.thealgothrim.overworld.ui.skin.SkinSpec
 import com.thealgothrim.overworld.ui.skin.SkinText
+import com.thealgothrim.overworld.ui.skin.sheetFloat
 import com.thealgothrim.overworld.ui.skin.skinPanel
 import uniffi.ferrostar.GeographicCoordinate
 
@@ -181,7 +182,7 @@ fun BoxScope.BrowseLayer(
     Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
       Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 14.dp, bottom = 14.dp), verticalAlignment = Alignment.Bottom) {
         Column(Modifier.weight(1f)) {
-          if (spec.gta && destination == null && metresPerDp != null) GtaMapCorner(spec, mapArea, metresPerDp, Modifier.padding(bottom = 8.dp))
+          if (!spec.rdr && destination == null && metresPerDp != null) GtaMapCorner(spec, mapArea, metresPerDp, Modifier.padding(bottom = 8.dp))
           MapCredit(spec)
         }
         SkinRoundButton(spec, GameIcon.LOCATE, onLocate)
@@ -261,7 +262,7 @@ private fun SavedList(spec: SkinSpec, saved: SavedState, here: GeographicCoordin
     rows++
   }
   if (saved.recents.isNotEmpty()) {
-    SkinText(spec.title("Recent"), spec.title, if (spec.gta) 14.sp else 16.sp, spec.sub, Modifier.padding(start = 14.dp, top = 14.dp, bottom = 2.dp))
+    SkinText(spec.title("Recent"), spec.title, spec.titleSize(if (spec.vi) 16.sp else 14.sp, 16.sp), spec.sub, Modifier.padding(start = 14.dp, top = 14.dp, bottom = 2.dp), spacing = if (spec.vi) spec.titleSpacing else androidx.compose.ui.unit.TextUnit.Unspecified)
     saved.recents.forEachIndexed { i, p ->
       if (i > 0) SkinDivider(spec)
       SkinRow(spec, p.name, { onChoose(p) }, subtitle = p.detail, icon = GameIcon.RECENT, trailing = away(p))
@@ -285,9 +286,9 @@ private fun PlaceSheet(
 ) {
   var saveMenu by remember(place) { mutableStateOf(false) }
   val store = AppModule.saved
-  SkinPanel(spec, Modifier.fillMaxWidth()) {
+  SkinPanel(spec, Modifier.sheetFloat(spec).fillMaxWidth()) {
     Column(Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
-      SkinText(spec.title(place.name), spec.title, if (spec.gta) 24.sp else 28.sp, spec.fg, maxLines = 2, spacing = if (spec.gta) 0.sp else 1.sp)
+      SkinText(spec.title(place.name), spec.title, spec.titleSize(if (spec.vi) 27.sp else 24.sp, 28.sp), spec.fg, maxLines = 2, spacing = spec.titleSpacing)
       if (place.detail.isNotBlank()) SkinText(place.detail, spec.body, 15.sp, spec.sub, Modifier.padding(top = 2.dp), maxLines = 2)
       val tags =
           listOfNotNull(
