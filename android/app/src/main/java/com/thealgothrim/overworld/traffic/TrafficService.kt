@@ -76,8 +76,16 @@ data class TrafficEta(val travelSeconds: Double, val delaySeconds: Double, val n
  */
 class TrafficService(private val http: OkHttpClient) {
   val tomtomKey: String = BuildConfig.TOMTOM_KEY
+  /** TomTom's key is there: its incidents, map-wide flow layer and fallback route times work. */
   val hasLiveTraffic: Boolean
     get() = tomtomKey.isNotBlank()
+
+  /** Google's time and jams for a route (see OverworldRoutes.routeTraffic); tried before TomTom. */
+  var google: (suspend (List<GeographicCoordinate>) -> RouteTraffic?)? = null
+
+  /** Some source of live time on a route: Google, or TomTom with its key. */
+  val hasRouteTraffic: Boolean
+    get() = google != null || hasLiveTraffic
 
   /** Vector tile URL for TomTom's traffic flow layer, or null without a key. */
   val flowTilesUrl: String?
@@ -251,7 +259,21 @@ class TrafficService(private val http: OkHttpClient) {
    * it and returns the travel time with traffic and the stretches in queues, which the map colours
    * on the route line like Google does. One request covers both.
    */
-  suspend fun routeTraffic(route: List<GeographicCoordinate>): RouteTraffic? =
+  /**
+   * Live time and jams on [route]: Google's when it drives the same road (its times are the ones
+   * people check against), else TomTom's.
+   */
+  suspend fun routeTraffic(route: List<GeographicCoordinate>): RouteTraffic? {
+    if (route.size < 2) return null
+    google?.let { ask -> runCatching { ask(route) }.getOrNull()?.let { return it.also { lastRouteTrafficSource = "Google" } } }
+    return tomtomRouteTraffic(route)?.also { lastRouteTrafficSource = "TomTom" }
+  }
+
+  /** Who answered the last [routeTraffic], for the drive log. */
+  @Volatile var lastRouteTrafficSource: String = "none"
+    private set
+
+  private suspend fun tomtomRouteTraffic(route: List<GeographicCoordinate>): RouteTraffic? =
       withContext(Dispatchers.IO) {
         if (!hasLiveTraffic || route.size < 2) return@withContext null
         val line = RouteLine(route)

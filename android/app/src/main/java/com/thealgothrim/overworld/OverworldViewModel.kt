@@ -608,12 +608,12 @@ class OverworldViewModel :
             }
             val state = navigationUiState.value
             DriveLog.note(
-                "${if (live) "trip" else "preview"} time: TomTom ${DriveLog.minutes(fresh?.eta?.travelSeconds)} for ${"%.1f".format(left / 1000)} km" +
+                "${if (live) "trip" else "preview"} time: ${traffic.lastRouteTrafficSource} ${DriveLog.minutes(fresh?.eta?.travelSeconds)} for ${"%.1f".format(left / 1000)} km" +
                     (if (fresh == null) " (no answer, kept ${DriveLog.minutes(_extras.value.eta?.travelSeconds)})" else "") +
                     ", routing server ${DriveLog.minutes(state.progress?.durationRemaining)}, showing ${DriveLog.minutes(estimateSeconds(state, _extras.value))}" +
                     ", at ${DriveLog.at(state.location?.coordinates)}"
             )
-            if (!live || !traffic.hasLiveTraffic) break
+            if (!live || !traffic.hasRouteTraffic) break
             delay(150_000)
           }
         }

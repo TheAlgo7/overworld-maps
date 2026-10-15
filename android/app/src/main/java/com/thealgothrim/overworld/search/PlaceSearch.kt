@@ -15,6 +15,7 @@ import org.json.JSONArray
 import java.net.URLEncoder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import com.thealgothrim.overworld.routing.GoogleMaps
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -55,7 +56,12 @@ enum class Nearby(val label: String, val tomtom: String, val words: String, val 
  * directly. Places only Google knows (a small church, a friend's house) come in by sharing them
  * from Google Maps; see [fromShared].
  */
-class PlaceSearch(private val http: OkHttpClient, private val tomtomKey: String) {
+class PlaceSearch(
+    private val http: OkHttpClient,
+    private val tomtomKey: String,
+    /** Google's place search when the Settings switch allows it, else null (see routing/GoogleMaps.kt). */
+    private val google: (suspend (String, GeographicCoordinate) -> List<GoogleMaps.GooglePlace>)? = null,
+) {
   private val photon = "https://photon.komoot.io"
 
   suspend fun search(query: String, near: GeographicCoordinate?): List<Place> {
@@ -69,15 +75,20 @@ class PlaceSearch(private val http: OkHttpClient, private val tomtomKey: String)
       // Each source gets a few seconds; a slow one doesn't hold up the other's answers.
       val tomtom = async { withTimeoutOrNull(SOURCE_WAIT) { runCatching { tomtom(q, near) }.onFailure { Log.w(TAG, "TomTom search failed", it) }.getOrNull() } }
       val osm = async { withTimeoutOrNull(SOURCE_WAIT) { runCatching { photonSearch(q, near) }.onFailure { Log.w(TAG, "Photon search failed", it) }.getOrNull() } }
+      val ask = google
+      val goog =
+          if (ask == null) null
+          else async { withTimeoutOrNull(SOURCE_WAIT) { runCatching { googleSearch(ask, q, near) }.onFailure { Log.w(TAG, "Google search failed", it) }.getOrNull() } }
       val t = tomtom.await()
       val o = osm.await()
-      val found = rank(q, t.orEmpty() + o.orEmpty())
+      val g = goog?.await()
+      val found = rank(q, g.orEmpty() + t.orEmpty() + o.orEmpty())
       DriveLog.note(
-          "search \"$q\" near ${DriveLog.at(near)}: TomTom ${t?.size ?: "failed"}, OpenStreetMap ${o?.size ?: "failed"}, " +
+          "search \"$q\" near ${DriveLog.at(near)}: Google ${if (ask == null) "off" else g?.size ?: "failed"}, TomTom ${t?.size ?: "failed"}, OpenStreetMap ${o?.size ?: "failed"}, " +
               "first ${found.take(3).joinToString(" / ") { it.name }}"
       )
       // Only a full answer is kept; a source that failed is asked again next time.
-      if (t != null && o != null) cache.put(key, found)
+      if (t != null && o != null && (ask == null || g != null)) cache.put(key, found)
       found
     }
   }
@@ -176,6 +187,20 @@ class PlaceSearch(private val http: OkHttpClient, private val tomtomKey: String)
   }
 
   // ---------------------------------------------------------------- TomTom
+
+  private suspend fun googleSearch(
+      ask: suspend (String, GeographicCoordinate) -> List<GoogleMaps.GooglePlace>,
+      q: String,
+      near: GeographicCoordinate?,
+  ): List<Candidate> =
+      ask(q, near ?: DELHI).mapIndexed { i, p ->
+        val detail = listOfNotNull(p.category, p.address?.let(::shortAddress)).joinToString(" · ")
+        Candidate(Place(p.name, detail, p.at), PlaceKind.PLACE, tomtom = false, rank = i, metres = near?.let { metres(it, p.at) }, google = true)
+      }
+
+  /** Google's addresses start with the postcode and end with city and PIN; the middle says where. */
+  private fun shortAddress(address: String): String =
+      address.split(", ").filterNot { it.matches(Regex("\\d{6}")) || it.matches(Regex(".* \\d{6}")) }.take(3).joinToString(", ")
 
   private suspend fun tomtom(q: String, near: GeographicCoordinate?): List<Candidate> =
       withContext(Dispatchers.IO) {
@@ -409,6 +434,8 @@ class PlaceSearch(private val http: OkHttpClient, private val tomtomKey: String)
   private companion object {
     const val TAG = "PlaceSearch"
     const val SOURCE_WAIT = 3_500L
+    /** Where Google's search is centred when the phone has no fix yet. */
+    val DELHI = GeographicCoordinate(28.6139, 77.2090)
     /** Enough places along the route that the ones around the car aren't needed. */
     const val MAX_ON_ROUTE = 6
     /** Metres a second, to weigh a place's distance ahead against its detour time. */

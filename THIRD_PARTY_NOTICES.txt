@@ -55,3 +55,13 @@ Map data (c) OpenStreetMap contributors, Open Database License (ODbL),
 https://www.openstreetmap.org/copyright. Tiles: OpenFreeMap (https://openfreemap.org),
 OpenMapTiles schema. Routing: Valhalla on the FOSSGIS server. Search: Photon by komoot.
 Speed cameras: Overpass API. Live traffic (optional, your own key): TomTom.
+
+
+----------------------------------------------------------------------
+
+Overworld Maps asks Google Maps for routes, traffic and places the way Vela Maps
+(https://github.com/PimpinPumpkin/Vela, GPL-3.0, Copyright the Vela contributors) does.
+The request templates and the positions read from the answers follow Vela's
+core/data/google/DirectionsPb.kt, SearchPb.kt and parse/DirectionsParser.kt, in:
+  android/app/src/main/java/com/thealgothrim/overworld/routing/GoogleMaps.kt
+The GNU General Public License v3.0: https://www.gnu.org/licenses/gpl-3.0.txt

@@ -86,6 +86,7 @@ fun SettingsScreen(
 ) {
   val store = AppModule.themeStore
   val carGameHud by store.carGameHud.collectAsState()
+  val useGoogle by store.useGoogle.collectAsState()
   val mapTime by store.mapTime.collectAsState()
   val details by store.details.collectAsState()
   val variant by AppModule.viewModel.mapVariant.collectAsState()
@@ -128,6 +129,12 @@ fun SettingsScreen(
                       else "Android Auto shows its own turn and ETA cards, in the theme's colour.",
                       value = if (carGameHud) "Game HUD" else "Android Auto",
                   ) { store.setCarGameHud(!carGameHud) },
+                  Setting(
+                      "Google routes and search",
+                      if (useGoogle) "Routes, traffic times and place search come from Google Maps, laid onto the game map. Off uses only open map data."
+                      else "Only open map data: OpenStreetMap routes and search, TomTom traffic.",
+                      checked = useGoogle,
+                  ) { store.setUseGoogle(!useGoogle) },
                   Setting("Voice guidance", "Spoken turn instructions while driving. Off unless you turn it on.", checked = !(uiState.isMuted ?: AppModule.ttsObserver.isMuted)) { onMute() },
                   Setting("Camera beep", "Two quick notes as a speed camera comes within 500 m, with a trip or without. Plays through the car like a turn prompt.", checked = cameraBeep) {
                     AppModule.viewModel.setCameraBeep(!cameraBeep)

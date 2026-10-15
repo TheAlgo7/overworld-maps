@@ -11,7 +11,11 @@ import com.stadiamaps.ferrostar.core.CorrectiveAction
 import com.stadiamaps.ferrostar.core.FerrostarCore
 import com.stadiamaps.ferrostar.core.RouteDeviationHandler
 import com.stadiamaps.ferrostar.core.http.OkHttpClientProvider.Companion.toOkHttpClientProvider
+import com.stadiamaps.ferrostar.core.CustomRouteProvider
 import com.stadiamaps.ferrostar.core.location.NavigationLocationProvider
+import com.thealgothrim.overworld.routing.GoogleMaps
+import com.thealgothrim.overworld.routing.OverworldRoutes
+import uniffi.ferrostar.RouteAdapter
 import com.stadiamaps.ferrostar.core.location.SimulatedLocationProvider
 import com.stadiamaps.ferrostar.core.location.toAndroidLocation
 import com.stadiamaps.ferrostar.core.withJsonOptions
@@ -85,11 +89,21 @@ object AppModule {
     )
   }
 
-  val ferrostarCore: FerrostarCore by lazy {
+  /** Google's drive laid onto OpenStreetMap's roads, or Valhalla's own route (see OverworldRoutes). */
+  val routes: OverworldRoutes by lazy {
     val options = mapOf("units" to "kilometers")
+    OverworldRoutes(
+        RouteAdapter.fromWellKnownRouteProvider(WellKnownRouteProvider.Valhalla(VALHALLA_URL, "auto").withJsonOptions(options)),
+        httpClient,
+        GoogleMaps(httpClient),
+        googleOn = { themeStore.useGoogle.value },
+    )
+  }
+
+  val ferrostarCore: FerrostarCore by lazy {
     val core =
         FerrostarCore(
-            WellKnownRouteProvider.Valhalla(VALHALLA_URL, "auto").withJsonOptions(options),
+            routes as CustomRouteProvider,
             httpClient = httpClient.toOkHttpClientProvider(),
             locationProvider = locationProvider,
             foregroundServiceManager =
@@ -154,11 +168,13 @@ object AppModule {
 
   val themeStore: ThemeStore by lazy { ThemeStore(appContext) }
 
-  val search: PlaceSearch by lazy { PlaceSearch(httpClient, BuildConfig.TOMTOM_KEY) }
+  val search: PlaceSearch by lazy {
+    PlaceSearch(httpClient, BuildConfig.TOMTOM_KEY, google = { q, near -> if (themeStore.useGoogle.value) routes.google.search(q, near) else emptyList() })
+  }
 
   val saved: SavedPlaces by lazy { SavedPlaces(appContext) }
 
-  val traffic: TrafficService by lazy { TrafficService(httpClient) }
+  val traffic: TrafficService by lazy { TrafficService(httpClient).also { t -> t.google = { routes.routeTraffic(it) } } }
 
   val cameras: MyCameras by lazy { MyCameras(appContext) }
 

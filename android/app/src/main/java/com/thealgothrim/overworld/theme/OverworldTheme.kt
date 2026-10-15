@@ -154,6 +154,15 @@ class ThemeStore(context: Context) {
     prefs.edit { putBoolean(KEY_CAR_HUD, on) }
   }
 
+  private val _useGoogle = MutableStateFlow(prefs.getBoolean(KEY_GOOGLE, true))
+  /** Routes, traffic times and search from Google Maps (see routing/GoogleMaps.kt); off uses only the open services. */
+  val useGoogle: StateFlow<Boolean> = _useGoogle.asStateFlow()
+
+  fun setUseGoogle(on: Boolean) {
+    _useGoogle.value = on
+    prefs.edit { putBoolean(KEY_GOOGLE, on) }
+  }
+
   private val _mapTime =
       MutableStateFlow(runCatching { MapTime.valueOf(prefs.getString(KEY_MAP_TIME, null) ?: "") }.getOrDefault(MapTime.AUTO))
   /** Which time-of-day palette themes like GTA VI use: by the sun, or held at one. */
@@ -188,6 +197,7 @@ class ThemeStore(context: Context) {
   companion object {
     private const val KEY = "theme"
     private const val KEY_CAR_HUD = "car_game_hud"
+    private const val KEY_GOOGLE = "use_google"
     private const val KEY_MAP_TIME = "map_time"
 
     /** Ids before the 2026-09-28 rename. */

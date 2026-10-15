@@ -15,6 +15,8 @@ data class Candidate(
     /** Metres from the user, when known. */
     val metres: Double? = null,
     val abroad: Boolean = false,
+    /** From Google's search, which knows India's small places best. */
+    val google: Boolean = false,
 )
 
 /**
@@ -82,6 +84,7 @@ fun rank(query: String, candidates: List<Candidate>, limit: Int = 10): List<Plac
     if (namedNearby && !local(c)) s -= 30.0
     s -= c.rank * 0.8
     if (c.tomtom && c.kind == PlaceKind.PLACE) s += 2.0
+    if (c.google) s += 6.0
     if (c.abroad) s -= 40.0
     return s
   }

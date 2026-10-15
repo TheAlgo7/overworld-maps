@@ -114,6 +114,8 @@ dependencies {
     implementation 'com.google.android.gms:play-services-location:21.3.0'
 
     testImplementation 'junit:junit:4.13.2'
+    // Android's org.json is a stub in plain unit tests; the real one reads the saved Google answers.
+    testImplementation 'org.json:json:20240303'
 
     androidTestImplementation 'androidx.car.app:app-testing:1.7.0'
     androidTestImplementation 'androidx.test.ext:junit:1.3.0'
