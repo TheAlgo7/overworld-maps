@@ -33,8 +33,9 @@ val Skin.driveCamera: DriveCamera
  */
 fun autoZoom(base: Double, speedMs: Double?, toTurnMetres: Double?): Double {
   val kmh = (speedMs ?: 0.0) * 3.6
-  // 20 km/h and under: base + 0.4. 110 km/h and over: base - 1.2.
-  var zoom = base + 0.4 - ((kmh - 20.0).coerceIn(0.0, 90.0) / 90.0) * 1.6
+  // 20 km/h and under: base + 0.4. 110 km/h and over: base - 0.8. The games' minimaps stay close
+  // in; pulled back further, the tilted 3D map turned into a sea of rooftops.
+  var zoom = base + 0.4 - ((kmh - 20.0).coerceIn(0.0, 90.0) / 90.0) * 1.2
   if (toTurnMetres != null) {
     // A long way to the next turn on a fast road: a little further out still.
     if (toTurnMetres > 2_000 && kmh > 50) zoom -= 0.3

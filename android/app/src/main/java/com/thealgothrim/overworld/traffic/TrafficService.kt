@@ -105,29 +105,52 @@ class TrafficService(private val http: OkHttpClient) {
    * edges and flags every junction with signals (OpenStreetMap highway=traffic_signals). One quick
    * call to the server that made the route, instead of a slow Overpass search.
    */
-  suspend fun trafficLights(route: List<GeographicCoordinate>): List<RoadFeature> =
+  /** What the routing server knows about a route's roads: its traffic lights and its flyovers. */
+  data class RouteAttributes(
+      val lights: List<RoadFeature>,
+      /** Stretches on a bridge or flyover, as metres along the route. */
+      val bridges: List<ClosedFloatingPointRange<Double>>,
+  )
+
+  suspend fun routeAttributes(route: List<GeographicCoordinate>): RouteAttributes =
       withContext(Dispatchers.IO) {
-        if (route.size < 2) return@withContext emptyList()
+        val none = RouteAttributes(emptyList(), emptyList())
+        if (route.size < 2) return@withContext none
         val shape = encodePolyline6(route)
         val body =
             listOf("edge_walk", "map_snap").firstNotNullOfOrNull { match -> traceAttributes(shape, match) }
-                ?: return@withContext emptyList()
+                ?: return@withContext none
         val root = JSONObject(body)
         val matched = root.optString("shape").takeIf { it.isNotEmpty() }?.let(::decodePolyline6) ?: route
-        val edges = root.optJSONArray("edges") ?: return@withContext emptyList()
+        val edges = root.optJSONArray("edges") ?: return@withContext none
         val line = RouteLine(matched)
+        // Measured on the route as asked, so the stretches line up with the route the map draws.
+        val asked = RouteLine(route)
         val lights = mutableListOf<RoadFeature>()
+        val bridges = mutableListOf<ClosedFloatingPointRange<Double>>()
         for (i in 0 until edges.length()) {
           val edge = edges.getJSONObject(i)
           val signal = edge.optBoolean("traffic_signal") || edge.optJSONObject("end_node")?.optBoolean("traffic_signal") == true
-          val at = matched.getOrNull(edge.optInt("end_shape_index", -1)) ?: continue
+          val end = matched.getOrNull(edge.optInt("end_shape_index", -1)) ?: continue
           // A big junction can have a signal on each carriageway; show one light per junction.
-          if (signal && lights.none { metres(it.at, at) < 55.0 }) {
-            lights += RoadFeature(RoadFeatureKind.TRAFFIC_LIGHT, at, along = line.project(at).first)
+          if (signal && lights.none { metres(it.at, end) < 55.0 }) {
+            lights += RoadFeature(RoadFeatureKind.TRAFFIC_LIGHT, end, along = line.project(end).first)
+          }
+          if (edge.optBoolean("bridge")) {
+            val start = matched.getOrNull(edge.optInt("begin_shape_index", -1)) ?: continue
+            val from = asked.project(start).first
+            val to = asked.project(end).first
+            if (to <= from) continue
+            // One stretch per flyover: its edges join end to end.
+            val last = bridges.lastOrNull()
+            if (last != null && from - last.endInclusive < 5.0) bridges[bridges.lastIndex] = last.start..maxOf(last.endInclusive, to)
+            else bridges += from..to
           }
         }
-        lights
+        RouteAttributes(lights, bridges)
       }
+
+  suspend fun trafficLights(route: List<GeographicCoordinate>): List<RoadFeature> = routeAttributes(route).lights
 
   private fun traceAttributes(shape: String, match: String): String? {
     val payload =
@@ -138,7 +161,7 @@ class TrafficService(private val http: OkHttpClient) {
             .put(
                 "filters",
                 JSONObject()
-                    .put("attributes", JSONArray(listOf("shape", "edge.end_shape_index", "edge.traffic_signal", "node.traffic_signal")))
+                    .put("attributes", JSONArray(listOf("shape", "edge.begin_shape_index", "edge.end_shape_index", "edge.traffic_signal", "node.traffic_signal", "edge.bridge")))
                     .put("action", "include"),
             )
     return try {

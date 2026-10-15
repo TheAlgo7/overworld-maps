@@ -259,7 +259,7 @@ private fun OverworldLayers(
   val trip = state.routeGeometry?.takeIf { state.isNavigating() && it.size >= 2 }
   val route = shown?.route
   if (trip != null && route != null) {
-    ThemedRouteAhead(route, shown, theme, car, style)
+    ThemedRouteAhead(route, shown, theme, car, style, extras.bridges)
     TripTrafficLine(trip, extras.trafficSpans, shown, theme, car)
   } else if (previewRoute != null && previewRoute.size >= 2) {
     ThemedRouteLine(previewRoute, theme, car)

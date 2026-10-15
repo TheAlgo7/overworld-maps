@@ -90,6 +90,8 @@
           service: { fill: "#55524a", casing: null, dash: [2.2, 1.4] },
         },
         trails: { color: "#40423d", dash: [1.6, 1.6] },
+        // Paper map: a faint brown pencil shade under a bridge, not a black drop shadow.
+        bridgeShadow: { color: "#4a3520", opacity: 0.28, blur: 3, drop: 3 },
         patterns: { wood: "hatch", park: "stipple" }, patternsInCar: true, railDotsInCar: true,
         glow: null,
         roadLabels: false,
@@ -137,7 +139,9 @@
         building: "#aeafb7", buildingLine: null,
         // Raised blocks: real heights where OpenStreetMap has them, a low default where it doesn't.
         buildings3d: { color: "#aeafb7", opacity: 0.94, heightScale: 1, minHeight: 4, maxHeight: 40 },
-        light: { color: "#ffffff", intensity: 0.42 },
+        // Flyovers: a concrete edge darker than the deck and a shadow on the ground below.
+        bridgeEdge: "#8f8782", bridgeShadow: { color: "#3a3430", opacity: 0.55, blur: 6, drop: 9 },
+        light: { color: "#ffffff", intensity: 0.5 },
         rail: "#a3a0a0",
         // Roads are wide surfaces, a shade lighter than the ground, with no outlines.
         roadScale: 1.6,
@@ -173,6 +177,7 @@
             water: "#2f5867", waterway: "#2f5867",
             building: "#5d6370",
             buildings3d: { color: "#5f6573", opacity: 0.94, heightScale: 1, minHeight: 4, maxHeight: 40 },
+            bridgeEdge: "#4a4844", bridgeShadow: { color: "#1e1c1a", opacity: 0.6, blur: 6, drop: 9 },
             light: { color: "#fff0e2", intensity: 0.38 },
             rail: "#5c5a58",
             roads: {
@@ -195,6 +200,7 @@
             water: "#0d1120", waterway: "#0d1120",
             building: "#3c3546",
             buildings3d: { color: "#41394c", opacity: 0.95, heightScale: 1, minHeight: 4, maxHeight: 40 },
+            bridgeEdge: "#1d1a22", bridgeShadow: { color: "#08070a", opacity: 0.65, blur: 6, drop: 9 },
             light: { color: "#ddd4ee", intensity: 0.3 },
             rail: "#4a4552",
             roads: {
@@ -261,15 +267,42 @@
     const out = [];
     const tag = brunnel || "road";
     const faded = brunnel === "tunnel";
+    // Flyovers stand above the roads they cross, like the games' minimaps: higher decks (OSM
+    // "layer") drawn over lower ones, and a soft shadow on the ground below each one. The app
+    // draws the route under "bridges-start" so it runs beneath a flyover, and the part of the
+    // route that is on one above it.
+    const sortKey = brunnel === "bridge" ? { "line-sort-key": ["coalesce", ["get", "layer"], 1] } : {};
+    if (brunnel === "bridge") {
+      out.push({
+        id: "bridges-start", type: "line", source: "omt", "source-layer": "transportation",
+        filter: ["boolean", false], paint: { "line-opacity": 0 },
+      });
+      const sh = m.bridgeShadow || { color: "#000000", opacity: 0.5, blur: 5, drop: 7 };
+      for (const g of GROUPS) {
+        out.push({
+          id: `bridge-${g.key}-shadow`, type: "line", source: "omt", "source-layer": "transportation",
+          minzoom: Math.max(g.minzoom, 13), filter: classFilter(g.classes, brunnel),
+          layout: { "line-cap": "butt", "line-join": "round", ...sortKey },
+          paint: {
+            "line-color": sh.color,
+            "line-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0, 14.5, sh.opacity],
+            "line-blur": sh.blur,
+            "line-width": widthExpr(g.w, scale, [2, 3, 6, 10]),
+            "line-translate": [0, sh.drop],
+            "line-translate-anchor": "viewport",
+          },
+        });
+      }
+    }
     // Casings first, then fills, so crossings read cleanly.
     for (const g of GROUPS) {
       const spec = m.roads[g.key];
-      const casing = spec.casing || (brunnel === "bridge" ? m.land : null);
+      const casing = brunnel === "bridge" ? m.bridgeEdge || spec.casing || m.land : spec.casing;
       if (!casing) continue;
       out.push({
         id: `${tag}-${g.key}-casing`, type: "line", source: "omt", "source-layer": "transportation",
         minzoom: Math.max(g.minzoom, 11), filter: classFilter(g.classes, brunnel),
-        layout: { "line-cap": brunnel ? "butt" : "round", "line-join": "round" },
+        layout: { "line-cap": brunnel ? "butt" : "round", "line-join": "round", ...sortKey },
         paint: { "line-color": casing, "line-width": widthExpr(g.w, scale, [1, 1.6, 2.6, 4.5]), "line-opacity": faded ? 0.35 : 1 },
       });
     }
@@ -280,7 +313,7 @@
       out.push({
         id: `${tag}-${g.key}`, type: "line", source: "omt", "source-layer": "transportation",
         minzoom: g.minzoom, filter: classFilter(g.classes, brunnel),
-        layout: { "line-cap": brunnel || spec.dash ? "butt" : "round", "line-join": "round" },
+        layout: { "line-cap": brunnel || spec.dash ? "butt" : "round", "line-join": "round", ...sortKey },
         paint,
       });
     }
@@ -448,7 +481,8 @@
           "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 14.5, 0, 16, height],
           "fill-extrusion-base": ["interpolate", ["linear"], ["zoom"], 14.5, 0, 16, ["*", B.heightScale, ["coalesce", ["get", "render_min_height"], 0]]],
           "fill-extrusion-opacity": B.opacity,
-          "fill-extrusion-vertical-gradient": false,
+          // Walls darken toward the ground, so the blocks sit on the map instead of floating on it.
+          "fill-extrusion-vertical-gradient": true,
         },
       });
     }

@@ -65,6 +65,8 @@ import org.maplibre.compose.expressions.dsl.switch
 
 /** First label layer in every Overworld style; the route is drawn just under it. */
 private const val FIRST_LABEL_LAYER = "label-water"
+/** An empty marker layer just under the flyovers in every style (prototype/themes.js). */
+private const val BRIDGES_LAYER = "bridges-start"
 
 /**
  * MapLibre reads an icon's pixel ratio from the bitmap's density, which Android sets to the phone
@@ -98,7 +100,15 @@ private fun widthByZoom(at10: Float, at18: Float) =
  */
 @Composable
 @MaplibreComposable
-fun ThemedRouteAhead(route: RoutePolyline, shown: DisplayedPosition, theme: OverworldTheme, car: Boolean, style: Any) {
+fun ThemedRouteAhead(
+    route: RoutePolyline,
+    shown: DisplayedPosition,
+    theme: OverworldTheme,
+    car: Boolean,
+    style: Any,
+    /** Stretches on flyovers (metres along [route]): drawn over the bridge; the rest goes under bridges. */
+    bridges: List<ClosedFloatingPointRange<Double>> = emptyList(),
+) {
   val fade = theme.routeFade
   val step by remember(shown) { derivedStateOf { ((shown.along ?: 0.0) / NEAR_METRES).toInt() } }
   val cut = remember(route, step, fade) { minOf(route.length, (step + 1) * NEAR_METRES + fade) }
@@ -118,14 +128,29 @@ fun ThemedRouteAhead(route: RoutePolyline, shown: DisplayedPosition, theme: Over
             options = GeoJsonOptions(synchronousUpdate = true, lineMetrics = true),
         )
       } else null
-  LaunchedEffect(near, faded, route, cut) {
+  // The route on flyovers, still ahead of the arrow (past the fade): drawn again over the bridges.
+  fun bridgeData(along: Double): GeoJsonData {
+    val from = fadeEnd(along).coerceAtLeast(along)
+    val features =
+        bridges.filter { it.endInclusive > from }.joinToString(",") { b ->
+          """{"type":"Feature","properties":{},"geometry":${lineGeometry(route.slice(maxOf(b.start, from), b.endInclusive))}}"""
+        }
+    return GeoJsonData.JsonString("""{"type":"FeatureCollection","features":[$features]}""")
+  }
+  val onBridges =
+      if (bridges.isEmpty()) null
+      else rememberGeoJsonSource(remember(route, bridges, style) { bridgeData(startAlong) }, options = GeoJsonOptions(synchronousUpdate = true))
+  LaunchedEffect(near, faded, onBridges, route, cut) {
     snapshotFlow { shown.along ?: 0.0 }
         .collect {
           near.setData(nearData(it))
           faded?.setData(fadeData(it))
+          onBridges?.setData(bridgeData(it))
         }
   }
-  RouteLayers(listOf(near, far), "ow-trip", theme, car, faded)
+  // Under the flyovers, so a bridge the car drives beneath crosses over the route like in the games.
+  RouteLayers(listOf(near, far), "ow-trip", theme, car, faded, anchor = BRIDGES_LAYER)
+  onBridges?.let { RouteLayers(listOf(it), "ow-trip-bridge", theme, car) }
 }
 
 /** One distance for both pieces of the route ahead: 300 m is about 18 s at 60 km/h. */
@@ -148,7 +173,7 @@ private fun routeWidth(theme: OverworldTheme) =
  */
 @Composable
 @MaplibreComposable
-private fun RouteLayers(sources: List<Source>, id: String, theme: OverworldTheme, car: Boolean, faded: Source? = null) {
+private fun RouteLayers(sources: List<Source>, id: String, theme: OverworldTheme, car: Boolean, faded: Source? = null, anchor: String = FIRST_LABEL_LAYER) {
   val k = routeWidth(theme)
   val lineAt10 = (if (car) 4.5f else 3.5f) * k
   val lineAt18 = (if (car) 15f else 12f) * k
@@ -159,7 +184,7 @@ private fun RouteLayers(sources: List<Source>, id: String, theme: OverworldTheme
   val casingWidth =
       if (edge > 0f) widthByZoom(lineAt10 / (1 - 2 * edge), lineAt18 / (1 - 2 * edge))
       else widthByZoom((if (car) 7f else 5.5f) * k, (if (car) 22f else 18f) * k)
-  Anchor.Below(FIRST_LABEL_LAYER) {
+  Anchor.Below(anchor) {
     val glow = theme.routeGlow
     if (glow != null && !car) {
       sources.forEachIndexed { i, source ->
@@ -233,9 +258,12 @@ private fun fadeIn(color: Color) =
         1 to const(color),
     )
 
-private fun lineJson(points: List<GeographicCoordinate>): String {
+private fun lineJson(points: List<GeographicCoordinate>): String =
+    """{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},"geometry":${lineGeometry(points)}}]}"""
+
+private fun lineGeometry(points: List<GeographicCoordinate>): String {
   val coords = points.joinToString(",") { "[${it.lng},${it.lat}]" }
-  return """{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},"geometry":{"type":"LineString","coordinates":[$coords]}}]}"""
+  return """{"type":"LineString","coordinates":[$coords]}"""
 }
 
 /**

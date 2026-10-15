@@ -24,7 +24,7 @@ class DriveCameraTest {
     val highway = autoZoom(base, 110 / 3.6, null)
     assertTrue(city > arterial && arterial > highway)
     assertEquals(base + 0.4, city, 0.01)
-    assertEquals(base - 1.2, highway, 0.01)
+    assertEquals(base - 0.8, highway, 0.01)
   }
 
   @Test

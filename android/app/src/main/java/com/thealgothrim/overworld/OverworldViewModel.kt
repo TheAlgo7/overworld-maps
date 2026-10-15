@@ -71,6 +71,8 @@ data class RouteExtras(
     val etaAtDistance: Double = 0.0,
     /** Stretches of the route in traffic (metres along the whole route), drawn on the route line. */
     val trafficSpans: List<TrafficSpan> = emptyList(),
+    /** Stretches of the route on a flyover (metres along it): drawn over the bridge, the rest under. */
+    val bridges: List<ClosedFloatingPointRange<Double>> = emptyList(),
 ) {
   val lightsOnRoute: Int
     get() = signals.count { it.kind == RoadFeatureKind.TRAFFIC_LIGHT && it.along != null }
@@ -580,7 +582,11 @@ class OverworldViewModel :
         viewModelScope.launch {
           // Lights come from the routing server in about a second; cameras from Overpass, which can
           // be slow or busy, so each arrives on its own.
-          for ((kind, fetch) in listOf(RoadFeatureKind.TRAFFIC_LIGHT to traffic::trafficLights, RoadFeatureKind.SPEED_CAMERA to traffic::speedCameras)) {
+          // The routing server's answer carries the flyovers too.
+          val lightsAndBridges: suspend (List<GeographicCoordinate>) -> List<RoadFeature> = { r ->
+            traffic.routeAttributes(r).also { a -> _extras.update { e -> e.copy(bridges = a.bridges) } }.lights
+          }
+          for ((kind, fetch) in listOf(RoadFeatureKind.TRAFFIC_LIGHT to lightsAndBridges, RoadFeatureKind.SPEED_CAMERA to traffic::speedCameras)) {
             if (kind in extrasLoaded) continue
             launch {
               val found = runCatching { fetch(route) }.getOrNull() ?: return@launch
