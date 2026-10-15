@@ -298,12 +298,25 @@ fun ThemedRouteLine(points: List<GeographicCoordinate>, theme: OverworldTheme, c
  */
 @Composable
 @MaplibreComposable
-fun ThemedPuck(shown: DisplayedPosition, theme: OverworldTheme, car: Boolean, style: Any) {
+fun ThemedPuck(
+    shown: DisplayedPosition,
+    theme: OverworldTheme,
+    car: Boolean,
+    style: Any,
+    /**
+     * Whether the camera follows the car heading-up. The arrow then stands fixed on the screen,
+     * pointing straight up, and only the map turns, like Google's. Turned to the route's own
+     * direction on the map instead, it went out of step with the camera and leaned into bends.
+     */
+    headingUp: () -> Boolean,
+) {
+  val screenUp = headingUp()
   // Moved every frame straight from the animation, without composing anything (see ThemedRouteAhead).
   val lastBearing = remember { doubleArrayOf(0.0) }
-  fun puckData(location: Location): GeoJsonData {
-    val bearing = location.courseDegrees ?: lastBearing[0]
-    lastBearing[0] = bearing
+  fun puckData(location: Location, up: Boolean): GeoJsonData {
+    val course = location.courseDegrees ?: lastBearing[0]
+    lastBearing[0] = course
+    val bearing = if (up) 0.0 else course
     val position = location.position.value
     return GeoJsonData.Features(
         FeatureCollection(Feature(geometry = Point(position.longitude, position.latitude), properties = buildJsonObject { put("bearing", bearing) }))
@@ -311,10 +324,10 @@ fun ThemedPuck(shown: DisplayedPosition, theme: OverworldTheme, car: Boolean, st
   }
   val source =
       rememberGeoJsonSource(
-          remember(shown, style) { puckData(Snapshot.withoutReadObservation { shown.location }) },
+          remember(shown, style, screenUp) { Snapshot.withoutReadObservation { puckData(shown.location, screenUp) } },
           options = GeoJsonOptions(synchronousUpdate = true),
       )
-  LaunchedEffect(source, shown) { snapshotFlow { shown.location }.collect { source.setData(puckData(it)) } }
+  LaunchedEffect(source, shown, screenUp) { snapshotFlow { shown.location }.collect { source.setData(puckData(it, screenUp)) } }
   val art =
       ImageBitmap.imageResource(
           when (theme.skin) {
@@ -340,7 +353,7 @@ fun ThemedPuck(shown: DisplayedPosition, theme: OverworldTheme, car: Boolean, st
       iconAnchor = const(SymbolAnchor.Center),
       iconRotate = feature["bearing"].asNumber(const(0f)),
       iconPitchAlignment = const(IconPitchAlignment.Viewport),
-      iconRotationAlignment = const(IconRotationAlignment.Map),
+      iconRotationAlignment = const(if (screenUp) IconRotationAlignment.Viewport else IconRotationAlignment.Map),
       iconAllowOverlap = const(true),
       iconIgnorePlacement = const(true),
   )

@@ -73,15 +73,18 @@ fun BoxScope.CarGameHud(
 ) {
   val spec = theme.spec
   val progress = uiState.progress
+  val lost by AppModule.viewModel.gpsLost.collectAsState()
   if (!uiState.isNavigating() || progress == null) {
     val estimate by AppModule.viewModel.estimatedKmh.collectAsState()
     // GPS speed, or the speed worked out from movement when a fix has none.
     val moving = rememberFreeDriving(uiState.location?.speed?.value ?: estimate?.div(3.6) ?: 0.0)
     when {
       preview != null -> PreviewCard(spec, preview, extras, Modifier.align(Alignment.TopStart))
-      // Driving without a trip: the map, the speed and camera alerts, like Google's free drive.
-      // The "Where to?" card comes back when the car stops.
+      lost -> LostCard(spec, Modifier.align(Alignment.TopStart))
+      // Driving without a trip: the map, the speed and camera alerts, and where the car is, like
+      // Google's free drive. The "Where to?" card comes back once the car is parked.
       moving -> {
+        StreetLine(spec, listOfNotNull(area), Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp))
         hazard?.let { HazardRow(spec, it, Modifier.align(Alignment.TopStart).widthIn(max = 420.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 14.dp), textSize = 20.sp, icon = 40.dp) }
         val speed = rememberSpeedNow(uiState)
         // The speedometer in the same corner as on a trip, over the limit sign and + Cam.
@@ -93,7 +96,7 @@ fun BoxScope.CarGameHud(
           }
         }
       }
-      else -> IdleCard(spec, Modifier.align(Alignment.TopStart))
+      else -> ParkedCard(spec, Modifier.align(Alignment.TopStart))
     }
     return
   }
@@ -121,24 +124,9 @@ fun BoxScope.CarGameHud(
       CameraButton(spec, Modifier.padding(start = 12.dp))
     }
     Box(Modifier.weight(1f).padding(bottom = 6.dp), contentAlignment = Alignment.Center) {
-      val street = listOfNotNull(uiState.currentStepRoadName?.takeIf { it.isNotBlank() }, area)
-      if (street.isNotEmpty()) {
-        if (spec.gta) {
-          GtaText(street.joinToString("  |  "), 24.sp, align = TextAlign.Center)
-        } else if (spec.vi) {
-          // GTA VI: the minimap's clean grotesk, white with a thin dark edge.
-          ViText(street.joinToString("  ·  "), 22.sp, font = Vi.sansSemiBold, align = TextAlign.Center)
-        } else {
-          RdrText(
-              street.joinToString(",  ").uppercase(),
-              20.sp,
-              Modifier.skinPanel(spec, elevated = false).padding(horizontal = 18.dp, vertical = 6.dp),
-              color = Rdr.GreyLight,
-              align = TextAlign.Center,
-              spacing = 1.sp,
-          )
-        }
-      }
+      // With no fix the street would be the last one seen: say so instead.
+      if (lost) LostCard(spec, Modifier)
+      else StreetLine(spec, listOfNotNull(uiState.currentStepRoadName?.takeIf { it.isNotBlank() }, area), Modifier)
     }
     // Keeps the street name clear of Android Auto's map buttons on the right.
     Spacer(Modifier.width(96.dp))
@@ -200,6 +188,8 @@ object CarTapTargets {
   @Volatile var start: Rect? = null
   @Volatile var cancel: Rect? = null
   @Volatile var camera: Rect? = null
+  @Volatile var home: Rect? = null
+  @Volatile var work: Rect? = null
 }
 
 /**
@@ -268,11 +258,67 @@ private fun PreviewCard(spec: SkinSpec, preview: RoutePreview, extras: RouteExtr
   }
 }
 
+/** The street and area along the bottom, in each game's own lettering. */
 @Composable
-private fun IdleCard(spec: SkinSpec, modifier: Modifier) {
+private fun StreetLine(spec: SkinSpec, parts: List<String>, modifier: Modifier) {
+  if (parts.isEmpty()) return
+  when {
+    spec.gta -> Box(modifier) { GtaText(parts.joinToString("  |  "), 24.sp, align = TextAlign.Center) }
+    // GTA VI: the minimap's clean grotesk, white with a thin dark edge.
+    spec.vi -> Box(modifier) { ViText(parts.joinToString("  ·  "), 22.sp, font = Vi.sansSemiBold, align = TextAlign.Center) }
+    else ->
+        RdrText(
+            parts.joinToString(",  ").uppercase(),
+            20.sp,
+            modifier.skinPanel(spec, elevated = false).padding(horizontal = 18.dp, vertical = 6.dp),
+            color = Rdr.GreyLight,
+            align = TextAlign.Center,
+            spacing = 1.sp,
+        )
+  }
+}
+
+/** No GPS fix for a while: said plainly, like Google Maps, instead of a frozen arrow. */
+@Composable
+private fun LostCard(spec: SkinSpec, modifier: Modifier) {
+  Row(modifier.widthIn(max = 420.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+    GameIconView(GameIcon.LOCATE, spec.sub, Modifier.size(32.dp))
+    Spacer(Modifier.width(14.dp))
+    Column {
+      SkinText(spec.title("Location not found"), spec.title, spec.titleSize(if (spec.vi) 26.sp else 24.sp, 26.sp), spec.fg, spacing = spec.titleSpacing)
+      SkinText("Waiting for GPS", spec.body, 18.sp, spec.sub, Modifier.padding(top = 2.dp))
+    }
+  }
+}
+
+/**
+ * Parked with no trip: "Where to?" with Home and Work one tap away (pressed through map taps, see
+ * CarTapTargets), like Google's suggestions. Without either saved, it says where to set them.
+ */
+@Composable
+private fun ParkedCard(spec: SkinSpec, modifier: Modifier) {
+  val saved by AppModule.saved.state.collectAsState()
+  DisposableEffect(Unit) {
+    onDispose {
+      CarTapTargets.home = null
+      CarTapTargets.work = null
+    }
+  }
   Column(modifier.widthIn(max = 420.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 16.dp)) {
     SkinText(spec.title("Where to?"), spec.title, spec.titleSize(if (spec.vi) 32.sp else 28.sp, 32.sp), spec.fg, spacing = spec.titleSpacing)
-    SkinText("Tap Search or Nearby, or pick a place on your phone.", spec.body, 19.sp, spec.sub, Modifier.padding(top = 4.dp), maxLines = 2)
+    if (saved.home == null && saved.work == null) {
+      SkinText("Tap Search or Nearby, or set Home and Work on your phone.", spec.body, 19.sp, spec.sub, Modifier.padding(top = 4.dp), maxLines = 2)
+    } else {
+      Row(Modifier.padding(top = 12.dp)) {
+        if (saved.home != null) {
+          SkinSecondaryButton(spec, spec.title("Home"), {}, Modifier.onGloballyPositioned { CarTapTargets.home = it.boundsInRoot() }, icon = GameIcon.HOME)
+        }
+        if (saved.home != null && saved.work != null) Spacer(Modifier.width(10.dp))
+        if (saved.work != null) {
+          SkinSecondaryButton(spec, spec.title("Work"), {}, Modifier.onGloballyPositioned { CarTapTargets.work = it.boundsInRoot() }, icon = GameIcon.WORK)
+        }
+      }
+    }
   }
 }
 
@@ -280,7 +326,8 @@ private fun IdleCard(spec: SkinSpec, modifier: Modifier) {
  * Free driving (no trip) from the speed in m/s, held through slow traffic: crawling along, the speed
  * kept dipping under the line and the HUD flipped between the speedometer and "Where to?" with every
  * fix. On at once above [FREE_DRIVE_SPEED]; off only once the car has stood still for
- * [STOPPED_HOLD_MS] (a long red light, parked).
+ * [STOPPED_HOLD_MS]. That was 20 s, shorter than most Delhi red lights, so "Where to?" came back
+ * at nearly every signal.
  */
 @Composable
 private fun rememberFreeDriving(speed: Double): Boolean {
@@ -301,4 +348,5 @@ private fun rememberFreeDriving(speed: Double): Boolean {
 private const val FREE_DRIVE_SPEED = 3.0
 /** About 4 km/h: slower than this the car is standing. */
 private const val STOPPED_SPEED = 1.0
-private const val STOPPED_HOLD_MS = 20_000L
+/** Three minutes standing still: parked, not waiting at a light. */
+private const val STOPPED_HOLD_MS = 180_000L

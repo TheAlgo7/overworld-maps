@@ -23,6 +23,8 @@ import kotlin.math.max
 import kotlin.math.sqrt
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.TimeSource
+import java.time.Duration
+import java.time.Instant
 import org.maplibre.compose.location.BearingWithAccuracy
 import org.maplibre.compose.location.Location
 import org.maplibre.compose.location.PositionWithAccuracy
@@ -67,6 +69,22 @@ fun rememberDisplayedPosition(
   val userLocation = uiState.location?.toMapLibreLocation() ?: return null
   return rememberRouteSnappedLocation(uiState, userLocation)
 }
+
+/**
+ * How far the car has gone since [fix] was taken, plus the second the arrow spends gliding to it:
+ * the arrow aims there, so it is where the car is when it arrives, not a fix behind (about 17 m at
+ * 60 km/h, which put the arrow short of every junction the car was already in). Applied to the fix
+ * itself (see rememberSmoothedUiState), so Ferrostar's camera and this arrow move together.
+ */
+fun leadMetres(fix: UserLocation): Double {
+  val speed = fix.speed?.value ?: return 0.0
+  if (speed < MIN_LEAD_SPEED) return 0.0
+  val age = (Duration.between(fix.timestamp, Instant.now()).toMillis() / 1000.0).coerceIn(0.0, 1.5)
+  return speed * (DISPLAY_LOCATION_ANIMATION_DURATION.inWholeMilliseconds / 1000.0 + age)
+}
+
+/** About 4 km/h: slower than this the car is standing and GPS speed is noise. */
+private const val MIN_LEAD_SPEED = 1.2
 
 @Composable
 private fun rememberRouteSnappedLocation(

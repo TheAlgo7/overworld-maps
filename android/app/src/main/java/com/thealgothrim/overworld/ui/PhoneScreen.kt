@@ -22,9 +22,23 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.unit.sp
+import com.thealgothrim.overworld.ui.skin.GameIcon
+import com.thealgothrim.overworld.ui.skin.GameIconView
+import com.thealgothrim.overworld.ui.skin.SkinText
+import com.thealgothrim.overworld.ui.skin.skinPanel
 import com.stadiamaps.ferrostar.core.boundingBox
 import com.stadiamaps.ferrostar.maplibreui.runtime.NavigationCameraMode
 import com.stadiamaps.ferrostar.maplibreui.runtime.navigationCameraOptions
+import com.thealgothrim.overworld.map.AutoZoomEffect
+import com.thealgothrim.overworld.map.driveCamera
 import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.OverworldViewModel
 import com.thealgothrim.overworld.map.rememberOverworldMapState
@@ -60,8 +74,11 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
   val testDrive by viewModel.testDrive.collectAsState()
   val area by viewModel.area.collectAsState()
   val variant by viewModel.mapVariant.collectAsState()
-  val cameraOptions = navigationCameraOptions()
+  val driveCamera = theme.skin.driveCamera
+  val phoneZoom = PHONE_ZOOM + driveCamera.zoomOffset
+  val cameraOptions = navigationCameraOptions().copy(navigationZoom = phoneZoom, navigationTilt = driveCamera.tilt)
   val mapState = rememberOverworldMapState(cameraOptions)
+  AutoZoomEffect(mapState, viewModel.navigationUiState.collectAsState(), base = phoneZoom)
   val scope = rememberCoroutineScope()
   val navigating = uiState.isNavigating()
 
@@ -226,6 +243,22 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
       }
     }
 
+    // No GPS fix for a while: said over the map, above where the arrow would be.
+    val lost by viewModel.gpsLost.collectAsState()
+    if (lost && !searchOpen && !settingsOpen && !layersOpen) {
+      Row(
+          Modifier.align(Alignment.Center).offset(y = (-140).dp).skinPanel(spec).padding(horizontal = 18.dp, vertical = 12.dp),
+          verticalAlignment = Alignment.CenterVertically,
+      ) {
+        GameIconView(GameIcon.LOCATE, spec.sub, Modifier.size(26.dp))
+        Spacer(Modifier.width(12.dp))
+        Column {
+          SkinText(spec.title("Location not found"), spec.title, spec.titleSize(20.sp, 22.sp), spec.fg, spacing = spec.titleSpacing)
+          SkinText("Waiting for GPS", spec.body, 15.sp, spec.sub)
+        }
+      }
+    }
+
     val arrivedVisible = arrivedAt != null
     when (theme.skin) {
       Skin.GTA -> GtaBigMessage(arrivedVisible, "ARRIVED", arrivedAt.orEmpty(), Modifier.align(Alignment.Center))
@@ -249,3 +282,6 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
     if (layersOpen) MapLayersSheet(theme, onClose = { layersOpen = false })
   }
 }
+
+/** The phone map's following zoom at about 40 km/h (Ferrostar's driving default). */
+private const val PHONE_ZOOM = 16.0

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.derivedStateOf
@@ -19,12 +20,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.stadiamaps.ferrostar.core.NavigationUiState
 import com.stadiamaps.ferrostar.core.NavigationViewModel
 import com.stadiamaps.ferrostar.maplibreui.NavigationMapClickResult
 import com.stadiamaps.ferrostar.maplibreui.NavigationMapView
+import com.stadiamaps.ferrostar.maplibreui.runtime.NavigationCameraMode
 import com.stadiamaps.ferrostar.maplibreui.runtime.NavigationCameraOptions
 import com.stadiamaps.ferrostar.maplibreui.runtime.NavigationMapState
 import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.SurfaceAreaTracker
@@ -90,7 +94,7 @@ fun OverworldPhoneMap(
         }
       },
   ) { state ->
-    OverworldLayers(state, theme, car = false, extras, details, previewRoute, pickedDestination, style = baseStyle)
+    OverworldLayers(state, theme, car = false, extras, details, previewRoute, pickedDestination, style = baseStyle, headingUp = mapState.headingUp)
   }
 }
 
@@ -136,6 +140,15 @@ fun OverworldCarMap(
     // Same paper as the phone, a little lighter so the roads stay crisp at a glance.
     if (theme.paperOverlay) PaperOverlay(strength = 0.75f)
 
+    // The HUD was drawn for the Curvv's wide screen. Smaller head units, and the map's half of a
+    // split screen (Spotify beside it), get the same HUD scaled down to fit instead of overlapping.
+    val hudScale =
+        with(density) {
+          val width = (surfaceSize.width.toDp() - stable.calculateLeftPadding(LayoutDirection.Ltr) - stable.calculateRightPadding(LayoutDirection.Ltr)).value
+          val height = (surfaceSize.height.toDp() - stable.calculateTopPadding() - stable.calculateBottomPadding()).value
+          hudScale(width, height)
+        }
+    CompositionLocalProvider(LocalDensity provides Density(density.density * hudScale, density.fontScale)) {
     Box(Modifier.fillMaxSize().padding(stable).padding(12.dp)) {
       val gameHud by AppModule.themeStore.carGameHud.collectAsState()
       val area by AppModule.viewModel.area.collectAsState()
@@ -174,8 +187,20 @@ fun OverworldCarMap(
           modifier = Modifier.align(Alignment.BottomEnd),
       )
     }
+    }
   }
 }
+
+/**
+ * How much to shrink the car HUD for a map area of [widthDp] x [heightDp]: 1 on the Curvv (about
+ * 1500 x 540 dp), less on smaller screens and split screens, never under 0.6 so it stays readable.
+ */
+fun hudScale(widthDp: Float, heightDp: Float): Float =
+    minOf(1f, heightDp / HUD_DESIGN_HEIGHT_DP, widthDp / HUD_DESIGN_WIDTH_DP).coerceAtLeast(0.6f)
+
+/** The smallest map area the HUD fits at full size: the turn card and time card stacked, plus the street. */
+private const val HUD_DESIGN_HEIGHT_DP = 500f
+private const val HUD_DESIGN_WIDTH_DP = 1000f
 
 /**
  * The map itself, in its own function: the arrow glides every frame, and only this part should run
@@ -206,7 +231,7 @@ private fun CarMapView(
       routeOverlayBuilder = null,
       showDefaultPuck = false,
   ) { state ->
-    OverworldLayers(state, theme, car = true, extras, details, previewRoute, null, style = baseStyle)
+    OverworldLayers(state, theme, car = true, extras, details, previewRoute, null, style = baseStyle, headingUp = mapState.headingUp)
   }
 }
 
@@ -227,6 +252,8 @@ private fun OverworldLayers(
     pin: GeographicCoordinate?,
     /** The map style in use; the arrow and the near route resend their data when it changes. */
     style: Any,
+    /** Whether the camera follows heading-up (see ThemedPuck). */
+    headingUp: () -> Boolean,
 ) {
   val shown = rememberDisplayedPosition(state)
   val trip = state.routeGeometry?.takeIf { state.isNavigating() && it.size >= 2 }
@@ -245,8 +272,12 @@ private fun OverworldLayers(
   (state.tripState as? TripState.Navigating)?.remainingWaypoints?.dropLast(1)?.forEachIndexed { i, stop ->
     ThemedDestination(stop.coordinate, theme, car, id = "ow-stop-$i")
   }
-  shown?.let { ThemedPuck(it, theme, car, style) }
+  shown?.let { ThemedPuck(it, theme, car, style, headingUp) }
 }
+
+/** Whether the camera follows the car heading-up. */
+private val NavigationMapState.headingUp: () -> Boolean
+  get() = { cameraMode == NavigationCameraMode.FOLLOW_USER_WITH_BEARING }
 
 /**
  * Traffic on the trip's route, trimmed behind the arrow every 25 m (it composes only then). Where

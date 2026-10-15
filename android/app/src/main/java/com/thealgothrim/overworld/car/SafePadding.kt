@@ -9,18 +9,19 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Padding that keeps the map's focus inside [area] (the part of the car screen Android Auto leaves
- * free), with the top pushed down by [top] of its height. Ferrostar's
+ * free), with the top pushed down by [top] of its height and the left edge pushed right by [start]
+ * of its width (which moves the followed arrow right, away from the HUD on the left). Ferrostar's
  * surfaceStableFractionalPadding, clamped at zero: Compose throws on negative padding, so an area
  * reaching past the drawing surface (the simulator never reports one; a real head unit might)
  * would have closed the app in the car.
  */
 @Composable
-fun safeStablePadding(area: Rect?, top: Float = 0f): PaddingValues {
+fun safeStablePadding(area: Rect?, top: Float = 0f, start: Float = 0f): PaddingValues {
   if (area == null) return PaddingValues(0.dp)
   val surface = LocalWindowInfo.current.containerSize
   return with(LocalDensity.current) {
     PaddingValues(
-        start = area.left.coerceAtLeast(0).toDp(),
+        start = (area.left + area.width() * start).coerceAtLeast(0f).toDp(),
         top = (area.top + area.height() * top).coerceAtLeast(0f).toDp(),
         end = (surface.width - area.right).coerceAtLeast(0).toDp(),
         bottom = (surface.height - area.bottom).coerceAtLeast(0).toDp(),

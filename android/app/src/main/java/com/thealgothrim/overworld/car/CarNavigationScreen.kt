@@ -42,6 +42,8 @@ import com.thealgothrim.overworld.R
 import com.thealgothrim.overworld.theme.Skin
 import com.thealgothrim.overworld.map.rememberOverworldMapState
 import com.thealgothrim.overworld.map.OverworldCarMap
+import com.thealgothrim.overworld.map.AutoZoomEffect
+import com.thealgothrim.overworld.map.driveCamera
 import com.thealgothrim.overworld.ui.CarTapTargets
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineScope
@@ -116,6 +118,8 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
       val hit = { r: androidx.compose.ui.geometry.Rect? -> r?.inflate(12f)?.contains(Offset(x, y)) == true }
       when {
         hit(CarTapTargets.camera) -> viewModel.markCamera()
+        hit(CarTapTargets.home) -> AppModule.saved.state.value.home?.let { viewModel.startNavigation(it.coordinate, "Home") }
+        hit(CarTapTargets.work) -> AppModule.saved.state.value.work?.let { viewModel.startNavigation(it.coordinate, "Work") }
         viewModel.planner.value.preview == null -> {}
         hit(CarTapTargets.start) -> viewModel.startPreview()
         hit(CarTapTargets.cancel) -> viewModel.cancelPreview()
@@ -148,15 +152,19 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
     val theme by themeStore.theme.collectAsState()
     val surfaceArea by screenSurfaceState(surfaceAreaTracker)
     val normalPadding = safeStablePadding(surfaceArea?.compositeArea)
-    // Keep the arrow in the lower part of the visible map while driving.
-    val trackingPadding = safeStablePadding(surfaceArea?.compositeArea, top = 0.45f)
+    // Keep the arrow low and a little right of centre while driving, like Google's: the road ahead
+    // gets the screen and the HUD keeps the left.
+    val trackingPadding = safeStablePadding(surfaceArea?.compositeArea, top = 0.45f, start = 0.25f)
+    val driveCamera = theme.skin.driveCamera
+    val zoom = CAR_ZOOM + driveCamera.zoomOffset
     val cameraOptions =
         navigationCameraOptions()
-            .copy(browsingPadding = normalPadding, navigationPadding = trackingPadding, navigationZoom = 16.4)
+            .copy(browsingPadding = normalPadding, navigationPadding = trackingPadding, navigationZoom = zoom, navigationTilt = driveCamera.tilt)
     // With no trip the car still drives: follow it heading-up like a trip does (Google Maps' free
     // drive). North-up made the map look stuck while the car turned.
     val state = rememberOverworldMapState(cameraOptions, initialCameraMode = NavigationCameraMode.FOLLOW_USER_WITH_BEARING)
     mapState = state
+    AutoZoomEffect(state, viewModel.navigationUiState.collectAsState(), base = zoom)
 
     // Route overviews fit the part of the map nothing covers: inside Android Auto's visible area
     // (which leaves out its own cards) and, while driving with the game HUD, right of our cards.
@@ -365,3 +373,6 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
     invalidate()
   }
 }
+
+/** The car map's following zoom at about 40 km/h, before the theme's own offset (see DriveCamera). */
+private const val CAR_ZOOM = 16.4

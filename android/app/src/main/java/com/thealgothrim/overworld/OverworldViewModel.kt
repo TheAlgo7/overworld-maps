@@ -3,6 +3,7 @@ package com.thealgothrim.overworld
 import android.content.Context
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewModelScope
@@ -46,6 +47,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -124,6 +126,8 @@ class OverworldViewModel :
   private val lastLocation = MutableStateFlow<UserLocation?>(null)
   /** Which way the last fixes moved, for when GPS gives no course of its own. */
   @Volatile private var movementHeading: Double? = null
+  /** Fixes thrown out in a row by [plausible]. */
+  private var rejected = 0
   /** Map screens in view right now (the phone app, the car screen). */
   private val watchers = MutableStateFlow(0)
 
@@ -137,8 +141,16 @@ class OverworldViewModel :
   private var searchJob: Job? = null
 
   private val _area = MutableStateFlow<String?>(null)
-  /** Neighbourhood around the driver, refreshed about every 45 s while navigating. */
+  /** Neighbourhood around the driver, refreshed about every 45 s while driving, trip or not. */
   val area: StateFlow<String?> = _area.asStateFlow()
+
+  private val _gpsLost = MutableStateFlow(false)
+  /**
+   * A map is on screen and location is allowed, but no fix has come for [GPS_LOST_MS]: the screens
+   * say "Location not found" (like Google Maps) instead of a frozen arrow.
+   */
+  val gpsLost: StateFlow<Boolean> = _gpsLost.asStateFlow()
+  @Volatile private var lastFixAt = SystemClock.elapsedRealtime()
 
   private val _arrived = MutableSharedFlow<String>(extraBufferCapacity = 1)
   /** Emits the destination name once when a trip reaches its end (not when the driver ends it). */
@@ -184,11 +196,22 @@ class OverworldViewModel :
           }
           .collect {
             if (it != null) {
-              lastLocation.value?.let { previous ->
-                if (metres(previous.coordinates, it.coordinates) >= 8.0) movementHeading = bearing(previous.coordinates, it.coordinates)
+              val previous = lastLocation.value
+              if (previous != null && !plausible(it, previous)) {
+                rejected++
+                // Three in a row is the car really being somewhere else (a tunnel exit, the app
+                // coming back after a while): take it.
+                if (rejected < 3) return@collect
               }
-              lastLocation.value = it
-              rememberFix(it.coordinates)
+              rejected = 0
+              // Standing at a light, GPS wanders a few metres; at a T-junction that put the arrow
+              // on the crossing road. Standing still, the arrow stays where it stopped.
+              val fix = if (previous != null && standingStill(it, previous)) it.copy(coordinates = previous.coordinates, courseOverGround = previous.courseOverGround) else it
+              lastLocation.value?.let { previous ->
+                if (metres(previous.coordinates, fix.coordinates) >= 8.0) movementHeading = bearing(previous.coordinates, fix.coordinates)
+              }
+              lastLocation.value = fix
+              rememberFix(fix.coordinates)
             }
           }
     }
@@ -221,14 +244,41 @@ class OverworldViewModel :
     }
     viewModelScope.launch {
       var lastLookup = 0L
+      var lookedAt: GeographicCoordinate? = null
+      var seen: UserLocation? = null
       navigationUiState.collect { state ->
-        val at = state.location?.coordinates ?: return@collect
+        val location = state.location ?: return@collect
+        if (location !== seen) {
+          seen = location
+          lastFixAt = SystemClock.elapsedRealtime()
+          if (_gpsLost.value) _gpsLost.value = false
+        }
+        val at = location.coordinates
         val now = System.currentTimeMillis()
-        if (state.isNavigating() && now - lastLookup > 45_000) {
+        // The area name shows while free driving too, so look it up whenever the car has moved on.
+        val moved = lookedAt?.let { metres(it, at) > 250.0 } ?: true
+        if (moved && now - lastLookup > 45_000) {
           lastLookup = now
+          lookedAt = at
           launch { runCatching { AppModule.search.areaAt(at) }.getOrNull()?.let { _area.value = it } }
         }
       }
+    }
+    viewModelScope.launch {
+      combine(hasLocationPermission, watchers) { granted, screens -> granted && screens > 0 }
+          .distinctUntilChanged()
+          .collectLatest { on ->
+            if (!on) {
+              _gpsLost.value = false
+              return@collectLatest
+            }
+            // A fresh start gets the full wait before it counts as lost.
+            lastFixAt = maxOf(lastFixAt, SystemClock.elapsedRealtime())
+            while (true) {
+              _gpsLost.value = SystemClock.elapsedRealtime() - lastFixAt > GPS_LOST_MS
+              delay(2_000)
+            }
+          }
     }
     viewModelScope.launch {
       navigationUiState.map { it.routeGeometry }.collect { geometry ->
@@ -822,11 +872,40 @@ class OverworldViewModel :
         else -> "Couldn't find a route. Check the connection and try again."
       }
 
+  /**
+   * Whether [fix] is believable after [previous]: not a vague fix (city canyons, flyovers) right
+   * after a sharp one, and not a jump faster than any car. Those made the arrow leap off the road.
+   */
+  private fun plausible(fix: UserLocation, previous: UserLocation): Boolean {
+    val seconds = java.time.Duration.between(previous.timestamp, fix.timestamp).toMillis() / 1000.0
+    if (seconds <= 0.0) return true
+    if (fix.horizontalAccuracy > VAGUE_FIX_METRES && previous.horizontalAccuracy < SHARP_FIX_METRES && seconds < FRESH_FIX_SECONDS) return false
+    val slack = fix.horizontalAccuracy + previous.horizontalAccuracy
+    return (metres(previous.coordinates, fix.coordinates) - slack) / seconds < MAX_CAR_SPEED
+  }
+
+  /** Both fixes say the car isn't moving, and [fix] is within GPS's own wobble of [previous]. */
+  private fun standingStill(fix: UserLocation, previous: UserLocation): Boolean {
+    val speed = fix.speed?.value ?: return false
+    val before = previous.speed?.value ?: return false
+    if (speed > STILL_SPEED || before > STILL_SPEED) return false
+    return metres(previous.coordinates, fix.coordinates) < maxOf(STILL_WANDER_METRES, fix.horizontalAccuracy)
+  }
+
   companion object {
     private const val TAG = "OverworldViewModel"
     /** How quickly a new arrival estimate takes over (a time constant, in seconds). */
     private const val ETA_EASE_SECONDS = 20.0
     /** A fix younger than this is where the car is; an older one is checked against the phone's latest. */
     private const val FRESH_FIX_SECONDS = 5L
+    /** No fix for this long with a map on screen: "Location not found". */
+    private const val GPS_LOST_MS = 12_000L
+    /** About 3 km/h: under this the car is standing. */
+    private const val STILL_SPEED = 0.8
+    private const val STILL_WANDER_METRES = 20.0
+    private const val VAGUE_FIX_METRES = 60.0
+    private const val SHARP_FIX_METRES = 25.0
+    /** 250 km/h, in m/s. */
+    private const val MAX_CAR_SPEED = 70.0
   }
 }

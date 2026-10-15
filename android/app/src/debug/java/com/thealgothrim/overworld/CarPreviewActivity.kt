@@ -16,6 +16,8 @@ import com.stadiamaps.ferrostar.maplibreui.runtime.NavigationCameraMode
 import com.stadiamaps.ferrostar.maplibreui.runtime.navigationCameraOptions
 import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.SurfaceAreaTracker
 import com.thealgothrim.overworld.car.safeStablePadding
+import com.thealgothrim.overworld.map.AutoZoomEffect
+import com.thealgothrim.overworld.map.driveCamera
 import com.thealgothrim.overworld.map.OverworldCarMap
 import com.thealgothrim.overworld.map.rememberOverworldMapState
 
@@ -45,10 +47,19 @@ class CarPreviewActivity : ComponentActivity() {
       // The whole window stands in for the area Android Auto leaves free, as on the car screen.
       val surface = LocalWindowInfo.current.containerSize
       val area = Rect(0, 0, surface.width, surface.height)
+      // The same camera as CarNavigationScreen: the game's tilt, the arrow low and right of centre.
+      val driveCamera = theme.skin.driveCamera
+      val zoom = 16.4 + driveCamera.zoomOffset
       val cameraOptions =
           navigationCameraOptions()
-              .copy(browsingPadding = safeStablePadding(area), navigationPadding = safeStablePadding(area, top = 0.45f), navigationZoom = 16.4)
+              .copy(
+                  browsingPadding = safeStablePadding(area),
+                  navigationPadding = safeStablePadding(area, top = 0.45f, start = 0.25f),
+                  navigationZoom = zoom,
+                  navigationTilt = driveCamera.tilt,
+              )
       val state = rememberOverworldMapState(cameraOptions, initialCameraMode = NavigationCameraMode.FOLLOW_USER_WITH_BEARING)
+      AutoZoomEffect(state, viewModel.navigationUiState.collectAsState(), base = zoom)
       val tracker = remember { SurfaceAreaTracker {} }
       val navigating = uiState.isNavigating()
       LaunchedEffect(navigating) {
