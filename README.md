@@ -8,6 +8,8 @@
 </p>
 
 <p align="center">
+  <a href="#get-it">Get it</a>
+  &nbsp;·&nbsp;
   <a href="#screenshots">Screenshots</a>
   &nbsp;·&nbsp;
   <a href="#features">Features</a>
@@ -38,6 +40,12 @@ It is a personal project, built first for one car: a Tata Curvv with a 10.25-inc
 | **Red Dead 2** | Parchment and ink: ink roads, dotted railways, pencil place names, hatched forest, paper grain, a red route. Seen from straight above, like the game's minimap. Red Dead menus and HUD. | Ready |
 | **GTA VI** | The minimap from Rockstar's 2026 Extended Look: a steep 3D view close in, pale warm-grey ground, broad roads with lane dashes, raised and shaded buildings, flyovers standing over the roads below, grey-teal water, no names, and a pink route that fades in just ahead of the marker. It follows the sun: dim and warm at golden hour, violet slate at night. Rounded dark-glass HUD. | Ready |
 | **Next** | Minecraft, Genshin Impact, Fortnite OG, Zelda: Breath of the Wild, Cyberpunk 2077. | Planned |
+
+## Get it
+
+**On the phone:** download the APK from the [latest release](https://github.com/TheAlgo7/overworld-maps/releases/latest) and open it (Android 10 or newer; allow installs from your browser or files app when asked). This build uses free stand-in fonts in place of the games' own (see [Game fonts and art](#game-fonts-and-art)) and takes live traffic from Google alone.
+
+**In the car:** Android Auto only shows navigation apps installed from Google Play, so the car needs the Play copy. Overworld is in testing on Google Play: join the [Algothrim testers group](https://groups.google.com/g/algothrim-testers) with the Google account on your phone, then open [Overworld's Play testing page](https://play.google.com/apps/testing/com.thealgothrim.overworld) on the phone, tap **Become a tester** and install. Updates arrive as ordinary Play Store updates. The APK and the Play copy are signed differently, so uninstall one before installing the other.
 
 ## Screenshots
 
@@ -70,16 +78,18 @@ It is a personal project, built first for one car: a Tata Curvv with a 10.25-inc
 ## Features
 
 - **The car screen comes first.** Our HUD owns the left of the Android Auto screen and Android Auto keeps the right: the turn card with "Then" and road alerts top-left, the time card bottom-left with the speedometer standing on it and the speed-limit sign beside it, the street name along the bottom. The route preview is a themed card with Start and Cancel drawn in the game's style.
-- **Any car screen.** The HUD is drawn for the Curvv's wide screen and scales down to fit smaller head units and the map's half of a split screen (Spotify beside it), so nothing overlaps.
+- **Any car screen.** The HUD is drawn for the Curvv's wide screen and scales down to fit smaller head units and the map's half of a split screen (Spotify beside it), so nothing overlaps. Switching between full screen and split screen glides instead of jumping.
+- **Map buttons in the game's style.** Sound, zoom and the route overview are round buttons drawn in each world's look, in place of Android Auto's grey ones. They appear with a touch and leave with Android Auto's own buttons, so the map stays clear while driving. Drag, pinch or zoom the map and a **re-centre** button stays until you tap it, then the camera eases back to following the car.
 - **A camera like each game's, zoomed like Google's.** Each world has its own tilt (steep 3D for GTA VI, gentle for GTA V, flat for Red Dead). The map pulls back on a fast straight road and comes in before a turn. Your marker sits low and right of centre, pointing straight up the road, and is drawn where the car is now, not a GPS fix behind.
 - **Flyovers you drive under.** Bridges stand over the roads they cross with an edge and a shadow on the ground. The route runs under a flyover you pass beneath and over one you drive on, like the games' minimaps.
-- **Free drive.** With no trip the car map still follows you heading-up and glides between GPS fixes, with your speed, the area name and camera alerts, like Google Maps' free drive. Standing at a light, the marker stays put instead of wandering onto the crossing road. Parked for a few minutes, "Where to?" comes back with Home and Work one tap away.
-- **Says when GPS is gone.** No fix for a while shows "Location not found" instead of a frozen marker.
+- **Free drive.** With no trip the car map still follows you heading-up and glides between GPS fixes, with your speed, the area name and camera alerts, like Google Maps' free drive. Parked for a few minutes, "Where to?" comes back with Home and Work one tap away.
+- **Steady GPS.** Fixes that jump further than the car could have driven are held back, so at a red light the marker stays put instead of wandering onto the crossing road, and under a flyover it carries on along the road for a few seconds instead of freezing. A real wrong turn still reroutes within seconds; a single stray fix never does.
+- **Says when GPS is gone.** No fix for a while shows "Location not found" instead of a frozen marker, and the speed hides rather than showing an old one.
 - **Find places on the car screen.** Search (Android Auto's keyboard while parked) and **Nearby**: petrol and CNG, food, parking, toilets, hospitals and hotels, closest first.
 - **Google's routes and places, the game's look.** Trips follow Google Maps' own route, with its traffic, closures and one-ways and its time to go, laid onto the game map. Search asks Google alongside TomTom and OpenStreetMap, so small places only Google lists (a house, a small church) turn up. It also reads plus codes like `F5QR+3F New Delhi` and takes a place shared from Google Maps (Share > Overworld). One switch in Settings turns Google off and uses only open data.
 - **The route behaves like the games'.** The road already driven disappears behind the marker, as on GTA V's radar and Red Dead's minimap; GTA VI's fades in just ahead of it. The markers are drawn small, the way the games draw their blips.
 - **Traffic only where it matters.** Like Google's route line: amber where slow, red for jams, darkest where closed, and only on your route. Traffic on every road is one switch away in Layers, off by default.
-- **Road alerts.** Traffic lights on the route, speed cameras ahead (every kind OpenStreetMap has, plus the ones you mark with **+ Cam** while driving, and an optional beep), and accidents, road works and closures that run along the route (not side streets it crosses), with how much time the traffic adds.
+- **Road alerts.** Traffic lights on the route, speed cameras ahead (every kind OpenStreetMap has, plus the ones you mark with **+ Cam** while driving, a car-screen button you turn on in Settings, and an optional beep), and accidents, road works and closures that run along the route (not side streets it crosses), with how much time the traffic adds.
 - **Speed-limit signs for each world**, turning red at 5 km/h over, along with the speed.
 - **GTA VI follows the sun.** Its map is pale by day, warm at golden hour and violet at night, worked out from where you are, or held at one in Settings. Its buildings stand up in 3D; a Layers switch lays them flat.
 - **Google Maps layout, game look.** Search, Home, Work and Saved, a place sheet, a route preview, a Layers sheet with theme cards. Settings is the game's pause menu, in four groups (map, driving, places, about); anything that forgets a place asks for a second tap.
@@ -134,7 +144,7 @@ You need JDK 21 and the Android SDK.
 powershell -File tools/build-install.ps1          # build the debug APK and install it on the connected phone or emulator
 ```
 
-Or by hand from PowerShell: `cd android; .\gradlew.bat :app:assembleDebug`. Debug builds are their own app, `com.thealgothrim.overworld.debug` ("Overworld debug"), so they install next to the Play copy instead of over it. Don't call `gradlew.bat` from Git Bash when the path has a space in it: it fails without an obvious error and the old APK stays in place.
+Or by hand from PowerShell: `cd android; .\gradlew.bat :app:assembleDebug`. Add `-Ppublic` to a release build to leave out the game fonts and the TomTom key even when they're on your machine; that's how the APK on the releases page is made. Debug builds are their own app, `com.thealgothrim.overworld.debug` ("Overworld debug"), so they install next to the Play copy instead of over it. Don't call `gradlew.bat` from Git Bash when the path has a space in it: it fails without an obvious error and the old APK stays in place.
 
 After changing a theme in `prototype/themes.js`, run `node tools/export-android.mjs`, then rebuild.
 
@@ -179,7 +189,7 @@ To check a world's car screen without a head unit, debug builds have `CarPreview
 
 ## Put it in the car
 
-Android Auto won't show a sideloaded navigation app in a real car ([Google's testing docs](https://developer.android.com/training/cars/testing)). It has to come from Google Play. Play's **internal testing** track skips the review and reaches up to 100 testers within minutes:
+Android Auto won't show a sideloaded navigation app in a real car ([Google's testing docs](https://developer.android.com/training/cars/testing)). It has to come from Google Play. Play's **internal testing** track skips the review and reaches up to 100 testers within minutes, which is the quickest way into your own car:
 
 1. Create a Google Play Console developer account (USD 25 once, plus an identity check), then **Create app** with the package name `com.thealgothrim.overworld`.
 2. Make an upload key (`keytool -genkeypair -keystore overworld-upload.jks -alias upload -keyalg RSA -keysize 4096 -validity 12000`) and put `uploadStoreFile`, `uploadStorePassword`, `uploadKeyAlias` and `uploadKeyPassword` in `android/local.properties`. Keep the key out of the repo. Play re-signs the app with its own key, and a lost upload key can be reset in Play Console.
@@ -188,6 +198,8 @@ Android Auto won't show a sideloaded navigation app in a real car ([Google's tes
 5. Open the testers' opt-in link on the phone, accept, and install from Play. Overworld then appears in the car's Android Auto launcher. Later versions arrive as ordinary Play Store updates.
 
 Internal app sharing (a link per upload, debug builds allowed) only works once the app has been published on a track, so it can't be the first step.
+
+To reach more people, **closed testing** takes a Google Group as its tester list, so anyone who joins the group can install. It needs the store listing, content rating, data safety form and privacy policy filled in, and goes through Play's review (for Android Auto, the car-quality part of the review only warns on this track). A personal developer account then needs 12 testers opted in for 14 days in a row before it can apply for production; open testing unlocks with production ([Play's rules](https://support.google.com/googleplay/android-developer/answer/14151465), [car app distribution](https://developer.android.com/training/cars/distribute)).
 
 ## Project structure
 
@@ -214,7 +226,7 @@ licenses/             licence texts for the bundled fonts
 
 ## Known limits
 
-- Driven in a Tata Curvv, a Tata Nexon and a Volkswagen Virtus GT over Android Auto and used on a Galaxy S24 Ultra; tested on the Desktop Head Unit and an emulator at the Curvv's, a 1280x720 and an 800x480 screen size.
+- Driven in a Tata Curvv, a Tata Nexon and a Volkswagen Virtus GT over Android Auto and used on a Galaxy S24 Ultra; tested on the Desktop Head Unit at the screen sizes of India's popular cars (1920x720, 10.1- and 9-inch 1280x720, 7-inch 800x480) and on an emulator.
 - Google's route, traffic and search come from the web endpoints its own website uses. They aren't a published API and can change or refuse without warning; the app then falls back to the open services on its own.
 - The public routing and search servers are fair-use: fine for one driver, not for a public app with many users.
 - OpenStreetMap knows few of Delhi's speed cameras (about 9 speed cameras and 40 enforcement cameras in the NCR core). Radarbot's list is its own and can't be used, so cameras you mark fill the gaps on your roads.

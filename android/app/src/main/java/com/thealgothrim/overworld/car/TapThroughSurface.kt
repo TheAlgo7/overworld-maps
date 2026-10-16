@@ -67,8 +67,11 @@ fun ComposableScreen.passTapsTo(onTap: (x: Float, y: Float, shift: Float) -> Uni
         }
         override fun onScroll(distanceX: Float, distanceY: Float) = inner.onScroll(distanceX, distanceY)
         override fun onFling(velocityX: Float, velocityY: Float) = inner.onFling(velocityX, velocityY)
-        override fun onScale(focusX: Float, focusY: Float, scaleFactor: Float) =
-            inner.onScale(focusX + windowShift(width, visible), focusY, scaleFactor)
+        override fun onScale(focusX: Float, focusY: Float, scaleFactor: Float) {
+          // A pinch: the driver's own zoom, held like the + / - buttons' (see AutoZoomEffect).
+          CarTapTargets.zoomedAt.longValue = System.currentTimeMillis()
+          inner.onScale(focusX + windowShift(width, visible), focusY, scaleFactor)
+        }
 
         override fun onClick(x: Float, y: Float) = onTap(x, y, windowShift(width, visible))
       }

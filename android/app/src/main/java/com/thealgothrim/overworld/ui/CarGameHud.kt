@@ -86,6 +86,7 @@ fun BoxScope.CarGameHud(
     val estimate by AppModule.viewModel.estimatedKmh.collectAsState()
     // GPS speed, or the speed worked out from movement when a fix has none.
     val moving = rememberFreeDriving(uiState.location?.speed?.value ?: estimate?.div(3.6) ?: 0.0)
+    if (preview == null) MapButtons(spec, uiState, rememberSpeedNow(uiState).kmh, Modifier.align(Alignment.BottomEnd).padding(bottom = 24.dp), trip = false)
     when {
       preview != null -> Appear(Modifier.align(Alignment.TopStart)) { PreviewCard(spec, preview, extras, Modifier) }
       lost -> Appear(Modifier.align(Alignment.TopStart)) { LostCard(spec, Modifier) }
@@ -216,7 +217,7 @@ object CarTapTargets {
   val zoomHeld = mutableStateOf(false)
   /** ...until re-centre sets this. */
   val zoomReleasedAt = mutableLongStateOf(0L)
-  /** When + or - was last pressed. */
+  /** When the driver last zoomed: + or -, or a pinch. */
   val zoomedAt = mutableLongStateOf(0L)
 }
 
@@ -435,13 +436,13 @@ private fun rememberTouchedRecently(): Boolean {
 
 /**
  * The map's own buttons down the right, in the game's round style: sound, zoom in and out, and the
- * route overview. Android Auto's were plain grey ones it draws itself, and it ignores the colours
- * an app asks for, so on a trip these replace them. Pressed through map taps (see
+ * route overview (sound and overview on a trip only). Android Auto's were plain grey ones it draws
+ * itself, and it ignores the colours an app asks for, so these replace them. Pressed through map taps (see
  * CarNavigationScreen); they keep out of the way while driving, except that once the map has been
  * moved (dragged, zoomed, the overview) the bottom one turns into re-centre and stays.
  */
 @Composable
-private fun MapButtons(spec: SkinSpec, uiState: NavigationUiState, kmh: Int?, modifier: Modifier) {
+private fun MapButtons(spec: SkinSpec, uiState: NavigationUiState, kmh: Int?, modifier: Modifier, trip: Boolean = true) {
   val following by CarTapTargets.following
   val zoomHeld by CarTapTargets.zoomHeld
   val moved = !following || zoomHeld
@@ -451,12 +452,13 @@ private fun MapButtons(spec: SkinSpec, uiState: NavigationUiState, kmh: Int?, mo
   Column(modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
     AnimatedVisibility(shown, enter = enter, exit = exit) {
       Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        MapButton(spec, if (uiState.isMuted == true) GameIcon.SOUND_OFF else GameIcon.SOUND_ON) { CarTapTargets.mute = it }
+        if (trip) MapButton(spec, if (uiState.isMuted == true) GameIcon.SOUND_OFF else GameIcon.SOUND_ON) { CarTapTargets.mute = it }
         MapButton(spec, GameIcon.ZOOM_IN) { CarTapTargets.zoomIn = it }
         MapButton(spec, GameIcon.ZOOM_OUT) { CarTapTargets.zoomOut = it }
       }
     }
-    AnimatedVisibility(shown || moved, enter = enter, exit = exit) {
+    // With no trip there's no route to show, so only re-centre.
+    AnimatedVisibility(if (trip) shown || moved else moved, enter = enter, exit = exit) {
       MapButton(spec, if (moved) GameIcon.NAVIGATE else GameIcon.ROUTE) { CarTapTargets.overview = it }
     }
   }

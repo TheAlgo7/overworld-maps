@@ -89,8 +89,9 @@ fun AutoZoomEffect(
         heldUntil = 0L
         written = null
       }
-      // The + / - buttons say so outright: their zoom is animated, a little each frame, and could
-      // pass for this loop's own easing.
+      // Where the driver's zooms are reported (the car: + / - and pinches), only those count: the
+      // app's own zoom changes, at the start and end of a trip, aren't the driver's. The buttons'
+      // zoom is animated, a little each frame, and would pass for this loop's own easing anyway.
       if (zoomedAt != null && zoomedAt.value != zoomed) {
         zoomed = zoomedAt.value
         heldUntil = System.currentTimeMillis() + MANUAL_HOLD_MS
@@ -108,7 +109,7 @@ fun AutoZoomEffect(
       val position = state.cameraState.position
       val w = written
       // Moved by someone else: the driver pinched, so hold off for a while.
-      if (w != null && abs(position.zoom - w) > 0.15) heldUntil = now + MANUAL_HOLD_MS
+      if (zoomedAt == null && w != null && abs(position.zoom - w) > 0.15) heldUntil = now + MANUAL_HOLD_MS
       report(now < heldUntil)
       if (now < heldUntil) {
         written = position.zoom

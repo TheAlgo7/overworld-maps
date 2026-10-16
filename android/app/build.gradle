@@ -8,6 +8,10 @@ def props = new Properties()
 def localProps = rootProject.file("local.properties")
 if (localProps.exists()) localProps.withInputStream { props.load(it) }
 
+// `-Ppublic` builds the APK for GitHub releases: the free fonts only (the game fonts and blips in
+// src/local aren't ours to hand out) and no TomTom key (live traffic then comes from Google alone).
+def publicBuild = project.hasProperty("public")
+
 android {
     namespace 'com.thealgothrim.overworld'
     compileSdk = 36
@@ -22,7 +26,7 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         // Live traffic (TomTom free tier). Put tomtomKey=... in local.properties.
-        buildConfigField "String", "TOMTOM_KEY", "\"${props.getProperty("tomtomKey", "")}\""
+        buildConfigField "String", "TOMTOM_KEY", "\"${publicBuild ? "" : props.getProperty("tomtomKey", "")}\""
     }
 
     // Google Play upload key (uploadStoreFile, uploadStorePassword, uploadKeyAlias, uploadKeyPassword
@@ -61,7 +65,7 @@ android {
     }
     sourceSets {
         // Personal-use game fonts live in src/local (gitignored). Missing files fall back to free fonts.
-        main { assets.srcDirs += 'src/local/assets' }
+        if (!publicBuild) main { assets.srcDirs += 'src/local/assets' }
     }
     packagingOptions {
         resources {

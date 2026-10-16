@@ -296,7 +296,10 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
           )
           .apply {
             // With the game HUD, its own themed map buttons stand in for these (see MapButtons).
-            if (!themeStore.carGameHud.value) setMapActionStrip(
+            // PAN alone still has to be there: without it Android Auto keeps drags and pinches on
+            // the map to itself, so the map couldn't be moved on a trip. Touch screens don't show it.
+            if (themeStore.carGameHud.value) setMapActionStrip(ActionStrip.Builder().addAction(Action.PAN).build())
+            else setMapActionStrip(
               ActionStrip.Builder()
                   .addAction(
                       Action.Builder()
@@ -359,18 +362,22 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
         }
         .setActionStrip(idleActions)
         .setMapActionStrip(
-            ActionStrip.Builder()
-                .addAction(Action.PAN)
-                .addAction(Action.Builder().setIcon(icons.add).setOnClickListener { mapState?.zoomIn() }.build())
-                .addAction(Action.Builder().setIcon(icons.remove).setOnClickListener { mapState?.zoomOut() }.build())
-                // Back to following the car after looking around (there was no way back before).
-                .addAction(
-                    Action.Builder()
-                        .setIcon(icons.camera(mapState?.isTrackingUser != false))
-                        .setOnClickListener { mapState?.let { followCar(it) }; invalidate() }
-                        .build()
-                )
-                .build()
+            // The game HUD draws its own zoom and re-centre buttons (see MapButtons); PAN stays so
+            // the map can still be dragged and pinched.
+            if (themeStore.carGameHud.value) ActionStrip.Builder().addAction(Action.PAN).build()
+            else
+                ActionStrip.Builder()
+                    .addAction(Action.PAN)
+                    .addAction(Action.Builder().setIcon(icons.add).setOnClickListener { mapState?.zoomIn() }.build())
+                    .addAction(Action.Builder().setIcon(icons.remove).setOnClickListener { mapState?.zoomOut() }.build())
+                    // Back to following the car after looking around (there was no way back before).
+                    .addAction(
+                        Action.Builder()
+                            .setIcon(icons.camera(mapState?.isTrackingUser != false))
+                            .setOnClickListener { mapState?.let { followCar(it) }; invalidate() }
+                            .build()
+                    )
+                    .build()
         )
         .build()
   }
