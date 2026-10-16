@@ -174,7 +174,7 @@ fun SettingsScreen(
                   Setting(
                       "Marked cameras",
                       if (marked.isNotEmpty()) "Speed cameras you added with + Cam in the car, or Mark a camera here on the phone. Tap again to remove them all."
-                      else "None yet. Tap + Cam in the car as you pass one and it beeps there from then on.",
+                      else "None yet. Turn on + Cam on the car screen above and tap it as you pass one, or use Mark a camera here on the phone; it beeps there from then on.",
                       value = marked.size.toString(),
                       clears = marked.isNotEmpty(),
                   ) { AppModule.cameras.clear() },
