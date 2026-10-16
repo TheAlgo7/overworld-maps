@@ -48,6 +48,7 @@ import com.thealgothrim.overworld.theme.Skin
 import com.thealgothrim.overworld.ui.gta.Gta
 import com.thealgothrim.overworld.ui.rdr.Rdr
 import com.thealgothrim.overworld.ui.vi.Vi
+import com.thealgothrim.overworld.ui.vi.outerShadow
 import com.thealgothrim.overworld.ui.vi.viGlass
 
 /** Colours and type for the app chrome, taken from the game the theme is based on. */
@@ -172,7 +173,7 @@ fun SkinRoundButton(spec: SkinSpec, icon: GameIcon, onClick: () -> Unit, modifie
   Box(
       modifier
           .size(52.dp)
-          .shadow(8.dp, CircleShape, clip = false)
+          .then(if (spec.vi) Modifier.outerShadow(CircleShape, blur = 6.dp, drop = 1.5.dp) else Modifier.shadow(8.dp, CircleShape, clip = false))
           .background(
               when (spec.skin) {
                 Skin.GTA -> Color(0xE6000000)
@@ -347,7 +348,7 @@ fun RowScope.SkinRowSpacer() = Spacer(Modifier.weight(1f))
 enum class GameIcon {
   SEARCH, SETTINGS, LOCATE, CLOSE, BACK, STAR, STAR_FILLED, HOME, WORK, RECENT, PIN, SOUND_ON, SOUND_OFF,
   ROUTE, CHEVRON_UP, CHEVRON_DOWN, NORTH, NAVIGATE, CAR, LAYERS,
-  FUEL, FOOD, PARKING, TOILET, HOSPITAL, HOTEL, CAMERA,
+  FUEL, FOOD, PARKING, TOILET, HOSPITAL, HOTEL, CAMERA, ZOOM_IN, ZOOM_OUT,
 }
 
 /** The icon for a kind of nearby place. */
@@ -405,6 +406,11 @@ fun DrawScope.drawGameIcon(icon: GameIcon, color: Color) {
       drawLine(color, p(6f, 6f), p(18f, 18f), strokeWidth = w, cap = StrokeCap.Round)
       drawLine(color, p(18f, 6f), p(6f, 18f), strokeWidth = w, cap = StrokeCap.Round)
     }
+    GameIcon.ZOOM_IN -> {
+      drawLine(color, p(5f, 12f), p(19f, 12f), strokeWidth = w, cap = StrokeCap.Round)
+      drawLine(color, p(12f, 5f), p(12f, 19f), strokeWidth = w, cap = StrokeCap.Round)
+    }
+    GameIcon.ZOOM_OUT -> drawLine(color, p(5f, 12f), p(19f, 12f), strokeWidth = w, cap = StrokeCap.Round)
     GameIcon.BACK -> drawPath(path(19f to 12f, 5f to 12f, 11f to 6f, 5f to 12f, 11f to 18f), color, style = line)
     GameIcon.STAR, GameIcon.STAR_FILLED -> {
       val star =

@@ -86,6 +86,7 @@ fun SettingsScreen(
 ) {
   val store = AppModule.themeStore
   val carGameHud by store.carGameHud.collectAsState()
+  val carCamButton by store.carCamButton.collectAsState()
   val useGoogle by store.useGoogle.collectAsState()
   val mapTime by store.mapTime.collectAsState()
   val details by store.details.collectAsState()
@@ -129,6 +130,11 @@ fun SettingsScreen(
                       else "Android Auto shows its own turn and ETA cards, in the theme's colour.",
                       value = if (carGameHud) "Game HUD" else "Android Auto",
                   ) { store.setCarGameHud(!carGameHud) },
+                  Setting(
+                      "+ Cam on the car screen",
+                      "A button on the car's map for marking a speed camera as you pass it. It shows for a few seconds after you touch the screen, then hides again.",
+                      checked = carCamButton,
+                  ) { store.setCarCamButton(!carCamButton) },
                   Setting(
                       "Google routes and search",
                       if (useGoogle) "Routes, traffic times and place search come from Google Maps, laid onto the game map. Off uses only open map data."

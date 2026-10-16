@@ -645,8 +645,14 @@ class OverworldViewModel :
     val now = System.currentTimeMillis()
     val targetArrival = now + (target * 1000).toLong()
     val previous = shownArrival
+    // The first live-traffic time for a route lands at once too: it comes a second after the route
+    // itself, and easing from the routing server's guess took half a minute (52 min sliding to 34
+    // after a reroute).
+    val newRoute = route !== shownFor
+    val firstTraffic = extras.eta != null && (newRoute || !shownTraffic)
+    shownTraffic = extras.eta != null
     val arrival =
-        if (previous == null || route !== shownFor) targetArrival
+        if (previous == null || newRoute || firstTraffic) targetArrival
         else {
           val k = 1 - kotlin.math.exp(-((now - shownAt).coerceIn(0L, 5_000L) / 1000.0) / ETA_EASE_SECONDS)
           previous + ((targetArrival - previous) * k).toLong()
@@ -660,6 +666,8 @@ class OverworldViewModel :
   private var shownArrival: Long? = null
   private var shownAt = 0L
   private var shownFor: List<GeographicCoordinate>? = null
+  /** Whether the time shown for this route already came from live traffic. */
+  private var shownTraffic = false
 
   private fun estimateSeconds(state: NavigationUiState, extras: RouteExtras): Double? {
     val progress = state.progress ?: return null

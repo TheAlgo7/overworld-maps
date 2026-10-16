@@ -16,6 +16,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshots.Snapshot
 import com.stadiamaps.ferrostar.core.NavigationUiState
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -105,10 +106,14 @@ private fun rememberRouteSnappedLocation(
     return remember(route, raw) { DisplayedPosition(route, raw, along) }
   }
 
-  val targetProjection =
-      remember(route, userLocation.position.value) { route.project(userLocation.position.value) }
   val animatedProgress =
-      remember(route) { Animatable(targetProjection.progressMeters, DoubleToVector) }
+      remember(route) { Animatable(route.project(userLocation.position.value).progressMeters, DoubleToVector) }
+  // Near where the arrow already is (read without subscribing: the animation runs every frame).
+  val targetProjection =
+      remember(route, userLocation.position.value) {
+        val from = Snapshot.withoutReadObservation { animatedProgress.value }
+        route.projectNear(userLocation.position.value, from, reachAhead(uiState.location?.speed?.value))
+      }
 
   LaunchedEffect(route, targetProjection.progressMeters) {
     val targetProgress = max(animatedProgress.value, targetProjection.progressMeters)
@@ -169,6 +174,28 @@ class RoutePolyline(
     }
     out += GeographicCoordinate(end.latitude, end.longitude)
     return out
+  }
+
+  /**
+   * [position] on the line, looking only from 30 m behind [fromMetres] to [aheadMetres] past it.
+   * Searching the whole line, a route that comes back near itself (a U-turn under a flyover, a
+   * cloverleaf, out and back along one road) could pull the arrow to its other side: ahead, where
+   * it then stayed, or behind, where it stalled. Lost (over 80 m from anything in reach): the
+   * whole line, as before.
+   */
+  internal fun projectNear(position: Position, fromMetres: Double, aheadMetres: Double): RouteProjection {
+    val first = segmentIndexAt((fromMetres - NEAR_BEHIND_METRES).coerceIn(0.0, totalLengthMeters))
+    val last = segmentIndexAt((fromMetres + aheadMetres).coerceIn(0.0, totalLengthMeters))
+    var best = RouteProjection(progressMeters = fromMetres)
+    var bestDistanceSquared = Double.POSITIVE_INFINITY
+    for (index in first..last) {
+      val p = projectOntoSegment(index, position)
+      if (p.distanceSquaredMeters < bestDistanceSquared) {
+        bestDistanceSquared = p.distanceSquaredMeters
+        best = RouteProjection(progressMeters = p.progressMeters)
+      }
+    }
+    return if (bestDistanceSquared > LOST_METRES * LOST_METRES) project(position) else best
   }
 
   internal fun project(position: Position): RouteProjection {
@@ -269,6 +296,12 @@ class RoutePolyline(
     )
   }
 }
+
+private const val NEAR_BEHIND_METRES = 30.0
+private const val LOST_METRES = 80.0
+
+/** How far ahead on the route a fix can be from where the arrow is: 5 s of driving, at least 150 m. */
+internal fun reachAhead(speedMs: Double?): Double = maxOf(150.0, (speedMs ?: 0.0) * 5.0)
 
 internal data class RouteProjection(
     val progressMeters: Double,

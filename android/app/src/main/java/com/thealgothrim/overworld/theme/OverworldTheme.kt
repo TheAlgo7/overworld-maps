@@ -154,6 +154,15 @@ class ThemeStore(context: Context) {
     prefs.edit { putBoolean(KEY_CAR_HUD, on) }
   }
 
+  private val _carCamButton = MutableStateFlow(prefs.getBoolean(KEY_CAR_CAM, false))
+  /** + Cam on the car screen, for marking a speed camera as it's passed. Off unless turned on; even on, it shows only after a touch. */
+  val carCamButton: StateFlow<Boolean> = _carCamButton.asStateFlow()
+
+  fun setCarCamButton(on: Boolean) {
+    _carCamButton.value = on
+    prefs.edit { putBoolean(KEY_CAR_CAM, on) }
+  }
+
   private val _useGoogle = MutableStateFlow(prefs.getBoolean(KEY_GOOGLE, true))
   /** Routes, traffic times and search from Google Maps (see routing/GoogleMaps.kt); off uses only the open services. */
   val useGoogle: StateFlow<Boolean> = _useGoogle.asStateFlow()
@@ -197,6 +206,7 @@ class ThemeStore(context: Context) {
   companion object {
     private const val KEY = "theme"
     private const val KEY_CAR_HUD = "car_game_hud"
+    private const val KEY_CAR_CAM = "car_cam_button"
     private const val KEY_GOOGLE = "use_google"
     private const val KEY_MAP_TIME = "map_time"
 

@@ -21,6 +21,8 @@ import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.collectAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloatAsState
@@ -116,6 +118,9 @@ fun HazardRow(spec: SkinSpec, hazard: HazardAhead, modifier: Modifier = Modifier
 /** Over the limit once the speed is this far past it (so 55 on a 50 road), like Google's warning. */
 private const val OVER_BY = 5
 
+/** A speed older than this (no new fix) is hidden. */
+private const val STALE_SPEED_MS = 3_000L
+
 /**
  * The car's speed (km/h) and the road's limit right now. The speed comes from GPS, or on a test
  * drive is worked out from the simulated movement; the limit from the route's annotations.
@@ -129,7 +134,14 @@ data class SpeedNow(val kmh: Int?, val limit: Int?) {
 @Composable
 fun rememberSpeedNow(uiState: NavigationUiState): SpeedNow {
   val estimate by AppModule.viewModel.estimatedKmh.collectAsState()
-  val kmh = uiState.location?.speed?.value?.let { (it * 3.6).roundToInt().coerceAtLeast(0) } ?: estimate
+  // No fix for 3 s (a tunnel, GPS lost): the last speed isn't the car's any more, so it goes until
+  // the next fix. It used to stay up, 51 km/h through a stop in the GPS gap.
+  val fresh by produceState(true, uiState.location?.timestamp) {
+    value = true
+    delay(STALE_SPEED_MS)
+    value = false
+  }
+  val kmh = if (!fresh) null else uiState.location?.speed?.value?.let { (it * 3.6).roundToInt().coerceAtLeast(0) } ?: estimate
   val limit = (uiState.currentAnnotation?.speed as? Speed.Value)?.let {
     if (it.unit.name.contains("MILE", ignoreCase = true)) (it.value * 1.609).roundToInt() else it.value.roundToInt()
   }

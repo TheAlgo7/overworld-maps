@@ -33,7 +33,7 @@ import com.stadiamaps.ferrostar.maplibreui.runtime.NavigationCameraOptions
 import com.stadiamaps.ferrostar.maplibreui.runtime.NavigationMapState
 import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.SurfaceAreaTracker
 import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.screenSurfaceState
-import com.thealgothrim.overworld.car.safeStablePadding
+import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.SurfaceArea
 import androidx.compose.ui.text.style.TextAlign
 import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.RouteExtras
@@ -113,22 +113,9 @@ fun OverworldCarMap(
   val uiState by viewModel.navigationUiState.collectAsState()
   surfaceAreaTracker.rememberGestureDelegate(mapState)
   val surfaceArea by screenSurfaceState(surfaceAreaTracker)
-  // The HUD sits in the area Android Auto leaves uncovered, like Google Maps' cards. The top edge
-  // is pinned: Android Auto's buttons only use the right side, and following the visible area's
-  // top made the cards jump every time those buttons appeared.
   val density = LocalDensity.current
-  val surfaceSize = LocalWindowInfo.current.containerSize
-  val stable =
-      surfaceArea?.visibleArea?.let { area ->
-        with(density) {
-          PaddingValues(
-              start = area.left.coerceAtLeast(0).toDp(),
-              top = 0.dp,
-              end = (surfaceSize.width - area.right).coerceAtLeast(0).toDp(),
-              bottom = (surfaceSize.height - area.bottom).coerceAtLeast(0).toDp(),
-          )
-        }
-      } ?: safeStablePadding(surfaceArea?.compositeArea)
+  val roomTarget = carHudInsets(surfaceArea)
+  val stable = animatedPadding(roomTarget, "hud-room")
   val details by AppModule.themeStore.details.collectAsState()
   val extras by AppModule.viewModel.extras.collectAsState()
   val trafficTiles = AppModule.traffic.flowTilesUrl?.takeIf { details.traffic }
@@ -142,14 +129,13 @@ fun OverworldCarMap(
 
     // The HUD was drawn for the Curvv's wide screen. Smaller head units, and the map's half of a
     // split screen (Spotify beside it), get the same HUD scaled down to fit instead of overlapping.
-    val hudScale =
-        with(density) {
-          val width = (surfaceSize.width.toDp() - stable.calculateLeftPadding(LayoutDirection.Ltr) - stable.calculateRightPadding(LayoutDirection.Ltr)).value
-          val height = (surfaceSize.height.toDp() - stable.calculateTopPadding() - stable.calculateBottomPadding()).value
-          hudScale(width, height)
-        }
+    val hudScale = animatedScale(carHudScale(roomTarget), "hud-scale")
+    // The room Android Auto leaves (stable) at the screen's real density, the HUD scaled inside it.
+    // Applied inside the scaling, the room shrank with the HUD: in the split screen, where the map
+    // starts a media card's width in, the cards slid under the media card and were cut off.
+    Box(Modifier.fillMaxSize().padding(stable)) {
     CompositionLocalProvider(LocalDensity provides Density(density.density * hudScale, density.fontScale)) {
-    Box(Modifier.fillMaxSize().padding(stable).padding(12.dp)) {
+    Box(Modifier.fillMaxSize().padding(12.dp)) {
       val gameHud by AppModule.themeStore.carGameHud.collectAsState()
       val area by AppModule.viewModel.area.collectAsState()
       if (gameHud) {
@@ -188,6 +174,38 @@ fun OverworldCarMap(
       )
     }
     }
+    }
+  }
+}
+
+/**
+ * The car HUD's room: inside Android Auto's stable area, the part it keeps clear even while its
+ * buttons show (Android's guidance for persistent content). It used the visible area, which changes
+ * as those buttons come and go, so the HUD could resize at a touch. The top edge is pinned:
+ * Android Auto's buttons only use the right side, and following the top made the cards jump.
+ */
+@Composable
+fun carHudInsets(surfaceArea: SurfaceArea?): PaddingValues {
+  val area = surfaceArea?.stableArea ?: return PaddingValues(0.dp)
+  val surfaceSize = LocalWindowInfo.current.containerSize
+  return with(LocalDensity.current) {
+    PaddingValues(
+        start = area.left.coerceAtLeast(0).toDp(),
+        top = 0.dp,
+        end = (surfaceSize.width - area.right).coerceAtLeast(0).toDp(),
+        bottom = (surfaceSize.height - area.bottom).coerceAtLeast(0).toDp(),
+    )
+  }
+}
+
+/** [hudScale] for the room [insets] leave on this car screen. */
+@Composable
+fun carHudScale(insets: PaddingValues): Float {
+  val surfaceSize = LocalWindowInfo.current.containerSize
+  return with(LocalDensity.current) {
+    val width = (surfaceSize.width.toDp() - insets.calculateLeftPadding(LayoutDirection.Ltr) - insets.calculateRightPadding(LayoutDirection.Ltr)).value
+    val height = (surfaceSize.height.toDp() - insets.calculateTopPadding() - insets.calculateBottomPadding()).value
+    hudScale(width, height)
   }
 }
 

@@ -1,5 +1,13 @@
 package com.thealgothrim.overworld.ui
 
+import com.thealgothrim.overworld.ui.skin.SkinRoundButton
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -79,8 +87,8 @@ fun BoxScope.CarGameHud(
     // GPS speed, or the speed worked out from movement when a fix has none.
     val moving = rememberFreeDriving(uiState.location?.speed?.value ?: estimate?.div(3.6) ?: 0.0)
     when {
-      preview != null -> PreviewCard(spec, preview, extras, Modifier.align(Alignment.TopStart))
-      lost -> LostCard(spec, Modifier.align(Alignment.TopStart))
+      preview != null -> Appear(Modifier.align(Alignment.TopStart)) { PreviewCard(spec, preview, extras, Modifier) }
+      lost -> Appear(Modifier.align(Alignment.TopStart)) { LostCard(spec, Modifier) }
       // Driving without a trip: the map, the speed and camera alerts, and where the car is, like
       // Google's free drive. The "Where to?" card comes back once the car is parked.
       moving -> {
@@ -96,12 +104,12 @@ fun BoxScope.CarGameHud(
           }
         }
       }
-      else -> ParkedCard(spec, Modifier.align(Alignment.TopStart))
+      else -> Appear(Modifier.align(Alignment.TopStart)) { ParkedCard(spec, Modifier) }
     }
     return
   }
 
-  TurnCard(spec, uiState, hazard, Modifier.align(Alignment.TopStart))
+  Appear(Modifier.align(Alignment.TopStart)) { TurnCard(spec, uiState, hazard, Modifier) }
 
   Row(Modifier.align(Alignment.BottomStart).fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
     val left = remaining ?: progress.durationRemaining
@@ -128,9 +136,10 @@ fun BoxScope.CarGameHud(
       if (lost) LostCard(spec, Modifier)
       else StreetLine(spec, listOfNotNull(uiState.currentStepRoadName?.takeIf { it.isNotBlank() }, area), Modifier)
     }
-    // Keeps the street name clear of Android Auto's map buttons on the right.
+    // Keeps the street name clear of the map buttons on the right.
     Spacer(Modifier.width(96.dp))
   }
+  MapButtons(spec, uiState, rememberSpeedNow(uiState).kmh, Modifier.align(Alignment.BottomEnd).padding(bottom = 24.dp))
 }
 
 @Composable
@@ -190,6 +199,25 @@ object CarTapTargets {
   @Volatile var camera: Rect? = null
   @Volatile var home: Rect? = null
   @Volatile var work: Rect? = null
+  @Volatile var mute: Rect? = null
+  @Volatile var zoomIn: Rect? = null
+  @Volatile var zoomOut: Rect? = null
+  @Volatile var overview: Rect? = null
+  /** When the car screen was last touched (any tap on the map): brings up the buttons that hide while driving. */
+  val touchedAt = mutableLongStateOf(0L)
+  /** Whether the map follows the car (set by the car screen): the overview button shows the route or the car. */
+  val following = mutableStateOf(true)
+  /**
+   * Whether Android Auto's own buttons (End, Nearby) are up, read from the surface's visible area
+   * (see passTapsTo); null until the head unit has said. Ours come and go with them.
+   */
+  val hostButtonsUp = mutableStateOf<Boolean?>(null)
+  /** A zoom of the driver's own is being held (see AutoZoomEffect)... */
+  val zoomHeld = mutableStateOf(false)
+  /** ...until re-centre sets this. */
+  val zoomReleasedAt = mutableLongStateOf(0L)
+  /** When + or - was last pressed. */
+  val zoomedAt = mutableLongStateOf(0L)
 }
 
 /**
@@ -207,9 +235,18 @@ private fun CameraButton(spec: SkinSpec, modifier: Modifier) {
     now = System.currentTimeMillis()
   }
   val saved = markedAt > 0 && now - markedAt < 3_000
+  // Only when turned on in Settings, and then only for a few seconds after a touch on the screen,
+  // standing still or not (that touch doesn't mark anything: hidden, it isn't a target).
+  val enabled by AppModule.themeStore.carCamButton.collectAsState()
+  val shown = enabled && (rememberTouchedRecently() || saved)
+  AnimatedVisibility(shown, modifier, enter = fadeIn(), exit = fadeOut()) { CameraButtonFace(spec, saved) }
+}
+
+@Composable
+private fun CameraButtonFace(spec: SkinSpec, saved: Boolean) {
   DisposableEffect(Unit) { onDispose { CarTapTargets.camera = null } }
   Row(
-      modifier.height(56.dp).skinPanel(spec).onGloballyPositioned { CarTapTargets.camera = it.boundsInRoot() }.padding(horizontal = 14.dp),
+      Modifier.height(56.dp).skinPanel(spec).onGloballyPositioned { CarTapTargets.camera = it.boundsInRoot() }.padding(horizontal = 14.dp),
       verticalAlignment = Alignment.CenterVertically,
   ) {
     GameIconView(GameIcon.CAMERA, spec.fg, Modifier.size(28.dp))
@@ -350,3 +387,83 @@ private const val FREE_DRIVE_SPEED = 3.0
 private const val STOPPED_SPEED = 1.0
 /** Three minutes standing still: parked, not waiting at a light. */
 private const val STOPPED_HOLD_MS = 180_000L
+
+/** The map buttons hide above this speed until the screen is touched... */
+private const val CAM_HIDE_KMH = 8
+/** ...and then show for this long where Android Auto doesn't say how long its own buttons stay. */
+private const val CAM_SHOWN_MS = 8_000L
+
+/**
+ * A card that fades and settles in (a slight grow on a soft spring) when it appears, instead of
+ * popping onto the car screen.
+ */
+@Composable
+private fun Appear(modifier: Modifier, content: @Composable () -> Unit) {
+  val shown = remember { MutableTransitionState(false) }.apply { targetState = true }
+  AnimatedVisibility(
+      shown,
+      modifier,
+      enter = fadeIn(com.thealgothrim.overworld.map.layoutSpring()) + scaleIn(com.thealgothrim.overworld.map.layoutSpring(), initialScale = 0.94f),
+      exit = fadeOut(),
+  ) {
+    content()
+  }
+}
+
+/**
+ * Whether a button that keeps out of the way while driving should show: standing still, or while
+ * Android Auto's own buttons are up, so both appear at the touch and leave together. A head unit
+ * that never says falls back to a few seconds after each tap.
+ */
+@Composable
+private fun rememberShownWhileDriving(kmh: Int?): Boolean = (kmh ?: 0) < CAM_HIDE_KMH || rememberTouchedRecently()
+
+/** Whether Android Auto's own buttons are up after a touch, or, where the head unit doesn't say, whether the screen was touched in the last few seconds. */
+@Composable
+private fun rememberTouchedRecently(): Boolean {
+  val hostUp by CarTapTargets.hostButtonsUp
+  val touchedAt by CarTapTargets.touchedAt
+  var touched by remember { mutableStateOf(false) }
+  LaunchedEffect(touchedAt) {
+    if (touchedAt == 0L) return@LaunchedEffect
+    touched = true
+    delay(CAM_SHOWN_MS)
+    touched = false
+  }
+  return hostUp ?: touched
+}
+
+/**
+ * The map's own buttons down the right, in the game's round style: sound, zoom in and out, and the
+ * route overview. Android Auto's were plain grey ones it draws itself, and it ignores the colours
+ * an app asks for, so on a trip these replace them. Pressed through map taps (see
+ * CarNavigationScreen); they keep out of the way while driving, except that once the map has been
+ * moved (dragged, zoomed, the overview) the bottom one turns into re-centre and stays.
+ */
+@Composable
+private fun MapButtons(spec: SkinSpec, uiState: NavigationUiState, kmh: Int?, modifier: Modifier) {
+  val following by CarTapTargets.following
+  val zoomHeld by CarTapTargets.zoomHeld
+  val moved = !following || zoomHeld
+  val shown = rememberShownWhileDriving(kmh)
+  val enter = fadeIn(com.thealgothrim.overworld.map.layoutSpring()) + slideInHorizontally(com.thealgothrim.overworld.map.layoutSpring()) { it / 2 }
+  val exit = fadeOut() + slideOutHorizontally { it / 2 }
+  Column(modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    AnimatedVisibility(shown, enter = enter, exit = exit) {
+      Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        MapButton(spec, if (uiState.isMuted == true) GameIcon.SOUND_OFF else GameIcon.SOUND_ON) { CarTapTargets.mute = it }
+        MapButton(spec, GameIcon.ZOOM_IN) { CarTapTargets.zoomIn = it }
+        MapButton(spec, GameIcon.ZOOM_OUT) { CarTapTargets.zoomOut = it }
+      }
+    }
+    AnimatedVisibility(shown || moved, enter = enter, exit = exit) {
+      MapButton(spec, if (moved) GameIcon.NAVIGATE else GameIcon.ROUTE) { CarTapTargets.overview = it }
+    }
+  }
+}
+
+@Composable
+private fun MapButton(spec: SkinSpec, icon: GameIcon, target: (Rect?) -> Unit) {
+  DisposableEffect(Unit) { onDispose { target(null) } }
+  SkinRoundButton(spec, icon, {}, Modifier.size(60.dp).onGloballyPositioned { target(it.boundsInRoot()) })
+}

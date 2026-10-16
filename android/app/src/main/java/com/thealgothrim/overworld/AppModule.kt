@@ -13,6 +13,8 @@ import com.stadiamaps.ferrostar.core.RouteDeviationHandler
 import com.stadiamaps.ferrostar.core.http.OkHttpClientProvider.Companion.toOkHttpClientProvider
 import com.stadiamaps.ferrostar.core.CustomRouteProvider
 import com.stadiamaps.ferrostar.core.location.NavigationLocationProvider
+import com.thealgothrim.overworld.location.LocationGate
+import com.thealgothrim.overworld.location.SustainedDeviation
 import com.thealgothrim.overworld.routing.GoogleMaps
 import com.thealgothrim.overworld.routing.OverworldRoutes
 import uniffi.ferrostar.RouteAdapter
@@ -80,7 +82,9 @@ object AppModule {
 
   val locationProvider: NavigationLocationProvider by lazy {
     NavigationLocationProvider(
-        liveProviding = FusedNavigationLocationProvider(appContext),
+        // Real GPS goes through the gate (a bad fix at a light can't move the car, on a trip or
+        // not); the test drive's simulator is exact and goes straight in.
+        liveProviding = LocationGate(FusedNavigationLocationProvider(appContext)),
         simulatedProvider =
             SimulatedLocationProvider(
                 warpFactor = 3u,
@@ -121,8 +125,9 @@ object AppModule {
                     WaypointAdvanceMode.WaypointWithinRange(100.0),
                     stepAdvanceDistanceEntryAndExit(30u, 5u, 32u),
                     stepAdvanceDistanceToEndOfStep(10u, 32u),
-                    // Delhi GPS drifts near flyovers; allow 50 m before calling it a detour.
-                    RouteDeviationTracking.StaticThreshold(15U, 50.0),
+                    // A detour once the car has been off long enough (30 m for 8 s, 60 m for 2 s),
+                    // not one fix past 50 m: that missed a service road 40 m away for good.
+                    RouteDeviationTracking.Custom(SustainedDeviation()),
                     CourseFiltering.SNAP_TO_ROUTE,
                 ),
         )

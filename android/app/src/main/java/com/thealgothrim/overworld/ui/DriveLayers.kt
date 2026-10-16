@@ -1,5 +1,10 @@
 package com.thealgothrim.overworld.ui
 
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -130,23 +135,44 @@ fun BoxScope.NavigationLayer(
     onMute: () -> Unit,
     onEnd: () -> Unit,
     onSettings: () -> Unit,
+    /** How tall the bottom part (street line and trip sheet) is, so the arrow can stay above it. */
+    onBottomBlocked: (Dp) -> Unit = {},
 ) {
   var expanded by remember { mutableStateOf(false) }
   val progress = uiState.progress
+  val density = LocalDensity.current
 
-  // ---- top: turn banner, then map buttons on the right
-  Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
-    TurnBanner(spec, uiState, hazard)
-    Spacer(Modifier.height(12.dp))
-    Column(Modifier.align(Alignment.End), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+  // Landscape (a phone in a sideways mount): the cards make a column down the left, as on the car
+  // screen and in Google Maps, and the map buttons stand at the right edge; the camera keeps the
+  // arrow in the open map to the right. Full-width cards left a strip of map with the arrow under them.
+  val wide = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+  val buttons: @Composable () -> Unit = {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
       SkinRoundButton(spec, if (uiState.isMuted == true) GameIcon.SOUND_OFF else GameIcon.SOUND_ON, onMute)
       SkinRoundButton(spec, if (following) GameIcon.ROUTE else GameIcon.NAVIGATE, if (following) onOverview else onRecenter)
       SkinRoundButton(spec, GameIcon.LAYERS, onLayers)
     }
   }
 
+  // ---- top: turn banner, then map buttons on the right
+  Column(
+      (if (wide) Modifier.align(Alignment.TopStart).width(LANDSCAPE_COLUMN) else Modifier.align(Alignment.TopCenter).fillMaxWidth())
+          .padding(horizontal = 12.dp, vertical = 10.dp)
+  ) {
+    TurnBanner(spec, uiState, hazard)
+    if (!wide) {
+      Spacer(Modifier.height(12.dp))
+      Box(Modifier.align(Alignment.End)) { buttons() }
+    }
+  }
+  if (wide) Box(Modifier.align(Alignment.TopEnd).padding(horizontal = 12.dp, vertical = 10.dp)) { buttons() }
+
   // ---- bottom: re-centre + street, then the trip sheet
-  Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+  Column(
+      (if (wide) Modifier.align(Alignment.BottomStart).width(LANDSCAPE_COLUMN) else Modifier.align(Alignment.BottomCenter).fillMaxWidth())
+          // In landscape the arrow is beside this column, not above it, so it covers nothing of the road.
+          .onGloballyPositioned { onBottomBlocked(if (wide) 0.dp else with(density) { it.size.height.toDp() }) }
+  ) {
     Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
       MapCredit(spec, Modifier.align(Alignment.BottomEnd))
       if (!following) {
@@ -306,3 +332,4 @@ private fun TripProgressBar(spec: SkinSpec, uiState: NavigationUiState) {
     }
   }
 }
+private val LANDSCAPE_COLUMN = 400.dp

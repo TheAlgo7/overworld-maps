@@ -8,13 +8,14 @@ import androidx.car.app.SurfaceContainer
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.rallista.car.app.compose.ComposableScreen
+import com.thealgothrim.overworld.ui.CarTapTargets
 
 /**
  * car-app-compose draws the map but drops taps on it. This passes everything to its surface
  * callback and hands taps (surface pixels) to [onTap], so buttons drawn on the map can be pressed.
  * It re-installs itself each time the screen starts, right after car-app-compose installs its own.
  */
-fun ComposableScreen.passTapsTo(onTap: (x: Float, y: Float) -> Unit) {
+fun ComposableScreen.passTapsTo(onTap: (x: Float, y: Float, shift: Float) -> Unit) {
   val inner =
       ComposableScreen::class.java.getDeclaredField("surfaceCallback").let {
         it.isAccessible = true
@@ -22,6 +23,10 @@ fun ComposableScreen.passTapsTo(onTap: (x: Float, y: Float) -> Unit) {
       }
   val wrapper =
       object : SurfaceCallback {
+        var width = 0
+        var visible: Rect? = null
+        var stable: Rect? = null
+
         // car-app-compose builds a virtual display on the surface. Android throws for one with no
         // size or density, and a throw here closes the app in the car: skip such a surface (the map
         // stays blank until the head unit sends a usable one) rather than crash.
@@ -31,6 +36,7 @@ fun ComposableScreen.passTapsTo(onTap: (x: Float, y: Float) -> Unit) {
             Log.w(TAG, "Skipping unusable car surface ${c.width}x${c.height} @${c.dpi}dpi")
             return
           }
+          width = c.width
           try {
             inner.onSurfaceAvailable(c)
           } catch (e: RuntimeException) {
@@ -39,12 +45,32 @@ fun ComposableScreen.passTapsTo(onTap: (x: Float, y: Float) -> Unit) {
         }
 
         override fun onSurfaceDestroyed(surfaceContainer: SurfaceContainer) = inner.onSurfaceDestroyed(surfaceContainer)
-        override fun onVisibleAreaChanged(visibleArea: Rect) = inner.onVisibleAreaChanged(visibleArea)
-        override fun onStableAreaChanged(stableArea: Rect) = inner.onStableAreaChanged(stableArea)
+
+        override fun onVisibleAreaChanged(visibleArea: Rect) {
+          visible = visibleArea
+          noteHostButtons()
+          inner.onVisibleAreaChanged(visibleArea)
+        }
+
+        override fun onStableAreaChanged(stableArea: Rect) {
+          stable = stableArea
+          noteHostButtons()
+          inner.onStableAreaChanged(stableArea)
+        }
+
+        // Android Auto shrinks the visible area to the stable one while its buttons are up (at the
+        // touch, before the tap itself arrives) and gives the room back when they go, 10 s later.
+        fun noteHostButtons() {
+          val v = visible ?: return
+          val s = stable ?: return
+          CarTapTargets.hostButtonsUp.value = !(v.contains(s) && v != s)
+        }
         override fun onScroll(distanceX: Float, distanceY: Float) = inner.onScroll(distanceX, distanceY)
         override fun onFling(velocityX: Float, velocityY: Float) = inner.onFling(velocityX, velocityY)
-        override fun onScale(focusX: Float, focusY: Float, scaleFactor: Float) = inner.onScale(focusX, focusY, scaleFactor)
-        override fun onClick(x: Float, y: Float) = onTap(x, y)
+        override fun onScale(focusX: Float, focusY: Float, scaleFactor: Float) =
+            inner.onScale(focusX + windowShift(width, visible), focusY, scaleFactor)
+
+        override fun onClick(x: Float, y: Float) = onTap(x, y, windowShift(width, visible))
       }
   lifecycle.addObserver(
       object : DefaultLifecycleObserver {
@@ -53,6 +79,20 @@ fun ComposableScreen.passTapsTo(onTap: (x: Float, y: Float) -> Unit) {
         }
       }
   )
+}
+
+/**
+ * How far right of the surface's edge Android Auto's map window starts. In split screen the app
+ * still draws on a full-width surface, with the media card laid over one side, but taps arrive
+ * measured from the map's own window: with the map on the right, as in right-hand-drive cars,
+ * every tap landed about 630 px left of the button under the finger. The window is the visible
+ * area with an even margin on both sides, so a wider gap on the left is the window's offset. Full
+ * screen, and a map on the left, give no shift.
+ */
+internal fun windowShift(width: Int, visible: Rect?): Float {
+  if (visible == null || width <= 0) return 0f
+  val gap = visible.left - (width - visible.right)
+  return if (gap > 0) gap.toFloat() else 0f
 }
 
 private const val TAG = "CarSurface"

@@ -18,7 +18,8 @@ OUT = r"C:\tmp\dhu-out.txt"
 open(CMD, "w").close()
 out = open(OUT, "w", buffering=1, encoding="utf-8", errors="replace")
 proc = subprocess.Popen(
-    [os.path.join(DHU_DIR, "desktop-head-unit.exe"), "-c", r"config\tata_curvv.ini"],
+    # A preset in the DHU's config folder: tata_curvv.ini, or one of the india_*.ini screens.
+    [os.path.join(DHU_DIR, "desktop-head-unit.exe"), "-c", "config\\" + (sys.argv[1] if len(sys.argv) > 1 else "tata_curvv.ini")],
     cwd=DHU_DIR,
     stdin=subprocess.PIPE,
     stdout=subprocess.PIPE,

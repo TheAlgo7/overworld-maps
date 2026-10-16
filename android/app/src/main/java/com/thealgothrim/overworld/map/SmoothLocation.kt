@@ -62,11 +62,17 @@ private fun rememberLeadOnRoute(raw: NavigationUiState): NavigationUiState {
   val uiState = raw.copy(routeGeometry = steady)
   val fix = uiState.location ?: return uiState
   val route = remember(steady) { RoutePolyline(steady) }
+  // Where on the route the last fix was, so the next is looked for near it (see projectNear).
+  val lastAlong = remember(route) { doubleArrayOf(Double.NaN) }
   val led =
       remember(fix, route) {
+        val here = Position(fix.coordinates.lng, fix.coordinates.lat)
+        val previous = lastAlong[0]
+        val at =
+            (if (previous.isNaN()) route.project(here) else route.projectNear(here, previous, reachAhead(fix.speed?.value))).progressMeters
+        lastAlong[0] = at
         val lead = leadMetres(fix)
         if (lead <= 0.0) return@remember fix
-        val at = route.project(Position(fix.coordinates.lng, fix.coordinates.lat)).progressMeters
         // Lead only along the line the car is following: projected on the route, then ahead on it.
         val p = route.positionAt((at + lead).coerceAtMost(route.length))
         fix.copy(coordinates = GeographicCoordinate(p.latitude, p.longitude))

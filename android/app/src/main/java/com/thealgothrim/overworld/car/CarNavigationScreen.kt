@@ -44,6 +44,10 @@ import com.thealgothrim.overworld.map.rememberOverworldMapState
 import com.thealgothrim.overworld.map.OverworldCarMap
 import com.thealgothrim.overworld.map.AutoZoomEffect
 import com.thealgothrim.overworld.map.driveCamera
+import com.thealgothrim.overworld.map.animatedPadding
+import com.thealgothrim.overworld.map.carHudInsets
+import com.thealgothrim.overworld.map.carHudScale
+import com.thealgothrim.overworld.map.rememberDriveTilt
 import com.thealgothrim.overworld.ui.CarTapTargets
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineScope
@@ -88,6 +92,8 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
       )
 
   private var uiState: NavigationUiState? by mutableStateOf(null)
+  /** The car screen's density (px per dp), unscaled; set while the screen draws. */
+  @Volatile private var carDensity = 1f
   private var mapState: NavigationMapState? = null
   private var overviewPadding = PaddingValues()
   private val surfaceAreaTracker = SurfaceAreaTracker { surfaceGestureCallback = it }
@@ -113,17 +119,35 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
     viewModel.planner.onEach { invalidate() }.launchIn(scope)
     carContext.onBackPressedDispatcher.addCallback(this, cancelPreviewOnBack)
 
-    // The themed preview card's Start and Cancel, pressed through map taps (a little slack around them).
-    passTapsTo { x, y ->
-      val hit = { r: androidx.compose.ui.geometry.Rect? -> r?.inflate(12f)?.contains(Offset(x, y)) == true }
-      when {
-        hit(CarTapTargets.camera) -> viewModel.markCamera()
-        hit(CarTapTargets.home) -> AppModule.saved.state.value.home?.let { viewModel.startNavigation(it.coordinate, "Home") }
-        hit(CarTapTargets.work) -> AppModule.saved.state.value.work?.let { viewModel.startNavigation(it.coordinate, "Work") }
-        viewModel.planner.value.preview == null -> {}
-        hit(CarTapTargets.start) -> viewModel.startPreview()
-        hit(CarTapTargets.cancel) -> viewModel.cancelPreview()
-      }
+    // Buttons drawn on the map (+ Cam, Home and Work, the preview card's Start and Cancel), pressed
+    // through map taps. Each takes at least Android Auto's minimum touch target, 76 x 76 dp, around
+    // it (the buttons are 50 to 56 dp, smaller still when the HUD shrinks); where two overlap, the
+    // nearer button wins.
+    passTapsTo { x, y, shift ->
+      CarTapTargets.touchedAt.longValue = System.currentTimeMillis()
+      val previewing = viewModel.planner.value.preview != null
+      val targets =
+          listOfNotNull(
+              CarTapTargets.camera?.let { it to { viewModel.markCamera() } },
+              CarTapTargets.mute?.let { it to { viewModel.toggleMute() } },
+              CarTapTargets.zoomIn?.let { it to { CarTapTargets.zoomedAt.longValue = System.currentTimeMillis(); mapState?.zoomIn(); Unit } },
+              CarTapTargets.zoomOut?.let { it to { CarTapTargets.zoomedAt.longValue = System.currentTimeMillis(); mapState?.zoomOut(); Unit } },
+              CarTapTargets.overview?.let { it to { toggleOverview() } },
+              CarTapTargets.home?.let { it to { AppModule.saved.state.value.home?.let { h -> viewModel.startNavigation(h.coordinate, "Home") }; Unit } },
+              CarTapTargets.work?.let { it to { AppModule.saved.state.value.work?.let { w -> viewModel.startNavigation(w.coordinate, "Work") }; Unit } },
+              CarTapTargets.start?.takeIf { previewing }?.let { it to { viewModel.startPreview() } },
+              CarTapTargets.cancel?.takeIf { previewing }?.let { it to { viewModel.cancelPreview() } },
+          )
+      // In split screen the tap comes measured from the map's window (see windowShift); the raw
+      // point is the fallback, so a wrong guess never costs a button that full screen would hit.
+      listOf(Offset(x + shift, y), Offset(x, y))
+          .firstNotNullOfOrNull { tap ->
+            targets
+                .filter { (rect, _) -> rect.forCarTouch(carDensity).contains(tap) }
+                .minByOrNull { (rect, _) -> (rect.center - tap).getDistanceSquared() }
+          }
+          ?.second
+          ?.invoke()
     }
 
     lifecycle.addObserver(
@@ -151,20 +175,26 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
   override fun content() {
     val theme by themeStore.theme.collectAsState()
     val surfaceArea by screenSurfaceState(surfaceAreaTracker)
-    val normalPadding = safeStablePadding(surfaceArea?.compositeArea)
+    // From the stable area: the part Android Auto keeps clear even while its buttons show. The
+    // visible area changes as they come and go, and the arrow moved with it.
+    val normalPadding = animatedPadding(safeStablePadding(surfaceArea?.stableArea), "browse")
     // Keep the arrow low and a little right of centre while driving, like Google's: the road ahead
     // gets the screen and the HUD keeps the left.
-    val trackingPadding = safeStablePadding(surfaceArea?.compositeArea, top = 0.45f, start = 0.25f)
+    val trackingPadding = animatedPadding(safeStablePadding(surfaceArea?.stableArea, top = 0.45f, start = 0.25f), "follow")
     val driveCamera = theme.skin.driveCamera
     val zoom = CAR_ZOOM + driveCamera.zoomOffset
+    val navState = viewModel.navigationUiState.collectAsState()
+    val tilt = rememberDriveTilt(driveCamera, navState)
     val cameraOptions =
         navigationCameraOptions()
-            .copy(browsingPadding = normalPadding, navigationPadding = trackingPadding, navigationZoom = zoom, navigationTilt = driveCamera.tilt)
+            .copy(browsingPadding = normalPadding, navigationPadding = trackingPadding, navigationZoom = zoom, navigationTilt = tilt)
     // With no trip the car still drives: follow it heading-up like a trip does (Google Maps' free
     // drive). North-up made the map look stuck while the car turned.
     val state = rememberOverworldMapState(cameraOptions, initialCameraMode = NavigationCameraMode.FOLLOW_USER_WITH_BEARING)
     mapState = state
-    AutoZoomEffect(state, viewModel.navigationUiState.collectAsState(), base = zoom)
+    AutoZoomEffect(state, navState, base = zoom, held = CarTapTargets.zoomHeld, release = CarTapTargets.zoomReleasedAt, zoomedAt = CarTapTargets.zoomedAt)
+    // The car screen's own density, before the HUD's scaling: the size of a finger on this screen.
+    carDensity = LocalDensity.current.density
 
     // Route overviews fit the part of the map nothing covers: inside Android Auto's visible area
     // (which leaves out its own cards) and, while driving with the game HUD, right of our cards.
@@ -172,7 +202,9 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
     val surfaceSize = LocalWindowInfo.current.containerSize
     val gameHud by themeStore.carGameHud.collectAsState()
     val planner by viewModel.planner.collectAsState()
-    val hudStart = if (gameHud && (uiState?.isNavigating() == true || planner.preview != null)) 440.dp else 0.dp
+    // The HUD's cards are 440 dp wide at full size and shrink with the HUD on smaller screens.
+    val hudScale = carHudScale(carHudInsets(surfaceArea))
+    val hudStart = if (gameHud && (uiState?.isNavigating() == true || planner.preview != null)) 440.dp * hudScale else 0.dp
     val padding =
         surfaceArea?.visibleArea?.let { area ->
           with(density) {
@@ -211,7 +243,13 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
         followCar(state)
       }
     }
-    LaunchedEffect(state) { snapshotFlow { state.cameraMode }.collectLatest { invalidate() } }
+    LaunchedEffect(state) {
+      snapshotFlow { state.cameraMode }
+          .collectLatest {
+            CarTapTargets.following.value = state.isTrackingUser
+            invalidate()
+          }
+    }
 
     OverworldCarMap(
         theme = theme,
@@ -256,7 +294,9 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
                   )
                   .build()
           )
-          .setMapActionStrip(
+          .apply {
+            // With the game HUD, its own themed map buttons stand in for these (see MapButtons).
+            if (!themeStore.carGameHud.value) setMapActionStrip(
               ActionStrip.Builder()
                   .addAction(
                       Action.Builder()
@@ -274,6 +314,7 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
                   )
                   .build()
           )
+          }
           .build()
     }
 
@@ -359,16 +400,22 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
     state.cameraMode = NavigationCameraMode.FOLLOW_USER_WITH_BEARING
   }
 
+  /**
+   * The bottom round button: re-centre when the map was moved (dragged, the route overview, or a
+   * zoom of the driver's own), otherwise the route overview.
+   */
   private fun toggleOverview() {
     val state = mapState ?: return
-    if (state.isTrackingUser) {
-      viewModel.navigationUiState.value.routeGeometry?.boundingBox()?.let {
-        state.showRouteOverview(boundingBox = it, paddingValues = overviewPadding)
+    when {
+      !state.isTrackingUser -> {
+        if (uiState?.isNavigating() == true) state.recenter(isNavigating = true) else followCar(state)
+        CarTapTargets.zoomReleasedAt.longValue = System.currentTimeMillis()
       }
-    } else if (uiState?.isNavigating() == true) {
-      state.recenter(isNavigating = true)
-    } else {
-      followCar(state)
+      CarTapTargets.zoomHeld.value -> CarTapTargets.zoomReleasedAt.longValue = System.currentTimeMillis()
+      else ->
+          viewModel.navigationUiState.value.routeGeometry?.boundingBox()?.let {
+            state.showRouteOverview(boundingBox = it, paddingValues = overviewPadding)
+          }
     }
     invalidate()
   }
@@ -376,3 +423,13 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
 
 /** The car map's following zoom at about 40 km/h, before the theme's own offset (see DriveCamera). */
 private const val CAR_ZOOM = 16.4
+
+/** At least 76 x 76 dp (Android Auto's minimum touch target) on a screen of [density], centred on the button. */
+internal fun androidx.compose.ui.geometry.Rect.forCarTouch(density: Float): androidx.compose.ui.geometry.Rect {
+  val min = CAR_TOUCH_DP * density
+  val w = maxOf(width, min)
+  val h = maxOf(height, min)
+  return androidx.compose.ui.geometry.Rect(center.x - w / 2f, center.y - h / 2f, center.x + w / 2f, center.y + h / 2f)
+}
+
+private const val CAR_TOUCH_DP = 76f

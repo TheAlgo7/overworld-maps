@@ -27,6 +27,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.ClipOp
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -94,11 +103,26 @@ object Vi {
 /** A GTA VI panel: rounded dark glass with a hairline edge and a soft shadow. */
 fun Modifier.viGlass(corner: Dp = Vi.corner, elevated: Boolean = true, color: Color = Vi.Glass): Modifier {
   val shape = RoundedCornerShape(corner)
-  return this.then(if (elevated) Modifier.shadow(12.dp, shape, clip = false, ambientColor = Color.Black, spotColor = Color.Black) else Modifier)
+  return this.then(if (elevated) Modifier.outerShadow(shape) else Modifier)
       .clip(shape)
       .background(color)
       .border(1.dp, Vi.Hairline, shape)
 }
+
+/**
+ * A soft shadow drawn only outside [shape]. An elevation shadow is cast under the whole box, so
+ * through see-through glass it shows up as a faint, offset copy of the panel.
+ */
+fun Modifier.outerShadow(shape: Shape, blur: Dp = 8.dp, drop: Dp = 2.dp, color: Color = Color(0x4D000000)): Modifier =
+    drawWithCache {
+      val path = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
+      val paint =
+          android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            this.color = android.graphics.Color.BLACK
+            setShadowLayer(blur.toPx(), 0f, drop.toPx(), color.toArgb())
+          }
+      onDrawBehind { clipPath(path, ClipOp.Difference) { drawIntoCanvas { it.nativeCanvas.drawPath(path.asAndroidPath(), paint) } } }
+    }
 
 /**
  * Text over the map: white with a thin dark outline, the way the minimap prints its distance.

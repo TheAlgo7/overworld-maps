@@ -39,6 +39,13 @@ import com.stadiamaps.ferrostar.maplibreui.runtime.NavigationCameraMode
 import com.stadiamaps.ferrostar.maplibreui.runtime.navigationCameraOptions
 import com.thealgothrim.overworld.map.AutoZoomEffect
 import com.thealgothrim.overworld.map.driveCamera
+import com.thealgothrim.overworld.map.rememberDriveTilt
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.calculateEndPadding
 import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.OverworldViewModel
 import com.thealgothrim.overworld.map.rememberOverworldMapState
@@ -76,9 +83,15 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
   val variant by viewModel.mapVariant.collectAsState()
   val driveCamera = theme.skin.driveCamera
   val phoneZoom = PHONE_ZOOM + driveCamera.zoomOffset
-  val cameraOptions = navigationCameraOptions().copy(navigationZoom = phoneZoom, navigationTilt = driveCamera.tilt)
+  val navState = viewModel.navigationUiState.collectAsState()
+  val tilt = rememberDriveTilt(driveCamera, navState)
+  // How much of the screen's bottom the trip sheet and street line cover while driving.
+  var bottomBlocked by remember { mutableStateOf(0.dp) }
+  val defaults = navigationCameraOptions()
+  val cameraOptions =
+      defaults.copy(navigationZoom = phoneZoom, navigationTilt = tilt, navigationPadding = clearOfBottom(defaults.navigationPadding, bottomBlocked))
   val mapState = rememberOverworldMapState(cameraOptions)
-  AutoZoomEffect(mapState, viewModel.navigationUiState.collectAsState(), base = phoneZoom)
+  AutoZoomEffect(mapState, navState, base = phoneZoom)
   val scope = rememberCoroutineScope()
   val navigating = uiState.isNavigating()
 
@@ -203,6 +216,7 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
                 onMute = viewModel::toggleMute,
                 onEnd = viewModel::stopNavigation,
                 onSettings = { settingsOpen = true },
+                onBottomBlocked = { bottomBlocked = it },
             )
         planner.preview != null ->
             PreviewLayer(
@@ -282,6 +296,33 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
     if (layersOpen) MapLayersSheet(theme, onClose = { layersOpen = false })
   }
 }
+
+/**
+ * [base] with enough extra bottom padding that the followed arrow sits above what covers the
+ * bottom of the screen ([blocked], plus the system's own bar). On a full-height phone nothing
+ * changes; in a short window (split screen) the arrow used to sit behind the trip sheet.
+ */
+@Composable
+private fun clearOfBottom(base: PaddingValues, blocked: Dp): PaddingValues {
+  val density = LocalDensity.current
+  val height = with(density) { LocalWindowInfo.current.containerSize.height.toDp() }
+  val inset = with(density) { WindowInsets.safeDrawing.getBottom(density).toDp() }
+  val top = base.calculateTopPadding()
+  val bottom = base.calculateBottomPadding()
+  // MapLibre centres the arrow in the padded view, so raising the bottom edge by x lifts it by x / 2.
+  val arrow = (height + top - bottom) / 2
+  val lowest = height - inset - blocked - ARROW_CLEARANCE
+  val extra = ((arrow - lowest) * 2).coerceAtLeast(0.dp)
+  if (extra == 0.dp) return base
+  return PaddingValues(
+      start = base.calculateStartPadding(LayoutDirection.Ltr),
+      top = top,
+      end = base.calculateEndPadding(LayoutDirection.Ltr),
+      bottom = bottom + extra,
+  )
+}
+
+private val ARROW_CLEARANCE = 24.dp
 
 /** The phone map's following zoom at about 40 km/h (Ferrostar's driving default). */
 private const val PHONE_ZOOM = 16.0
