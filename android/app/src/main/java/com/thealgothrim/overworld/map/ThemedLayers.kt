@@ -129,14 +129,27 @@ fun ThemedRouteAhead(
         )
       } else null
   // The route on flyovers, still ahead of the arrow (past the fade): drawn again over the bridges.
+  // A little longer than the stretch the routing server calls a bridge: the map's own bridge can
+  // start a few metres sooner, and the route showed a gap there.
   fun bridgeData(along: Double): GeoJsonData {
     val from = fadeEnd(along).coerceAtLeast(along)
     val features =
-        bridges.filter { it.endInclusive > from }.joinToString(",") { b ->
-          """{"type":"Feature","properties":{},"geometry":${lineGeometry(route.slice(maxOf(b.start, from), b.endInclusive))}}"""
+        bridges.filter { it.endInclusive + BRIDGE_MARGIN_METRES > from }.joinToString(",") { b ->
+          val piece = route.slice(maxOf(b.start - BRIDGE_MARGIN_METRES, from), b.endInclusive + BRIDGE_MARGIN_METRES)
+          """{"type":"Feature","properties":{},"geometry":${lineGeometry(piece)}}"""
         }
     return GeoJsonData.JsonString("""{"type":"FeatureCollection","features":[$features]}""")
   }
+  // Whether the stretch fading in ahead of the arrow runs onto a flyover. Then it goes over the
+  // bridges too: under them, it vanished beneath the deck where the road went up, a gap in the
+  // route at every ramp.
+  val fadeOnBridge by
+      remember(shown, bridges, fade) {
+        derivedStateOf {
+          val a = shown.along ?: 0.0
+          fade > 0 && bridges.any { it.start - BRIDGE_MARGIN_METRES < a + fade && it.endInclusive + BRIDGE_MARGIN_METRES > a }
+        }
+      }
   val onBridges =
       if (bridges.isEmpty()) null
       else rememberGeoJsonSource(remember(route, bridges, style) { bridgeData(startAlong) }, options = GeoJsonOptions(synchronousUpdate = true))
@@ -149,12 +162,16 @@ fun ThemedRouteAhead(
         }
   }
   // Under the flyovers, so a bridge the car drives beneath crosses over the route like in the games.
-  RouteLayers(listOf(near, far), "ow-trip", theme, car, faded, anchor = BRIDGES_LAYER)
+  RouteLayers(listOf(near, far), "ow-trip", theme, car, anchor = BRIDGES_LAYER)
+  faded?.let { RouteLayers(emptyList(), "ow-trip-fade", theme, car, it, anchor = if (fadeOnBridge) FIRST_LABEL_LAYER else BRIDGES_LAYER) }
   onBridges?.let { RouteLayers(listOf(it), "ow-trip-bridge", theme, car) }
 }
 
 /** One distance for both pieces of the route ahead: 300 m is about 18 s at 60 km/h. */
 private const val NEAR_METRES = 300.0
+
+/** How much further the route is drawn over a flyover than the routing server's bridge stretch, each end. */
+private const val BRIDGE_MARGIN_METRES = 12.0
 
 /** How wide a theme draws its route, as a share of the road. */
 private fun routeWidth(theme: OverworldTheme) =

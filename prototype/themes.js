@@ -27,6 +27,8 @@
         water: "#bcc7cd", waterway: "#bcc7cd",
         waterLine: "#d6dee1",
         building: "#424242", buildingLine: null,
+        // Flyovers seen from the radar's 45 degree tilt (see bridgeLayers).
+        bridge: { lift: 4.0, face: 1.4, faceColor: "#626262", edge: "#7d7d7d", shadow: { color: "#000000", opacity: 0.6 } },
         rail: "#c4cfd5",
         roads: {
           motorway: { fill: "#bcbcbc", casing: null },
@@ -90,8 +92,9 @@
           service: { fill: "#55524a", casing: null, dash: [2.2, 1.4] },
         },
         trails: { color: "#40423d", dash: [1.6, 1.6] },
-        // Paper map: a faint brown pencil shade under a bridge, not a black drop shadow.
-        bridgeShadow: { color: "#4a3520", opacity: 0.28, blur: 3, drop: 3 },
+        // A paper map seen from straight above: the surveyor's bridge, the road in a band of bare
+        // paper with an ink parapet line along each side (see parapetLayers).
+        bridge: { edge: "#40423d", gap: true },
         patterns: { wood: "hatch", park: "stipple" }, patternsInCar: true, railDotsInCar: true,
         glow: null,
         roadLabels: false,
@@ -139,8 +142,9 @@
         building: "#aeafb7", buildingLine: null,
         // Raised blocks: real heights where OpenStreetMap has them, a low default where it doesn't.
         buildings3d: { color: "#aeafb7", opacity: 0.94, heightScale: 1, minHeight: 4, maxHeight: 40 },
-        // Flyovers: a concrete edge darker than the deck and a shadow on the ground below.
-        bridgeEdge: "#8f8782", bridgeShadow: { color: "#3a3430", opacity: 0.55, blur: 6, drop: 9 },
+        // Flyovers seen from the minimap's 60 degree tilt: a concrete side under the deck and its
+        // shadow on the ground (see bridgeLayers).
+        bridge: { lift: 5.0, face: 1.7, faceColor: "#9b928c", edge: "#aaa19b", shadow: { color: "#3a3430", opacity: 0.5 } },
         light: { color: "#ffffff", intensity: 0.5 },
         rail: "#a3a0a0",
         // Roads are wide surfaces, a shade lighter than the ground, with no outlines.
@@ -177,7 +181,7 @@
             water: "#2f5867", waterway: "#2f5867",
             building: "#5d6370",
             buildings3d: { color: "#5f6573", opacity: 0.94, heightScale: 1, minHeight: 4, maxHeight: 40 },
-            bridgeEdge: "#4a4844", bridgeShadow: { color: "#1e1c1a", opacity: 0.6, blur: 6, drop: 9 },
+            bridge: { lift: 5.0, face: 1.7, faceColor: "#4d4a45", edge: "#66634f", shadow: { color: "#1e1c1a", opacity: 0.55 } },
             light: { color: "#fff0e2", intensity: 0.38 },
             rail: "#5c5a58",
             roads: {
@@ -200,7 +204,7 @@
             water: "#0d1120", waterway: "#0d1120",
             building: "#3c3546",
             buildings3d: { color: "#41394c", opacity: 0.95, heightScale: 1, minHeight: 4, maxHeight: 40 },
-            bridgeEdge: "#1d1a22", bridgeShadow: { color: "#08070a", opacity: 0.65, blur: 6, drop: 9 },
+            bridge: { lift: 5.0, face: 1.7, faceColor: "#221e28", edge: "#625a6e", shadow: { color: "#08070a", opacity: 0.6 } },
             light: { color: "#ddd4ee", intensity: 0.3 },
             rail: "#4a4552",
             roads: {
@@ -262,14 +266,102 @@
     return f;
   }
 
+  /**
+   * A length on the ground as the camera sees it: [atZ16] dp at zoom 16, doubling with every zoom
+   * level, the way a real height looks bigger as the map zooms in. As a line-translate when [offset].
+   */
+  function groundScaled(atZ16, offset) {
+    const v = (x) => (offset ? ["literal", [0, x]] : x);
+    return ["interpolate", ["exponential", 2], ["zoom"], 12, v(atZ16 / 16), 20, v(atZ16 * 16)];
+  }
+
+  /**
+   * Under each flyover deck (drawn by roadLayers in the road's own colour, so it runs straight into
+   * the ramps at both ends): its side and its shadow on the ground, offset down the screen by what
+   * a 6 m high deck looks like from the theme's camera tilt (bridge.lift, dp at zoom 16; 0 for a map
+   * seen from straight above). The offsets grow and shrink with zoom like a real height, so a
+   * zoomed-out map doesn't get slabs of shadow.
+   *
+   * These go under the ordinary roads: where a bridge ends, the road it runs into covers the end
+   * of its side and shadow. Drawn over the roads, they stopped in a hard square edge across the
+   * road at every end of every bridge.
+   */
+  function bridgeUndersideLayers(m, car) {
+    const b = m.bridge || {};
+    const out = [];
+    const scale = (car ? 1.25 : 1) * (m.roadScale || 1);
+    const sortKey = { "line-sort-key": ["coalesce", ["get", "layer"], 1] };
+    // OpenStreetMap marks a 15 m crossing over a drain exactly like a flyover. The side starts two
+    // road widths into each bridge (a dash pattern opening with a gap), so the short ones the road
+    // just runs across get no edge, only a faint soft shadow.
+    const rise = { "line-dasharray": ["literal", [0, 2, 200, 0]] };
+    for (const g of GROUPS) {
+      const filter = classFilter(g.classes, "bridge");
+      const minzoom = Math.max(g.minzoom, 13);
+      // Round, blurred ends for the shadow; square ones for the side (round would turn the pattern's
+      // empty first dash into a dot).
+      const soft = { "line-cap": "round", "line-join": "round", ...sortKey };
+      const layout = { "line-cap": "butt", "line-join": "round", ...sortKey };
+      if (b.lift && b.shadow) {
+        out.push({
+          id: `bridge-${g.key}-shadow`, type: "line", source: "omt", "source-layer": "transportation", minzoom, filter, layout: soft,
+          paint: {
+            "line-color": b.shadow.color,
+            "line-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0, 14.5, b.shadow.opacity],
+            "line-blur": groundScaled(b.lift * 0.35),
+            "line-width": widthExpr(g.w, scale),
+            "line-translate": groundScaled(b.lift, true),
+            "line-translate-anchor": "viewport",
+          },
+        });
+      }
+      if (b.face) {
+        out.push({
+          id: `bridge-${g.key}-side`, type: "line", source: "omt", "source-layer": "transportation", minzoom, filter, layout,
+          paint: {
+            "line-color": b.faceColor,
+            "line-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0, 14.5, 1],
+            "line-width": widthExpr(g.w, scale),
+            "line-translate": groundScaled(b.face, true),
+            "line-translate-anchor": "viewport",
+            ...rise,
+          },
+        });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * A thin kerb line along each side of a deck (bridge.edge), so it reads as passing over the roads
+   * it crosses. Lines beside the deck, not an outline round it, so a bridge's ends draw nothing
+   * across the road. On the paper map they stand off the deck past a band of bare paper (bridge.gap),
+   * the surveyor's bridge.
+   */
+  function parapetLayers(m, scale, sortKey) {
+    const b = m.bridge || {};
+    if (!b.edge) return [];
+    return GROUPS.map((g) => ({
+      id: `bridge-${g.key}-parapet`, type: "line", source: "omt", "source-layer": "transportation",
+      minzoom: Math.max(g.minzoom, 13), filter: classFilter(g.classes, "bridge"),
+      layout: { "line-cap": "butt", "line-join": "round", ...sortKey },
+      paint: {
+        "line-color": b.edge,
+        "line-width": b.gap ? 1.1 : 0.9,
+        "line-gap-width": widthExpr(g.w, scale, b.gap ? [1.6, 2, 3, 4] : [0, 0, 0, 0]),
+        "line-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0, 14.5, 1],
+      },
+    }));
+  }
+
   function roadLayers(m, car, brunnel) {
     const scale = (car ? 1.25 : 1) * (m.roadScale || 1);
     const out = [];
     const tag = brunnel || "road";
     const faded = brunnel === "tunnel";
     // Flyovers stand above the roads they cross, like the games' minimaps: higher decks (OSM
-    // "layer") drawn over lower ones, and a soft shadow on the ground below each one. The app
-    // draws the route under "bridges-start" so it runs beneath a flyover, and the part of the
+    // "layer") drawn over lower ones, each with its side and its shadow below (bridgeLayers). The
+    // app draws the route under "bridges-start" so it runs beneath a flyover, and the part of the
     // route that is on one above it.
     const sortKey = brunnel === "bridge" ? { "line-sort-key": ["coalesce", ["get", "layer"], 1] } : {};
     if (brunnel === "bridge") {
@@ -277,27 +369,23 @@
         id: "bridges-start", type: "line", source: "omt", "source-layer": "transportation",
         filter: ["boolean", false], paint: { "line-opacity": 0 },
       });
-      const sh = m.bridgeShadow || { color: "#000000", opacity: 0.5, blur: 5, drop: 7 };
-      for (const g of GROUPS) {
-        out.push({
-          id: `bridge-${g.key}-shadow`, type: "line", source: "omt", "source-layer": "transportation",
-          minzoom: Math.max(g.minzoom, 13), filter: classFilter(g.classes, brunnel),
-          layout: { "line-cap": "butt", "line-join": "round", ...sortKey },
-          paint: {
-            "line-color": sh.color,
-            "line-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0, 14.5, sh.opacity],
-            "line-blur": sh.blur,
-            "line-width": widthExpr(g.w, scale, [2, 3, 6, 10]),
-            "line-translate": [0, sh.drop],
-            "line-translate-anchor": "viewport",
-          },
-        });
+      if (m.bridge && m.bridge.gap) {
+        // Bare paper either side of the deck, so the roads beneath stop short of it.
+        for (const g of GROUPS) {
+          out.push({
+            id: `bridge-${g.key}-gap`, type: "line", source: "omt", "source-layer": "transportation",
+            minzoom: Math.max(g.minzoom, 13), filter: classFilter(g.classes, brunnel),
+            layout: { "line-cap": "butt", "line-join": "round", ...sortKey },
+            paint: { "line-color": m.land, "line-width": widthExpr(g.w, scale, [1.6, 2, 3, 4]) },
+          });
+        }
       }
     }
-    // Casings first, then fills, so crossings read cleanly.
+    // Casings first, then fills, so crossings read cleanly. A deck has no outline of its own: an
+    // edge darker than the road around every piece of bridge looked stamped onto the map.
     for (const g of GROUPS) {
       const spec = m.roads[g.key];
-      const casing = brunnel === "bridge" ? m.bridgeEdge || spec.casing || m.land : spec.casing;
+      const casing = brunnel === "bridge" ? null : spec.casing;
       if (!casing) continue;
       out.push({
         id: `${tag}-${g.key}-casing`, type: "line", source: "omt", "source-layer": "transportation",
@@ -317,6 +405,7 @@
         paint,
       });
     }
+    if (brunnel === "bridge") out.push(...parapetLayers(m, scale, sortKey));
     return out;
   }
 
@@ -449,24 +538,29 @@
       });
     }
     layers.push(...roadLayers(m, car, "tunnel"));
+    layers.push(...bridgeUndersideLayers(m, car));
     layers.push(...roadLayers(m, car, null));
-    if (m.laneDashes) {
-      // Lane dividers down the middle of each carriageway (OpenStreetMap draws dual carriageways
-      // as one line per direction, so the middle of the line is between its lanes).
+    // Lane dividers down the middle of each carriageway (OpenStreetMap draws dual carriageways
+    // as one line per direction, so the middle of the line is between its lanes). A flyover's go
+    // on its deck, or they stopped dead where every bridge began.
+    const laneDashes = (id, brunnel) => {
       const classes = GROUPS.filter((g) => m.laneDashes.groups.includes(g.key)).flatMap((g) => g.classes);
-      layers.push({
-        id: "lane-dashes", type: "line", source: "omt", "source-layer": "transportation", minzoom: 15,
-        filter: ["all", ["match", ["get", "class"], classes, true, false], ["match", ["get", "brunnel"], ["tunnel"], false, true]],
-        layout: { "line-join": "round" },
+      return {
+        id, type: "line", source: "omt", "source-layer": "transportation", minzoom: 15,
+        filter: ["all", ["match", ["get", "class"], classes, true, false],
+          brunnel === "bridge" ? ["==", ["get", "brunnel"], "bridge"] : ["match", ["get", "brunnel"], ["tunnel", "bridge"], false, true]],
+        layout: { "line-join": "round", ...(brunnel === "bridge" ? { "line-sort-key": ["coalesce", ["get", "layer"], 1] } : {}) },
         paint: {
           "line-color": m.laneDashes.color,
           "line-width": ["interpolate", ["linear"], ["zoom"], 15, 0.8, 18, 2.2],
           "line-dasharray": [3, 3],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 15, 0, 15.6, 0.9],
         },
-      });
-    }
+      };
+    };
+    if (m.laneDashes) layers.push(laneDashes("lane-dashes", null));
     layers.push(...roadLayers(m, car, "bridge"));
+    if (m.laneDashes) layers.push(laneDashes("lane-dashes-bridge", "bridge"));
     if (m.buildings3d) {
       // GTA VI's minimap raises its buildings. Heights come from OpenStreetMap (render_height,
       // 5 m where nothing is tagged), capped so towers don't wall off the view, and grown in
