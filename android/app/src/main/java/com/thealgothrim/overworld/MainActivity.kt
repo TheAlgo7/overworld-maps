@@ -1,9 +1,12 @@
 package com.thealgothrim.overworld
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -34,12 +37,23 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
       }
 
+      // Samsung's app freezer paused the app mid-drive with the phone locked on a lap: GPS and the
+      // trip stopped until the phone was unlocked. Battery "Unrestricted" keeps it out of the
+      // freezer, so ask once, after the location prompt (Settings > Phone locked asks again).
+      val battery = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {}
       val permissions =
           rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
             AppModule.viewModel.setLocationPermission(
                 result[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
                     result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
             )
+            val prefs = getSharedPreferences("overworld", MODE_PRIVATE)
+            if (!LockedPhone.batteryUnrestricted(this) && !prefs.getBoolean("askedBattery", false)) {
+              prefs.edit().putBoolean("askedBattery", true).apply()
+              @SuppressLint("BatteryLife")
+              val ask = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))
+              battery.launch(ask)
+            }
           }
       LaunchedEffect(Unit) {
         val wanted =
