@@ -27,8 +27,17 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
  * app's battery use "Unrestricted".
  */
 object LockedPhone {
+  /** Granted, or not asked for by this build (the manifest leaves it out until Play's declaration is done). */
   fun locationAllTheTime(context: Context): Boolean =
-      ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
+      !requests(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) ||
+          ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+  @Suppress("DEPRECATION") // The flags overload is Android 13+.
+  private fun requests(context: Context, permission: String): Boolean =
+      context.packageManager
+          .getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
+          .requestedPermissions
+          ?.contains(permission) == true
 
   fun batteryUnrestricted(context: Context): Boolean =
       context.getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(context.packageName) == true

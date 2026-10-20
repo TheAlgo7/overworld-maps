@@ -128,8 +128,8 @@ fun SettingsScreen(
               listOf(
                   Setting(
                       "Phone locked",
-                      if (lockedReady) "Keeps navigating with the phone locked in your pocket: location is allowed all the time and the battery saver leaves the app alone. Tap to change it in Android's settings."
-                      else "Tap to keep it navigating with the phone locked: set location to \"Allow all the time\", then allow it to run in the background.",
+                      if (lockedReady) "Keeps navigating with the phone locked in your pocket: the battery saver leaves the app alone. Tap to change it in Android's settings."
+                      else "Tap to keep it navigating with the phone locked: say yes when Android asks to let it run in the background.",
                       value = if (lockedReady) "Works" else "Set up",
                   ) { setUpLocked() },
                   Setting(
