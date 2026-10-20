@@ -22,7 +22,7 @@ class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     AppModule.init(this)
-    AppModule.ferrostarCore.spokenInstructionObserver = AppModule.ttsObserver
+    AppModule.ferrostarCore.spokenInstructionObserver = AppModule.spokenInstructions
     createFerrostarLogger()
 
     setContent {

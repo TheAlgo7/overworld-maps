@@ -8,6 +8,10 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- Driving with the phone locked in a pocket: GPS keeps coming, and Samsung's battery saver
+         doesn't put the app to sleep mid-drive (Settings > Phone locked, see LockedPhone). -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- Ending a trip from its notification, for this app alone (see SafeForegroundServiceManager). -->
     <permission

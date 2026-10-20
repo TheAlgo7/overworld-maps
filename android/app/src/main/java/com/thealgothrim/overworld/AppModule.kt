@@ -10,6 +10,7 @@ import com.stadiamaps.ferrostar.core.AndroidTtsStatusListener
 import com.stadiamaps.ferrostar.core.CorrectiveAction
 import com.stadiamaps.ferrostar.core.FerrostarCore
 import com.stadiamaps.ferrostar.core.RouteDeviationHandler
+import com.stadiamaps.ferrostar.core.SpokenInstructionObserver
 import com.stadiamaps.ferrostar.core.http.OkHttpClientProvider.Companion.toOkHttpClientProvider
 import com.stadiamaps.ferrostar.core.CustomRouteProvider
 import com.stadiamaps.ferrostar.core.location.NavigationLocationProvider
@@ -38,6 +39,7 @@ import uniffi.ferrostar.CourseFiltering
 import uniffi.ferrostar.GeographicCoordinate
 import uniffi.ferrostar.NavigationControllerConfig
 import uniffi.ferrostar.RouteDeviationTracking
+import uniffi.ferrostar.SpokenInstruction
 import uniffi.ferrostar.UserLocation
 import uniffi.ferrostar.WaypointAdvanceMode
 import uniffi.ferrostar.WellKnownRouteProvider
@@ -150,6 +152,19 @@ object AppModule {
   val ttsObserver: AndroidTtsObserver by lazy {
     AndroidTtsObserver(appContext, statusObserver = TtsVoice).apply {
       setMuted(!appContext.getSharedPreferences("overworld", Context.MODE_PRIVATE).getBoolean("voice", false))
+    }
+  }
+
+  /**
+   * What Ferrostar is given instead of [ttsObserver]: muted prompts never reach it. Ferrostar asks
+   * for audio focus (music ducked) BEFORE it checks mute, and only gives it back when an utterance
+   * finishes; a muted prompt never speaks, so the music stayed ducked for the whole trip.
+   */
+  val spokenInstructions: SpokenInstructionObserver by lazy {
+    object : SpokenInstructionObserver by ttsObserver {
+      override fun onSpokenInstructionTrigger(spokenInstruction: SpokenInstruction) {
+        if (!ttsObserver.isMuted) ttsObserver.onSpokenInstructionTrigger(spokenInstruction)
+      }
     }
   }
 

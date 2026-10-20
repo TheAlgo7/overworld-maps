@@ -86,7 +86,7 @@ fun BoxScope.CarGameHud(
     val estimate by AppModule.viewModel.estimatedKmh.collectAsState()
     // GPS speed, or the speed worked out from movement when a fix has none.
     val moving = rememberFreeDriving(uiState.location?.speed?.value ?: estimate?.div(3.6) ?: 0.0)
-    if (preview == null) MapButtons(spec, uiState, rememberSpeedNow(uiState).kmh, Modifier.align(Alignment.BottomEnd).padding(bottom = 24.dp), trip = false)
+    if (preview == null) MapButtons(spec, uiState, Modifier.align(Alignment.BottomEnd).padding(bottom = 24.dp), trip = false)
     when {
       preview != null -> Appear(Modifier.align(Alignment.TopStart)) { PreviewCard(spec, preview, extras, Modifier) }
       lost -> Appear(Modifier.align(Alignment.TopStart)) { LostCard(spec, Modifier) }
@@ -140,7 +140,7 @@ fun BoxScope.CarGameHud(
     // Keeps the street name clear of the map buttons on the right.
     Spacer(Modifier.width(96.dp))
   }
-  MapButtons(spec, uiState, rememberSpeedNow(uiState).kmh, Modifier.align(Alignment.BottomEnd).padding(bottom = 24.dp))
+  MapButtons(spec, uiState, Modifier.align(Alignment.BottomEnd).padding(bottom = 24.dp))
 }
 
 @Composable
@@ -389,10 +389,8 @@ private const val STOPPED_SPEED = 1.0
 /** Three minutes standing still: parked, not waiting at a light. */
 private const val STOPPED_HOLD_MS = 180_000L
 
-/** The map buttons hide above this speed until the screen is touched... */
-private const val CAM_HIDE_KMH = 8
-/** ...and then show for this long where Android Auto doesn't say how long its own buttons stay. */
-private const val CAM_SHOWN_MS = 8_000L
+/** The map buttons show for this long after a touch, as long as Android Auto keeps its own up (10 s). */
+private const val CAM_SHOWN_MS = 10_000L
 
 /**
  * A card that fades and settles in (a slight grow on a soft spring) when it appears, instead of
@@ -412,14 +410,13 @@ private fun Appear(modifier: Modifier, content: @Composable () -> Unit) {
 }
 
 /**
- * Whether a button that keeps out of the way while driving should show: standing still, or while
- * Android Auto's own buttons are up, so both appear at the touch and leave together. A head unit
- * that never says falls back to a few seconds after each tap.
+ * Whether the buttons that keep out of the way should show: like Google Maps, only for a few
+ * seconds after a touch, moving or not (they used to stay whenever the car was under 8 km/h, which
+ * in Delhi traffic was nearly always). Shown for [CAM_SHOWN_MS] after the screen is touched, and
+ * gone early when Android Auto puts its own buttons away, so both leave together. Android Auto's
+ * signal alone isn't trusted to show them: where its area never changes (split screen, the idle
+ * strip) it read as "up" for good and kept ours on.
  */
-@Composable
-private fun rememberShownWhileDriving(kmh: Int?): Boolean = (kmh ?: 0) < CAM_HIDE_KMH || rememberTouchedRecently()
-
-/** Whether Android Auto's own buttons are up after a touch, or, where the head unit doesn't say, whether the screen was touched in the last few seconds. */
 @Composable
 private fun rememberTouchedRecently(): Boolean {
   val hostUp by CarTapTargets.hostButtonsUp
@@ -431,7 +428,11 @@ private fun rememberTouchedRecently(): Boolean {
     delay(CAM_SHOWN_MS)
     touched = false
   }
-  return hostUp ?: touched
+  // Android Auto's buttons went away after the touch: ours go too.
+  var hostWentDown by remember { mutableStateOf(false) }
+  LaunchedEffect(touchedAt) { hostWentDown = false }
+  LaunchedEffect(hostUp) { if (hostUp == false && touched) hostWentDown = true }
+  return touched && !hostWentDown
 }
 
 /**
@@ -442,11 +443,11 @@ private fun rememberTouchedRecently(): Boolean {
  * moved (dragged, zoomed, the overview) the bottom one turns into re-centre and stays.
  */
 @Composable
-private fun MapButtons(spec: SkinSpec, uiState: NavigationUiState, kmh: Int?, modifier: Modifier, trip: Boolean = true) {
+private fun MapButtons(spec: SkinSpec, uiState: NavigationUiState, modifier: Modifier, trip: Boolean = true) {
   val following by CarTapTargets.following
   val zoomHeld by CarTapTargets.zoomHeld
   val moved = !following || zoomHeld
-  val shown = rememberShownWhileDriving(kmh)
+  val shown = rememberTouchedRecently()
   val enter = fadeIn(com.thealgothrim.overworld.map.layoutSpring()) + slideInHorizontally(com.thealgothrim.overworld.map.layoutSpring()) { it / 2 }
   val exit = fadeOut() + slideOutHorizontally { it / 2 }
   Column(modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {

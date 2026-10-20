@@ -188,10 +188,15 @@ fun OverworldCarMap(
 fun carHudInsets(surfaceArea: SurfaceArea?): PaddingValues {
   val area = surfaceArea?.stableArea ?: return PaddingValues(0.dp)
   val surfaceSize = LocalWindowInfo.current.containerSize
+  // In split screen the map is a smaller window with round corners, and the HUD's own margin
+  // shrinks with the HUD: "Where to?" sat right in the corner and had its edge cut off in the
+  // Curvv. A margin that doesn't shrink keeps the cards clear of the corner.
+  val split = surfaceSize.width > 0 && area.width() < surfaceSize.width * 0.75f
+  val corner = if (split) 16.dp else 0.dp
   return with(LocalDensity.current) {
     PaddingValues(
-        start = area.left.coerceAtLeast(0).toDp(),
-        top = 0.dp,
+        start = area.left.coerceAtLeast(0).toDp() + corner,
+        top = corner,
         end = (surfaceSize.width - area.right).coerceAtLeast(0).toDp(),
         bottom = (surfaceSize.height - area.bottom).coerceAtLeast(0).toDp(),
     )

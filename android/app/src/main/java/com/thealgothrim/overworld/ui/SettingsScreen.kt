@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.stadiamaps.ferrostar.core.NavigationUiState
 import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.BuildConfig
+import com.thealgothrim.overworld.rememberLockedPhoneSetup
 import com.thealgothrim.overworld.search.SavedState
 import com.thealgothrim.overworld.theme.MapTime
 import com.thealgothrim.overworld.theme.OverworldTheme
@@ -94,6 +95,7 @@ fun SettingsScreen(
   val cameraBeep by AppModule.viewModel.cameraBeep.collectAsState()
   val marked by AppModule.cameras.all.collectAsState()
   val live = AppModule.traffic.hasLiveTraffic
+  val (lockedReady, setUpLocked) = rememberLockedPhoneSetup()
   var selected by remember { mutableStateOf<String?>(null) }
 
   val detailsOn =
@@ -124,6 +126,12 @@ fun SettingsScreen(
           Section(
               "Driving",
               listOf(
+                  Setting(
+                      "Phone locked",
+                      if (lockedReady) "Keeps navigating with the phone locked in your pocket: location is allowed all the time and the battery saver leaves the app alone. Tap to change it in Android's settings."
+                      else "Tap to keep it navigating with the phone locked: set location to \"Allow all the time\", then allow it to run in the background.",
+                      value = if (lockedReady) "Works" else "Set up",
+                  ) { setUpLocked() },
                   Setting(
                       "Car screen",
                       if (carGameHud) "Android Auto shows the game HUD: turn, time and street drawn in the theme."
