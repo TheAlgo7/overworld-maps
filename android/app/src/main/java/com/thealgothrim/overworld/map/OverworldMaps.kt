@@ -44,6 +44,9 @@ import com.thealgothrim.overworld.traffic.RoadFeatureKind
 import com.thealgothrim.overworld.traffic.TrafficSpan
 import com.thealgothrim.overworld.ui.CarGameHud
 import com.thealgothrim.overworld.ui.PaperOverlay
+import com.thealgothrim.overworld.ui.vi.ViEdgeMarkers
+import com.thealgothrim.overworld.ui.vi.ViMapLight
+import com.thealgothrim.overworld.theme.Skin
 import com.thealgothrim.overworld.theme.StyleCache
 import com.thealgothrim.overworld.theme.family
 import com.thealgothrim.overworld.theme.style
@@ -126,6 +129,13 @@ fun OverworldCarMap(
 
     // Same paper as the phone, a little lighter so the roads stay crisp at a glance.
     if (theme.paperOverlay) PaperOverlay(strength = 0.75f)
+    if (theme.skin == Skin.GTA6) {
+      val variant by AppModule.viewModel.mapVariant.collectAsState()
+      ViMapLight(variant)
+      // The minimap's "N" and, when the destination is off the map, its pink dot on the edge.
+      val destination = (uiState.routeGeometry?.takeIf { uiState.isNavigating() } ?: planner.preview?.route?.geometry)?.lastOrNull()
+      ViEdgeMarkers(mapState.cameraState, destination, stable)
+    }
 
     // The HUD was drawn for the Curvv's wide screen. Smaller head units, and the map's half of a
     // split screen (Spotify beside it), get the same HUD scaled down to fit instead of overlapping.

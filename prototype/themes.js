@@ -141,7 +141,7 @@
         water: "#739ba2", waterway: "#739ba2",
         building: "#aeafb7", buildingLine: null,
         // Raised blocks: real heights where OpenStreetMap has them, a low default where it doesn't.
-        buildings3d: { color: "#aeafb7", opacity: 0.94, heightScale: 1, minHeight: 4, maxHeight: 40 },
+        buildings3d: { color: "#aeafb7", opacity: 0.94, heightScale: 1, minHeight: 4 },
         // Flyovers seen from the minimap's 60 degree tilt: a concrete side under the deck and its
         // shadow on the ground (see bridgeLayers).
         bridge: { lift: 5.0, face: 1.7, faceColor: "#9b928c", edge: "#aaa19b", shadow: { color: "#3a3430", opacity: 0.5 } },
@@ -169,6 +169,10 @@
         // tenth of its width), the same by day, at golden hour and at night; it fades in just
         // ahead of the arrow.
         route: { line: "#fb74a5", casing: "#ffa5d4", edge: 0.1, glow: null, fade: 130 },
+        // Shops and services as GTA VI's own blips: pale rounded squares with a slate rim (red for
+        // medical), from the sheet Gaurav saved (tools/cut_vi_blips.py); personal builds only.
+        pois: { prefix: "vi-", minzoom: 15.2, size: 0.85,
+          only: ["food", "bar", "doctor", "pharmacy", "barber", "clothes", "repair", "store", "fuel"] },
       },
       variants: {
         // Golden hour: the minimap dims and warms; roads keep their lead over the ground.
@@ -180,7 +184,7 @@
             park: "#5b6759", wood: "#566355", grass: "#5f6b5d", sand: "#7e7666",
             water: "#2f5867", waterway: "#2f5867",
             building: "#5d6370",
-            buildings3d: { color: "#5f6573", opacity: 0.94, heightScale: 1, minHeight: 4, maxHeight: 40 },
+            buildings3d: { color: "#5f6573", opacity: 0.94, heightScale: 1, minHeight: 4 },
             bridge: { lift: 5.0, face: 1.7, faceColor: "#4d4a45", edge: "#66634f", shadow: { color: "#1e1c1a", opacity: 0.55 } },
             light: { color: "#fff0e2", intensity: 0.38 },
             rail: "#5c5a58",
@@ -203,7 +207,7 @@
             park: "#283130", wood: "#252d2c", grass: "#2a3332", sand: "#3a3540",
             water: "#0d1120", waterway: "#0d1120",
             building: "#3c3546",
-            buildings3d: { color: "#41394c", opacity: 0.95, heightScale: 1, minHeight: 4, maxHeight: 40 },
+            buildings3d: { color: "#41394c", opacity: 0.95, heightScale: 1, minHeight: 4 },
             bridge: { lift: 5.0, face: 1.7, faceColor: "#221e28", edge: "#625a6e", shadow: { color: "#08070a", opacity: 0.6 } },
             light: { color: "#ddd4ee", intensity: 0.3 },
             rail: "#4a4552",
@@ -563,10 +567,12 @@
     if (m.laneDashes) layers.push(laneDashes("lane-dashes-bridge", "bridge"));
     if (m.buildings3d) {
       // GTA VI's minimap raises its buildings. Heights come from OpenStreetMap (render_height,
-      // 5 m where nothing is tagged), capped so towers don't wall off the view, and grown in
-      // from zoom 14.5 to 16.
+      // 5 m where nothing is tagged) at their real size, and grow in from zoom 14.5 to 16. A theme
+      // can set maxHeight, but nothing in Rockstar's footage says the game caps its towers, so
+      // GTA VI doesn't (Gaurav, 25 Oct).
       const B = m.buildings3d;
-      const height = ["min", B.maxHeight, ["max", B.minHeight, ["*", B.heightScale, ["coalesce", ["get", "render_height"], 5]]]];
+      const raw = ["max", B.minHeight, ["*", B.heightScale, ["coalesce", ["get", "render_height"], 5]]];
+      const height = B.maxHeight ? ["min", B.maxHeight, raw] : raw;
       layers.push({
         id: "building-3d", type: "fill-extrusion", source: "omt", "source-layer": "building", minzoom: 14.5,
         filter: ["!=", ["get", "hide_3d"], true],
@@ -641,8 +647,8 @@
       });
     }
     if (m.pois && !car) {
-      // Shops and services as the game's blips: RDR2's black discs, GTA V's white pictograms
-      // (icons ship in the app's local sprite, cut from the games' blip textures).
+      // Shops and services as the game's blips: RDR2's black discs, GTA V's white pictograms,
+      // GTA VI's rounded squares (icons ship in the app's local sprite, cut from the games' blips).
       const P = m.pois === true ? { prefix: "poi-" } : m.pois;
       const groups = [
         ["food", ["restaurant", "fast_food", "food_court", "cafe", "ice_cream", "bakery"]],

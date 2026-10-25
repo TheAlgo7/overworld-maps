@@ -10,10 +10,13 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -265,6 +268,31 @@ fun ViPrompts(prompts: List<ViPrompt>, modifier: Modifier = Modifier) {
   }
 }
 
+// ---------------------------------------------------------------- map light
+
+/**
+ * The light across GTA VI's minimap, measured in Rockstar's frames (top band against the band by
+ * the player): by day the far side of the map sits about a tenth darker; at golden hour it's lit
+ * warm instead and the near side falls into shade; at night the map is flat. Drawn over the map,
+ * under the HUD. [variant]: the palette's time of day ("dusk", "night"; null is day).
+ */
+@Composable
+fun ViMapLight(variant: String?) {
+  if (variant == "night") return
+  Canvas(Modifier.fillMaxSize()) {
+    val brush =
+        if (variant == "dusk")
+            Brush.verticalGradient(
+                0f to Color(0x1FFFF0E2),
+                0.42f to Color.Transparent,
+                0.7f to Color.Transparent,
+                1f to Color(0x14000000),
+            )
+        else Brush.verticalGradient(0f to Color(0x1F000000), 0.45f to Color.Transparent)
+    drawRect(brush)
+  }
+}
+
 // ---------------------------------------------------------------- turn
 
 /** GTA VI's turn arrow: dark, on a rounded pink tile in the route's colour. */
@@ -272,6 +300,32 @@ fun ViPrompts(prompts: List<ViPrompt>, modifier: Modifier = Modifier) {
 fun ViTurnTile(content: VisualInstructionContent, side: DrivingSide?, size: Dp, modifier: Modifier = Modifier) {
   Box(modifier.size(size).background(Vi.Pink, RoundedCornerShape(size * 0.24f)), contentAlignment = Alignment.Center) {
     Box(Modifier.size(size * 0.72f), contentAlignment = Alignment.Center) { TurnArrow(content, side, Vi.Ink) }
+  }
+}
+
+/**
+ * The top of GTA VI's turn card, laid out like the game's own (its driving footage): the move in
+ * words, bold, the distance under it, and the arrow dark on a pink square flush with the card's
+ * right edge, as tall as the text. The card's own clip rounds the square's outer corners.
+ */
+@Composable
+fun ViTurnRow(
+    title: String,
+    line: String,
+    content: VisualInstructionContent?,
+    side: DrivingSide?,
+    titleSize: TextUnit,
+    lineSize: TextUnit,
+    modifier: Modifier = Modifier,
+) {
+  Row(modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.weight(1f).padding(start = 18.dp, end = 16.dp, top = 12.dp, bottom = 13.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+      Text(title, style = TextStyle(fontFamily = Vi.sansSemiBold, fontSize = titleSize, color = Vi.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
+      if (line.isNotEmpty()) Text(line, style = TextStyle(fontFamily = Vi.sans, fontSize = lineSize, color = Vi.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+    Box(Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true).background(Vi.Pink), contentAlignment = Alignment.Center) {
+      content?.let { Box(Modifier.fillMaxSize(0.58f), contentAlignment = Alignment.Center) { TurnArrow(it, side, Vi.Ink) } }
+    }
   }
 }
 

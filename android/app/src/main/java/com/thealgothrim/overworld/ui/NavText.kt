@@ -6,8 +6,9 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 import uniffi.ferrostar.GeographicCoordinate
+import uniffi.ferrostar.VisualInstructionContent
 
-// Shared by the game skins (GTA V, RDR2): turn sentences and small geometry helpers.
+// Shared by the game skins: turn sentences, the GTA VI turn card's words, small geometry helpers.
 
 /** Turns Ferrostar's maneuver data into a game-style help-text sentence. */
 internal fun turnSentence(uiState: NavigationUiState, destination: String?): String {
@@ -43,6 +44,37 @@ internal fun turnSentence(uiState: NavigationUiState, destination: String?): Str
       }.trim()
   val onto = if (road.isNotBlank()) " onto $road" else ""
   return if (dist != null) "In $dist, $verb$onto." else "${verb.replaceFirstChar { it.uppercase() }}$onto."
+}
+
+/**
+ * The move in two or three words, the way GTA VI's turn card names it ("Turn Right", "Off-Ramp
+ * Right", from the game's driving footage).
+ */
+internal fun viManeuver(content: VisualInstructionContent): String {
+  val type = content.maneuverType?.name.orEmpty()
+  val mod = content.maneuverModifier?.name.orEmpty()
+  val side = when { "LEFT" in mod -> "Left"; "RIGHT" in mod -> "Right"; else -> "" }
+  fun sided(word: String) = if (side.isEmpty()) word else "$word $side"
+  return when (type) {
+    "ARRIVE" -> "Arrive"
+    "DEPART" -> "Head Out"
+    "MERGE" -> sided("Merge")
+    "ON_RAMP" -> sided("On-Ramp")
+    "OFF_RAMP" -> sided("Off-Ramp")
+    "FORK" -> sided("Keep")
+    "ROUNDABOUT", "ROTARY", "ROUNDABOUT_TURN" -> "Roundabout"
+    "EXIT_ROUNDABOUT", "EXIT_ROTARY" -> "Exit Roundabout"
+    "END_OF_ROAD" -> sided("Turn")
+    "CONTINUE", "NEW_NAME" -> if (mod.startsWith("SLIGHT")) sided("Keep") else "Continue"
+    else ->
+        when {
+          mod == "U_TURN" -> "U-Turn"
+          mod.startsWith("SLIGHT") -> sided("Bear")
+          mod.startsWith("SHARP") -> sided("Sharp")
+          side.isNotEmpty() -> "Turn $side"
+          else -> "Continue"
+        }
+  }
 }
 
 

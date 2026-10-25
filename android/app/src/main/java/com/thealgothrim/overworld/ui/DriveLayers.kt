@@ -49,7 +49,7 @@ import com.thealgothrim.overworld.ui.rdr.RdrText
 import com.thealgothrim.overworld.ui.vi.Vi
 import com.thealgothrim.overworld.ui.vi.ViProgress
 import com.thealgothrim.overworld.ui.vi.ViText
-import com.thealgothrim.overworld.ui.vi.ViTurnTile
+import com.thealgothrim.overworld.ui.vi.ViTurnRow
 import com.thealgothrim.overworld.ui.skin.GameIcon
 import com.thealgothrim.overworld.ui.skin.GameIconView
 import com.thealgothrim.overworld.ui.skin.SkinDivider
@@ -260,29 +260,32 @@ private fun TurnBanner(spec: SkinSpec, uiState: NavigationUiState, hazard: Hazar
 
   // One card, like Google's: the turn, then "Then", then any alert, split by hairlines.
   Column(Modifier.fillMaxWidth().skinPanel(spec)) {
-    Row(
+    if (spec.vi) {
+      // GTA VI: the game's own card, the move in words over the distance and the pink arrow square on the right.
+      val rerouting = uiState.isCalculatingNewRoute == true
+      ViTurnRow(
+          title = if (rerouting) "Rerouting" else content?.let(::viManeuver).orEmpty(),
+          // Unnamed roads come through as a sentence ("Bear right."), which the title already says.
+          line = if (rerouting) "" else listOf(distance, road.takeUnless { it.endsWith(".") }.orEmpty()).filter { it.isNotEmpty() }.joinToString("  ·  "),
+          content = content,
+          side = uiState.remainingSteps?.firstOrNull()?.drivingSide,
+          titleSize = 25.sp,
+          lineSize = 19.sp,
+      )
+    } else Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-      if (spec.vi) {
-        // GTA VI: the arrow on a pink tile.
-        content?.let { ViTurnTile(it, uiState.remainingSteps?.firstOrNull()?.drivingSide, 56.dp) }
-      } else {
-        Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
-          content?.let { TurnArrow(it, uiState.remainingSteps?.firstOrNull()?.drivingSide, if (spec.gta) Gta.White else Rdr.White) }
-        }
+      Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
+        content?.let { TurnArrow(it, uiState.remainingSteps?.firstOrNull()?.drivingSide, if (spec.gta) Gta.White else Rdr.White) }
       }
       Spacer(Modifier.width(14.dp))
       Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         if (uiState.isCalculatingNewRoute == true) {
-          SkinText(spec.title("Rerouting"), spec.title, 26.sp, spec.fg, spacing = if (spec.vi) spec.titleSpacing else TextUnit.Unspecified)
+          SkinText(spec.title("Rerouting"), spec.title, 26.sp, spec.fg)
         } else {
-          when {
-            spec.gta -> GtaText(distance, 34.sp)
-            spec.vi -> SkinText(distance, Vi.condensedBold, 34.sp, spec.fg, spacing = 0.4.sp)
-            else -> RdrText(distance.uppercase(), 34.sp, spacing = 1.sp)
-          }
-          if (road.isNotEmpty()) SkinText(road, if (spec.vi) Vi.sansMedium else spec.body, 19.sp, spec.fg, maxLines = 2)
+          if (spec.gta) GtaText(distance, 34.sp) else RdrText(distance.uppercase(), 34.sp, spacing = 1.sp)
+          if (road.isNotEmpty()) SkinText(road, spec.body, 19.sp, spec.fg, maxLines = 2)
         }
       }
     }

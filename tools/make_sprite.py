@@ -8,6 +8,7 @@
    the gitignored local folder and is only used on personal builds. The app picks it up when present.
    GTA V's shop blips go in the same local sheet ("gta-*"), cut from the game's blip texture sheet
    in "Reference - GTA V/blips" (a 16x16 grid of 64 px icons: white pictograms, black outline).
+   GTA VI's ("vi-*") come from "Reference - GTA VI/blips" (tools/cut_vi_blips.py).
 
 Run: python tools/make_sprite.py   (needs Pillow)
 """
@@ -59,6 +60,28 @@ GTA_POIS = {
     "gta-police": (0, 12),  # police shield
     "gta-theatre": (3, 11),  # film camera
 }
+
+
+# Map icon name -> (row, column) of GTA VI's blips, cut from Gaurav's sheet by tools/cut_vi_blips.py
+# into "Reference - GTA VI/blips": rounded squares in pale tints with a dark slate border.
+VI_BLIPS = ROOT / "Reference - GTA VI" / "blips"
+VI_POIS = {
+    "vi-food": (0, 0),  # knife and fork
+    "vi-clothes": (0, 1),  # T-shirt
+    "vi-barber": (0, 4),  # scissors
+    "vi-store": (1, 0),  # basket
+    "vi-bar": (1, 3),  # cocktail glass
+    "vi-doctor": (1, 4),  # medical star, red rim
+    "vi-pharmacy": (1, 4),
+    "vi-repair": (2, 4),  # spray paint
+    "vi-fuel": (3, 3),  # petrol pump
+}
+
+
+def vi(cell: tuple, scale: int) -> Image.Image:
+    size = 22 * scale
+    r, c = cell
+    return Image.open(VI_BLIPS / f"r{r}c{c}.png").convert("RGBA").resize((size, size), Image.LANCZOS)
 
 
 def gta(cell: tuple, scale: int) -> Image.Image:
@@ -121,6 +144,8 @@ for scale, suffix in [(1, ""), (2, "@2x")]:
         local.update({name: poi(blip, scale) for name, blip in POIS.items()})
     if GTA_SHEET.exists():
         local.update({name: gta(cell, scale) for name, cell in GTA_POIS.items()})
+    if (VI_BLIPS / "r0c0.png").exists():
+        local.update({name: vi(cell, scale) for name, cell in VI_POIS.items()})
     if len(local) > len(patterns):
         write(LOCAL, local, scale, suffix)
-print("sprites ->", MAIN, "and", LOCAL if BLIPS.exists() or GTA_SHEET.exists() else "(no local blips)")
+print("sprites ->", MAIN, "and", LOCAL if len(local) > len(patterns) else "(no local blips)")

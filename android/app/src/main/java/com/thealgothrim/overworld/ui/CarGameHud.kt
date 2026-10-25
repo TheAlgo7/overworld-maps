@@ -54,7 +54,7 @@ import com.thealgothrim.overworld.ui.rdr.Rdr
 import com.thealgothrim.overworld.ui.rdr.RdrText
 import com.thealgothrim.overworld.ui.vi.Vi
 import com.thealgothrim.overworld.ui.vi.ViText
-import com.thealgothrim.overworld.ui.vi.ViTurnTile
+import com.thealgothrim.overworld.ui.vi.ViTurnRow
 import com.thealgothrim.overworld.ui.skin.GameIcon
 import com.thealgothrim.overworld.ui.skin.SkinPrimaryButton
 import com.thealgothrim.overworld.ui.skin.SkinSecondaryButton
@@ -152,26 +152,28 @@ private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardA
   val then = next?.visualInstructions?.firstOrNull()?.primaryContent?.takeIf { next.distance < 500 }
 
   // One card, like Google's: the turn, then "Then", then any alert, split by hairlines.
-  Column(modifier.width(IntrinsicSize.Max).widthIn(min = 300.dp, max = 420.dp).skinPanel(spec)) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = if (spec.vi) 16.dp else 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-      if (spec.vi) {
-        // GTA VI: the arrow, dark on a pink tile in the route's colour.
-        content?.let { ViTurnTile(it, uiState.remainingSteps?.firstOrNull()?.drivingSide, 66.dp) }
-      } else {
-        Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) { content?.let { TurnArrow(it, uiState.remainingSteps?.firstOrNull()?.drivingSide, spec.fg) } }
-      }
+  Column(modifier.width(IntrinsicSize.Max).widthIn(min = 300.dp, max = 440.dp).skinPanel(spec)) {
+    if (spec.vi) {
+      // GTA VI: the game's own card, the move in words over the distance and the pink arrow square on the right.
+      val rerouting = uiState.isCalculatingNewRoute == true
+      ViTurnRow(
+          title = if (rerouting) "Rerouting" else content?.let(::viManeuver).orEmpty(),
+          // Unnamed roads come through as a sentence ("Bear right."), which the title already says.
+          line = if (rerouting) "" else listOf(distance, road.takeUnless { it.endsWith(".") }.orEmpty()).filter { it.isNotEmpty() }.joinToString("  ·  "),
+          content = content,
+          side = uiState.remainingSteps?.firstOrNull()?.drivingSide,
+          titleSize = 30.sp,
+          lineSize = 23.sp,
+      )
+    } else Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+      Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) { content?.let { TurnArrow(it, uiState.remainingSteps?.firstOrNull()?.drivingSide, spec.fg) } }
       Spacer(Modifier.width(18.dp))
-      Column(verticalArrangement = Arrangement.spacedBy(if (spec.vi) 2.dp else 4.dp)) {
+      Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (uiState.isCalculatingNewRoute == true) {
-          SkinText(spec.title("Rerouting"), spec.title, if (spec.vi) 30.sp else 28.sp, spec.fg, spacing = if (spec.vi) spec.titleSpacing else androidx.compose.ui.unit.TextUnit.Unspecified)
+          SkinText(spec.title("Rerouting"), spec.title, 28.sp, spec.fg)
         } else {
-          when {
-            spec.gta -> GtaText(distance, 40.sp)
-            // The mission HUD's bold condensed numbers.
-            spec.vi -> SkinText(distance, Vi.condensedBold, 42.sp, spec.fg, spacing = 0.4.sp)
-            else -> RdrText(distance.uppercase(), 40.sp, spacing = 1.sp)
-          }
-          if (road.isNotEmpty()) SkinText(road, if (spec.vi) Vi.sansMedium else spec.body, 22.sp, spec.fg, maxLines = 2)
+          if (spec.gta) GtaText(distance, 40.sp) else RdrText(distance.uppercase(), 40.sp, spacing = 1.sp)
+          if (road.isNotEmpty()) SkinText(road, spec.body, 22.sp, spec.fg, maxLines = 2)
         }
       }
     }

@@ -54,6 +54,7 @@ import com.thealgothrim.overworld.theme.Skin
 import com.thealgothrim.overworld.ui.gta.GtaBigMessage
 import com.thealgothrim.overworld.ui.rdr.RdrBigMessage
 import com.thealgothrim.overworld.ui.vi.ViBigMessage
+import com.thealgothrim.overworld.ui.vi.ViMapLight
 import com.thealgothrim.overworld.ui.skin.spec
 import kotlin.math.abs
 import kotlin.math.pow
@@ -198,6 +199,7 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
         },
     )
     if (theme.paperOverlay) PaperOverlay()
+    if (theme.skin == Skin.GTA6) ViMapLight(variant)
 
     Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
       when {

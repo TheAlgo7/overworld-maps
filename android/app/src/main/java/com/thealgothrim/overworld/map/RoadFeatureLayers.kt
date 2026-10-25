@@ -72,7 +72,9 @@ private fun badge(kind: RoadFeatureKind, skin: Skin): Pair<Color, Color> {
       RoadFeatureKind.ROADWORKS, RoadFeatureKind.LANE_CLOSED, RoadFeatureKind.HAZARD -> Color(0xFF8A6212) to Color.White
       RoadFeatureKind.JAM, RoadFeatureKind.BROKEN_DOWN -> Color(0xFF8E4313) to Color.White
       RoadFeatureKind.FLOODING -> Color(0xFF1E4A8B) to Color.White
-      RoadFeatureKind.SPEED_CAMERA, RoadFeatureKind.TRAFFIC_LIGHT -> Color(0xFF26242F) to Color.White
+      // The game's own CCTV marker (its police HUD): a wall camera, white on deep red.
+      RoadFeatureKind.SPEED_CAMERA -> Color(0xFF7E2027) to Color.White
+      RoadFeatureKind.TRAFFIC_LIGHT -> Color(0xFF26242F) to Color.White
     }
   }
   return if (skin == Skin.GTA) {
@@ -116,7 +118,7 @@ class RoadFeaturePainter(private val kind: RoadFeatureKind, private val skin: Sk
     drawCircle(fill, s * 0.40f, c)
     // Glyphs are drawn on a 24-unit grid inside the badge.
     val g = s * 0.62f
-    translate(c.x - g / 2f, c.y - g / 2f) { drawRoadGlyph(kind, glyph, g, cut = fill) }
+    translate(c.x - g / 2f, c.y - g / 2f) { drawRoadGlyph(kind, glyph, g, cut = fill, cctv = skin == Skin.GTA6) }
   }
 
   private fun DrawScope.drawTrafficLight() {
@@ -133,8 +135,11 @@ class RoadFeaturePainter(private val kind: RoadFeatureKind, private val skin: Sk
   }
 }
 
-/** The glyph for a road-feature kind on a [s]-sized square, in [color]. Shared with the HUD alert. */
-fun DrawScope.drawRoadGlyph(kind: RoadFeatureKind, color: Color, s: Float, cut: Color = Color(0xFF1B1A1A)) {
+/**
+ * The glyph for a road-feature kind on a [s]-sized square, in [color]. Shared with the HUD alert.
+ * [cctv]: GTA VI draws the speed camera as its CCTV marker, a camera on a wall bracket.
+ */
+fun DrawScope.drawRoadGlyph(kind: RoadFeatureKind, color: Color, s: Float, cut: Color = Color(0xFF1B1A1A), cctv: Boolean = false) {
   val u = s / 24f
   fun p(x: Float, y: Float) = Offset(x * u, y * u)
   val stroke = Stroke(width = 2.2f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -232,7 +237,15 @@ fun DrawScope.drawRoadGlyph(kind: RoadFeatureKind, color: Color, s: Float, cut: 
       drawLine(color, p(12f, 9f), p(12f, 14.5f), 2.4f * u, StrokeCap.Round)
       drawCircle(color, 1.3f * u, p(12f, 17.6f))
     }
-    RoadFeatureKind.SPEED_CAMERA -> {
+    RoadFeatureKind.SPEED_CAMERA -> if (cctv) {
+      // The CCTV marker: the camera tilted down to the left, its lens cut in, on an arm from a wall plate.
+      drawRoundRect(color, p(17.6f, 6f), Size(3.4f * u, 13f * u), androidx.compose.ui.geometry.CornerRadius(0.9f * u))
+      drawLine(color, p(14f, 12.4f), p(18.4f, 14.6f), 2.4f * u, StrokeCap.Round)
+      rotate(-22f, p(10f, 10f)) {
+        drawRoundRect(color, p(2.2f, 6.4f), Size(14.4f * u, 7.6f * u), androidx.compose.ui.geometry.CornerRadius(1.6f * u))
+        drawRect(cut, p(2.2f, 8.4f), Size(2.2f * u, 3.6f * u))
+      }
+    } else {
       drawRoundRect(color, p(3f, 7f), Size(15f * u, 9f * u), androidx.compose.ui.geometry.CornerRadius(1.5f * u))
       val lens = Path().apply { moveTo(18f * u, 9f * u); lineTo(22f * u, 7.5f * u); lineTo(22f * u, 15.5f * u); lineTo(18f * u, 14f * u); close() }
       drawPath(lens, color)
