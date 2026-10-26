@@ -2,8 +2,13 @@ package com.thealgothrim.overworld.ui
 
 import android.content.res.Configuration
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -137,6 +142,8 @@ fun BoxScope.NavigationLayer(
     onSettings: () -> Unit,
     /** How tall the bottom part (street line and trip sheet) is, so the arrow can stay above it. */
     onBottomBlocked: (Dp) -> Unit = {},
+    /** The part of the window the cards leave clear, for what GTA VI pins to the map's edge. */
+    onMapRoom: (PaddingValues) -> Unit = {},
 ) {
   var expanded by remember { mutableStateOf(false) }
   val progress = uiState.progress
@@ -146,6 +153,20 @@ fun BoxScope.NavigationLayer(
   // screen and in Google Maps, and the map buttons stand at the right edge; the camera keeps the
   // arrow in the open map to the right. Full-width cards left a strip of map with the arrow under them.
   val wide = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+  // Where the turn banner and the trip sheet sit in the window (px). The round buttons are left out:
+  // kept clear of them, the edge ran down the middle of the map below them.
+  var bannerBottom by remember { mutableFloatStateOf(0f) }
+  var bannerRight by remember { mutableFloatStateOf(0f) }
+  var sheetTop by remember { mutableFloatStateOf(Float.NaN) }
+  val window = LocalWindowInfo.current.containerSize
+  val room =
+      with(density) {
+        if (wide) PaddingValues(start = bannerRight.toDp())
+        else PaddingValues(top = bannerBottom.toDp(), bottom = if (sheetTop.isNaN()) 0.dp else (window.height - sheetTop).coerceAtLeast(0f).toDp())
+      }
+  LaunchedEffect(room) { onMapRoom(room) }
+
   val buttons: @Composable () -> Unit = {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
       SkinRoundButton(spec, if (uiState.isMuted == true) GameIcon.SOUND_OFF else GameIcon.SOUND_ON, onMute)
@@ -159,7 +180,15 @@ fun BoxScope.NavigationLayer(
       (if (wide) Modifier.align(Alignment.TopStart).width(LANDSCAPE_COLUMN) else Modifier.align(Alignment.TopCenter).fillMaxWidth())
           .padding(horizontal = 12.dp, vertical = 10.dp)
   ) {
-    TurnBanner(spec, uiState, hazard)
+    Box(
+        Modifier.onGloballyPositioned {
+          val bounds = it.boundsInRoot()
+          bannerBottom = bounds.bottom
+          bannerRight = bounds.right
+        }
+    ) {
+      TurnBanner(spec, uiState, hazard)
+    }
     if (!wide) {
       Spacer(Modifier.height(12.dp))
       Box(Modifier.align(Alignment.End)) { buttons() }
@@ -204,7 +233,9 @@ fun BoxScope.NavigationLayer(
     }
 
     if (progress != null) {
-      SkinPanel(spec, Modifier.sheetFloat(spec).fillMaxWidth()) {
+      // From the sheet itself, not the street line above it: the arrow sits just over that line,
+      // and the edge markers behind the car had no room left below it.
+      SkinPanel(spec, Modifier.sheetFloat(spec).fillMaxWidth().onGloballyPositioned { sheetTop = it.boundsInRoot().top }) {
         TripProgressBar(spec, uiState)
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
           SheetIconButton(spec, GameIcon.CLOSE, onEnd, tint = spec.accent)

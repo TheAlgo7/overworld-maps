@@ -19,6 +19,7 @@ import com.thealgothrim.overworld.car.safeStablePadding
 import com.thealgothrim.overworld.map.AutoZoomEffect
 import com.thealgothrim.overworld.map.driveCamera
 import com.thealgothrim.overworld.map.OverworldCarMap
+import com.thealgothrim.overworld.map.OverworldClusterMap
 import com.thealgothrim.overworld.map.rememberOverworldMapState
 
 /**
@@ -30,6 +31,9 @@ import com.thealgothrim.overworld.map.rememberOverworldMapState
  *   adb shell am start -n com.thealgothrim.overworld.debug/com.thealgothrim.overworld.CarPreviewActivity
  *
  * and back with `adb shell wm size reset && adb shell wm density reset`.
+ *
+ * `--ez cluster true` shows the instrument cluster's map instead (OverworldClusterMap), best at the
+ * Desktop Head Unit's cluster size, 800x480 at 160 dpi.
  */
 class CarPreviewActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -40,6 +44,7 @@ class CarPreviewActivity : ComponentActivity() {
       hide(WindowInsetsCompat.Type.systemBars())
       systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
+    val cluster = intent.getBooleanExtra("cluster", false)
     setContent {
       val theme by AppModule.themeStore.theme.collectAsState()
       val viewModel = AppModule.viewModel
@@ -50,11 +55,13 @@ class CarPreviewActivity : ComponentActivity() {
       // The same camera as CarNavigationScreen: the game's tilt, the arrow low and right of centre.
       val driveCamera = theme.skin.driveCamera
       val zoom = 16.4 + driveCamera.zoomOffset
+      // The cluster's arrow is centred across (CarClusterScreen).
+      val follow = safeStablePadding(area, top = 0.45f, start = if (cluster) 0f else 0.25f)
       val cameraOptions =
           navigationCameraOptions()
               .copy(
-                  browsingPadding = safeStablePadding(area),
-                  navigationPadding = safeStablePadding(area, top = 0.45f, start = 0.25f),
+                  browsingPadding = if (cluster) follow else safeStablePadding(area),
+                  navigationPadding = follow,
                   navigationZoom = zoom,
                   navigationTilt = driveCamera.tilt,
               )
@@ -70,7 +77,8 @@ class CarPreviewActivity : ComponentActivity() {
           state.cameraMode = NavigationCameraMode.FOLLOW_USER_WITH_BEARING
         }
       }
-      OverworldCarMap(theme, viewModel, state, cameraOptions, tracker)
+      if (cluster) OverworldClusterMap(theme, viewModel, state, cameraOptions, safeStablePadding(area))
+      else OverworldCarMap(theme, viewModel, state, cameraOptions, tracker)
     }
   }
 

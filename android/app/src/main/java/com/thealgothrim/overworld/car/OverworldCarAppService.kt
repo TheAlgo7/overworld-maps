@@ -10,12 +10,16 @@ import androidx.car.app.validation.HostValidator
 import com.thealgothrim.overworld.AppModule
 import uniffi.ferrostar.GeographicCoordinate
 
-/** Android Auto entry point. Declared in the manifest under the NAVIGATION category. */
+/**
+ * Android Auto entry point. Declared in the manifest under the NAVIGATION category, and
+ * FEATURE_CLUSTER for the map between the dials in cars with an instrument cluster display.
+ */
 class OverworldCarAppService : CarAppService() {
   // Personal app: accept any Android Auto host (the phone's own Android Auto, or the DHU).
   override fun createHostValidator(): HostValidator = HostValidator.ALLOW_ALL_HOSTS_VALIDATOR
 
-  override fun onCreateSession(sessionInfo: SessionInfo): Session = OverworldCarSession()
+  override fun onCreateSession(sessionInfo: SessionInfo): Session =
+      if (sessionInfo.displayType == SessionInfo.DISPLAY_TYPE_CLUSTER) OverworldClusterSession() else OverworldCarSession()
 }
 
 class OverworldCarSession : Session() {

@@ -325,10 +325,13 @@ class OverworldViewModel :
     hasLocationPermission.value = granted
   }
 
-  /** A map screen (phone or car) came into view, or left it. GPS runs while at least one is up. */
+  /** A map screen (phone, car or cluster) came into view, or left it. GPS runs while at least one is up. */
   fun mapInView(visible: Boolean) {
     watchers.update { (it + if (visible) 1 else -1).coerceAtLeast(0) }
   }
+
+  /** Traffic as if the traffic service had found it, until its next refresh (debug builds' DEBUG_TRAFFIC). */
+  internal fun showTraffic(spans: List<com.thealgothrim.overworld.traffic.TrafficSpan>) = _extras.update { it.copy(trafficSpans = spans) }
 
   fun refreshLocationPermission() {
     val context = AppModule.context

@@ -195,20 +195,30 @@
               minor: { fill: "#7b7a74", casing: null },
               service: { fill: "#74736e", casing: null },
             },
-            laneDashes: { color: "#a39d8c", groups: ["motorway", "major"] },
+            // Golden hour shows the highways' lanes: warm lanes between pale grey stripes down the
+            // middle and along both edges of each carriageway (Extended Look 12:41 and 12:57, lanes
+            // #756f63, stripes #787a77, a stripe about half a lane wide), not white dashes.
+            laneDashes: null,
+            laneStripes: { color: "#898c85", groups: ["motorway", "major"], share: 0.14 },
           },
         },
-        // Night: violet slate ground and roads, near-black navy water.
+        // Night: violet slate ground and roads, near-black navy water, deep teal grass and parks
+        // (the game's own driving footage at night: #13363a beside roads that match these).
         night: {
           page: "#1f1e2a",
           dark: true,
           map: {
             land: "#312c38", residential: "#312c38", industrial: "#2e2a36",
-            park: "#283130", wood: "#252d2c", grass: "#2a3332", sand: "#3a3540",
+            park: "#15383b", wood: "#123133", grass: "#14363a", sand: "#3a3540",
             water: "#0d1120", waterway: "#0d1120",
             building: "#3c3546",
             buildings3d: { color: "#41394c", opacity: 0.95, heightScale: 1, minHeight: 4 },
-            bridge: { lift: 5.0, face: 1.7, faceColor: "#221e28", edge: "#625a6e", shadow: { color: "#08070a", opacity: 0.6 } },
+            // Stacked ramps at night stand apart on near-black gaps (Extended Look 20:22, #160f1f
+            // between the decks): dark, wider kerbs and a deeper shadow, where the day has pale kerbs.
+            bridge: {
+              lift: 5.0, face: 1.7, faceColor: "#1a1421", edge: "#17101f", edgeWidth: [1.1, 2.8, 4.8],
+              shadow: { color: "#120c18", opacity: 0.75 },
+            },
             light: { color: "#ddd4ee", intensity: 0.3 },
             rail: "#4a4552",
             roads: {
@@ -351,7 +361,10 @@
       layout: { "line-cap": "butt", "line-join": "round", ...sortKey },
       paint: {
         "line-color": b.edge,
-        "line-width": b.gap ? 1.1 : 0.9,
+        // [z14, z16, z18] when the theme sets a width, growing with the deck.
+        "line-width": b.edgeWidth
+          ? ["interpolate", ["linear"], ["zoom"], 14, b.edgeWidth[0], 16, b.edgeWidth[1], 18, b.edgeWidth[2]]
+          : b.gap ? 1.1 : 0.9,
         "line-gap-width": widthExpr(g.w, scale, b.gap ? [1.6, 2, 3, 4] : [0, 0, 0, 0]),
         "line-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0, 14.5, 1],
       },
@@ -562,9 +575,31 @@
         },
       };
     };
+    // Solid lane stripes instead (GTA VI at golden hour): one down the middle of each carriageway and
+    // one along each edge, each m.laneStripes.share of the road's width.
+    const laneStripes = (id, brunnel) => {
+      const S = m.laneStripes;
+      const scale = (car ? 1.25 : 1) * (m.roadScale || 1);
+      const layout = { "line-join": "round", ...(brunnel === "bridge" ? { "line-sort-key": ["coalesce", ["get", "layer"], 1] } : {}) };
+      const paint = { "line-color": S.color, "line-opacity": ["interpolate", ["linear"], ["zoom"], 15, 0, 15.6, 1] };
+      return GROUPS.filter((g) => S.groups.includes(g.key)).flatMap((g) => [
+        {
+          id: `${id}-${g.key}-middle`, type: "line", source: "omt", "source-layer": "transportation", minzoom: 15,
+          filter: classFilter(g.classes, brunnel), layout,
+          paint: { ...paint, "line-width": widthExpr(g.w, scale * S.share) },
+        },
+        {
+          id: `${id}-${g.key}-edges`, type: "line", source: "omt", "source-layer": "transportation", minzoom: 15,
+          filter: classFilter(g.classes, brunnel), layout,
+          paint: { ...paint, "line-width": widthExpr(g.w, scale * S.share), "line-gap-width": widthExpr(g.w, scale * (1 - 2 * S.share)) },
+        },
+      ]);
+    };
     if (m.laneDashes) layers.push(laneDashes("lane-dashes", null));
+    if (m.laneStripes) layers.push(...laneStripes("lane-stripes", null));
     layers.push(...roadLayers(m, car, "bridge"));
     if (m.laneDashes) layers.push(laneDashes("lane-dashes-bridge", "bridge"));
+    if (m.laneStripes) layers.push(...laneStripes("lane-stripes-bridge", "bridge"));
     if (m.buildings3d) {
       // GTA VI's minimap raises its buildings. Heights come from OpenStreetMap (render_height,
       // 5 m where nothing is tagged) at their real size, and grow in from zoom 14.5 to 16. A theme

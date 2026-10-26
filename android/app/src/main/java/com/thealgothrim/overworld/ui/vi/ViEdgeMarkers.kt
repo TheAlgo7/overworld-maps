@@ -47,9 +47,15 @@ fun ViEdgeMarkers(camera: CameraState, destination: GeographicCoordinate?, room:
     val top = room.calculateTopPadding() + EDGE_INSET
     val bottom = maxHeight - room.calculateBottomPadding() - EDGE_INSET
     if (right <= left || bottom <= top) return@BoxWithConstraints
-    // Rays start at the arrow (the camera's target, where the camera's padding puts it).
+    // Rays start at the arrow (the camera's target, where the camera's padding puts it), kept a
+    // marker's width inside the border: from on the border, a marker behind the car sat on the arrow.
     val arrow = projection.screenLocationFromPosition(position.target)
-    val origin = DpOffset(arrow.x.coerceIn(left, right), arrow.y.coerceIn(top, bottom))
+    val inner = NORTH_SIZE
+    val origin =
+        DpOffset(
+            arrow.x.coerceIn(left + inner, maxOf(left + inner, right - inner)),
+            arrow.y.coerceIn(top + inner, maxOf(top + inner, bottom - inner)),
+        )
 
     /** Where a ray from [origin], [angle] degrees clockwise from screen-up, meets the border. */
     fun border(angle: Double): DpOffset {

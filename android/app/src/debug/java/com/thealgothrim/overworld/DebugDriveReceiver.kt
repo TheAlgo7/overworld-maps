@@ -111,6 +111,18 @@ class DebugDriveReceiver : BroadcastReceiver() {
           }
         }
       }
+      // Traffic on the trip, as if the traffic service had found it: --ef ahead_from/ahead_to
+      // (metres ahead of the car), --ei level (1 slow, 2 heavy, 3 closed). The next refresh replaces it.
+      "com.thealgothrim.overworld.DEBUG_TRAFFIC" -> {
+        val ui = vm.navigationUiState.value
+        val line = ui.routeGeometry?.let { com.thealgothrim.overworld.traffic.RouteLine(it) } ?: return
+        val done = line.length - (ui.progress?.distanceRemaining ?: line.length)
+        val level = intent.getIntExtra("level", 2)
+        val from = done + intent.getFloatExtra("ahead_from", 0f)
+        val to = done + intent.getFloatExtra("ahead_to", 400f)
+        vm.showTraffic(listOf(com.thealgothrim.overworld.traffic.TrafficSpan(from, to, level)))
+        Log.i("DebugDrive", "traffic level $level from ${from.toInt()} to ${to.toInt()} m along the route")
+      }
       // A camera at --ef lat/lng (and --ef heading), as if marked with + Cam there.
       "com.thealgothrim.overworld.DEBUG_CAMERA" ->
           AppModule.cameras.mark(

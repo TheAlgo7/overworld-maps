@@ -11,7 +11,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,7 +40,6 @@ import com.thealgothrim.overworld.theme.MapDetails
 import com.thealgothrim.overworld.theme.OverworldTheme
 import com.thealgothrim.overworld.traffic.RoadFeature
 import com.thealgothrim.overworld.traffic.RoadFeatureKind
-import com.thealgothrim.overworld.traffic.TrafficSpan
 import com.thealgothrim.overworld.ui.CarGameHud
 import com.thealgothrim.overworld.ui.PaperOverlay
 import com.thealgothrim.overworld.ui.vi.ViEdgeMarkers
@@ -189,6 +187,39 @@ fun OverworldCarMap(
 }
 
 /**
+ * The map in the car's instrument cluster, between the dials (Android Auto's cluster display, in
+ * cars that have one, like the Curvv): the car screen's themed map, route and arrow, and no cards,
+ * since the cluster prints the next turn and the time itself from the trip Android Auto is sent.
+ * Android's rule for cluster displays is the map and the route only; GTA VI keeps its minimap's
+ * "N" and waypoint dot on the edge, which are part of its map.
+ */
+@Composable
+fun OverworldClusterMap(
+    theme: OverworldTheme,
+    viewModel: NavigationViewModel,
+    mapState: NavigationMapState,
+    cameraOptions: NavigationCameraOptions,
+    /** The part of the cluster's map the car leaves clear of its own turn and time cards. */
+    room: PaddingValues,
+) {
+  val uiState by viewModel.navigationUiState.collectAsState()
+  val details by AppModule.themeStore.details.collectAsState()
+  val extras by AppModule.viewModel.extras.collectAsState()
+  val trafficTiles = AppModule.traffic.flowTilesUrl?.takeIf { details.traffic }
+  val planner by AppModule.viewModel.planner.collectAsState()
+  Box(Modifier.fillMaxSize()) {
+    CarMapView(theme, uiState, mapState, cameraOptions, trafficTiles, extras, details, planner.preview?.route?.geometry)
+    if (theme.paperOverlay) PaperOverlay(strength = 0.75f)
+    if (theme.skin == Skin.GTA6) {
+      val variant by AppModule.viewModel.mapVariant.collectAsState()
+      ViMapLight(variant)
+      val destination = (uiState.routeGeometry?.takeIf { uiState.isNavigating() } ?: planner.preview?.route?.geometry)?.lastOrNull()
+      ViEdgeMarkers(mapState.cameraState, destination, room)
+    }
+  }
+}
+
+/**
  * The car HUD's room: inside Android Auto's stable area, the part it keeps clear even while its
  * buttons show (Android's guidance for persistent content). It used the visible area, which changes
  * as those buttons come and go, so the HUD could resize at a touch. The top edge is pinned:
@@ -292,11 +323,9 @@ private fun OverworldLayers(
   val trip = state.routeGeometry?.takeIf { state.isNavigating() && it.size >= 2 }
   val route = shown?.route
   if (trip != null && route != null) {
-    ThemedRouteAhead(route, shown, theme, car, style, extras.bridges)
-    TripTrafficLine(trip, extras.trafficSpans, shown, theme, car)
+    ThemedRouteAhead(route, shown, theme, car, style, extras.bridges, extras.trafficSpans)
   } else if (previewRoute != null && previewRoute.size >= 2) {
-    ThemedRouteLine(previewRoute, theme, car)
-    RouteTrafficLine(previewRoute, extras.trafficSpans, theme, car)
+    ThemedRouteLine(previewRoute, theme, car, extras.trafficSpans)
   }
   RoadFeatureLayers(visibleFeatures(extras, details), theme, car)
   val end = trip?.lastOrNull() ?: previewRoute?.lastOrNull() ?: pin
@@ -311,17 +340,6 @@ private fun OverworldLayers(
 /** Whether the camera follows the car heading-up. */
 private val NavigationMapState.headingUp: () -> Boolean
   get() = { cameraMode == NavigationCameraMode.FOLLOW_USER_WITH_BEARING }
-
-/**
- * Traffic on the trip's route, trimmed behind the arrow every 25 m (it composes only then). Where
- * the route fades in ahead of the arrow (GTA VI), the traffic colours start after the fade.
- */
-@Composable
-@MaplibreComposable
-private fun TripTrafficLine(trip: List<GeographicCoordinate>, spans: List<TrafficSpan>, shown: DisplayedPosition, theme: OverworldTheme, car: Boolean) {
-  val from by remember(shown, theme.routeFade) { derivedStateOf { (((shown.along ?: 0.0) + theme.routeFade) / 25).toInt() * 25.0 } }
-  RouteTrafficLine(trip, spans, theme, car, from = from, id = "ow-trip-traffic")
-}
 
 /** Road features the map should show, per the Layers switches, with the cameras marked by hand. */
 @Composable

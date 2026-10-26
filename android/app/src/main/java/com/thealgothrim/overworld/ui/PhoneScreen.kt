@@ -46,6 +46,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.asPaddingValues
+import com.thealgothrim.overworld.ui.vi.ViEdgeMarkers
 import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.OverworldViewModel
 import com.thealgothrim.overworld.map.rememberOverworldMapState
@@ -88,6 +90,8 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
   val tilt = rememberDriveTilt(driveCamera, navState)
   // How much of the screen's bottom the trip sheet and street line cover while driving.
   var bottomBlocked by remember { mutableStateOf(0.dp) }
+  // What the driving cards leave clear of the window (see NavigationLayer).
+  var mapRoom by remember { mutableStateOf(PaddingValues(0.dp)) }
   val defaults = navigationCameraOptions()
   val cameraOptions =
       defaults.copy(navigationZoom = phoneZoom, navigationTilt = tilt, navigationPadding = clearOfBottom(defaults.navigationPadding, bottomBlocked))
@@ -199,7 +203,22 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
         },
     )
     if (theme.paperOverlay) PaperOverlay()
-    if (theme.skin == Skin.GTA6) ViMapLight(variant)
+    if (theme.skin == Skin.GTA6) {
+      ViMapLight(variant)
+      // Driving, the map is the minimap: its "N" round the edge and the waypoint dot when the
+      // destination is off screen, inside what the cards leave clear.
+      if (navigating) {
+        val safe = WindowInsets.safeDrawing.asPaddingValues()
+        val room =
+            PaddingValues(
+                start = maxOf(mapRoom.calculateStartPadding(LayoutDirection.Ltr), safe.calculateStartPadding(LayoutDirection.Ltr)),
+                top = maxOf(mapRoom.calculateTopPadding(), safe.calculateTopPadding()),
+                end = maxOf(mapRoom.calculateEndPadding(LayoutDirection.Ltr), safe.calculateEndPadding(LayoutDirection.Ltr)),
+                bottom = maxOf(mapRoom.calculateBottomPadding(), safe.calculateBottomPadding()),
+            )
+        ViEdgeMarkers(mapState.cameraState, uiState.routeGeometry?.lastOrNull(), room)
+      }
+    }
 
     Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
       when {
@@ -219,6 +238,7 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
                 onEnd = viewModel::stopNavigation,
                 onSettings = { settingsOpen = true },
                 onBottomBlocked = { bottomBlocked = it },
+                onMapRoom = { mapRoom = it },
             )
         planner.preview != null ->
             PreviewLayer(

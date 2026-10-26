@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeJoin
@@ -58,7 +59,6 @@ import org.maplibre.spatialk.geojson.Feature
 import org.maplibre.spatialk.geojson.FeatureCollection
 import org.maplibre.spatialk.geojson.Point
 import uniffi.ferrostar.GeographicCoordinate
-import com.thealgothrim.overworld.traffic.RouteLine
 import com.thealgothrim.overworld.traffic.TrafficSpan
 import org.maplibre.compose.expressions.dsl.case
 import org.maplibre.compose.expressions.dsl.switch
@@ -97,6 +97,10 @@ private fun widthByZoom(at10: Float, at18: Float) =
  * [NEAR_METRES] driven, and the short near part from the arrow to there, which follows the arrow
  * every frame. GTA VI's route fades in ahead of the arrow: its first [OverworldTheme.routeFade]
  * metres are a third piece, drawn with a gradient, and the far part starts beyond the fade's reach.
+ *
+ * [traffic] is cut the same way and drawn over each piece, so a jam starts where the route does.
+ * It used to be its own line trimmed every 25 m, and in the Curvv a red jam ran on 25 m behind the
+ * arrow.
  */
 @Composable
 @MaplibreComposable
@@ -108,18 +112,25 @@ fun ThemedRouteAhead(
     style: Any,
     /** Stretches on flyovers (metres along [route]): drawn over the bridge; the rest goes under bridges. */
     bridges: List<ClosedFloatingPointRange<Double>> = emptyList(),
+    /** Slow and jammed stretches (metres along [route]). */
+    traffic: List<TrafficSpan> = emptyList(),
 ) {
   val fade = theme.routeFade
   val step by remember(shown) { derivedStateOf { ((shown.along ?: 0.0) / NEAR_METRES).toInt() } }
   val cut = remember(route, step, fade) { minOf(route.length, (step + 1) * NEAR_METRES + fade) }
   val far = rememberGeoJsonSource(remember(route, cut) { GeoJsonData.JsonString(lineJson(route.slice(cut, route.length))) })
+  val farTraffic = rememberGeoJsonSource(remember(route, cut, traffic) { trafficData(route, traffic, cut, route.length) })
   fun fadeEnd(along: Double) = minOf(along.coerceAtMost(cut) + fade, cut)
   fun nearData(along: Double) = GeoJsonData.JsonString(lineJson(route.slice(fadeEnd(along), cut)))
   fun fadeData(along: Double) = GeoJsonData.JsonString(lineJson(route.slice(along.coerceAtMost(cut), fadeEnd(along))))
+  // Traffic starts where the solid route does: at the arrow, or past GTA VI's fade.
+  fun nearTrafficData(along: Double) = trafficData(route, traffic, fadeEnd(along), cut)
   // Also fresh for a new map style: MapLibre gets these again when the style reloads.
   val startAlong = remember(route, cut, style) { Snapshot.withoutReadObservation { shown.along } ?: 0.0 }
   // The near pieces are handed to MapLibre straight from the animation, without composing anything.
   val near = rememberGeoJsonSource(remember(route, cut, style) { nearData(startAlong) }, options = GeoJsonOptions(synchronousUpdate = true))
+  val nearTraffic =
+      rememberGeoJsonSource(remember(route, cut, style, traffic) { nearTrafficData(startAlong) }, options = GeoJsonOptions(synchronousUpdate = true))
   val faded =
       if (fade > 0) {
         rememberGeoJsonSource(
@@ -131,15 +142,16 @@ fun ThemedRouteAhead(
   // The route on flyovers, still ahead of the arrow (past the fade): drawn again over the bridges.
   // A little longer than the stretch the routing server calls a bridge: the map's own bridge can
   // start a few metres sooner, and the route showed a gap there.
-  fun bridgeData(along: Double): GeoJsonData {
+  fun overBridges(along: Double): List<ClosedFloatingPointRange<Double>> {
     val from = fadeEnd(along).coerceAtLeast(along)
-    val features =
-        bridges.filter { it.endInclusive + BRIDGE_MARGIN_METRES > from }.joinToString(",") { b ->
-          val piece = route.slice(maxOf(b.start - BRIDGE_MARGIN_METRES, from), b.endInclusive + BRIDGE_MARGIN_METRES)
-          """{"type":"Feature","properties":{},"geometry":${lineGeometry(piece)}}"""
-        }
-    return GeoJsonData.JsonString("""{"type":"FeatureCollection","features":[$features]}""")
+    return bridges
+        .filter { it.endInclusive + BRIDGE_MARGIN_METRES > from }
+        .map { maxOf(it.start - BRIDGE_MARGIN_METRES, from)..(it.endInclusive + BRIDGE_MARGIN_METRES) }
   }
+  fun bridgeData(along: Double) =
+      GeoJsonData.JsonString(featureCollection(overBridges(along).map { """{"type":"Feature","properties":{},"geometry":${lineGeometry(route.slice(it.start, it.endInclusive))}}""" }))
+  fun bridgeTrafficData(along: Double) =
+      GeoJsonData.JsonString(featureCollection(overBridges(along).flatMap { trafficFeatures(route, traffic, it.start, it.endInclusive) }))
   // Whether the stretch fading in ahead of the arrow runs onto a flyover. Then it goes over the
   // bridges too: under them, it vanished beneath the deck where the road went up, a gap in the
   // route at every ramp.
@@ -153,18 +165,25 @@ fun ThemedRouteAhead(
   val onBridges =
       if (bridges.isEmpty()) null
       else rememberGeoJsonSource(remember(route, bridges, style) { bridgeData(startAlong) }, options = GeoJsonOptions(synchronousUpdate = true))
-  LaunchedEffect(near, faded, onBridges, route, cut) {
+  val bridgeTraffic =
+      if (bridges.isEmpty()) null
+      else rememberGeoJsonSource(remember(route, bridges, style, traffic) { bridgeTrafficData(startAlong) }, options = GeoJsonOptions(synchronousUpdate = true))
+  LaunchedEffect(near, faded, onBridges, nearTraffic, bridgeTraffic, route, cut, traffic) {
     snapshotFlow { shown.along ?: 0.0 }
         .collect {
           near.setData(nearData(it))
           faded?.setData(fadeData(it))
           onBridges?.setData(bridgeData(it))
+          if (traffic.isNotEmpty()) {
+            nearTraffic.setData(nearTrafficData(it))
+            bridgeTraffic?.setData(bridgeTrafficData(it))
+          }
         }
   }
   // Under the flyovers, so a bridge the car drives beneath crosses over the route like in the games.
-  RouteLayers(listOf(near, far), "ow-trip", theme, car, anchor = BRIDGES_LAYER)
+  RouteLayers(listOf(near, far), "ow-trip", theme, car, anchor = BRIDGES_LAYER, traffic = listOf(nearTraffic, farTraffic))
   faded?.let { RouteLayers(emptyList(), "ow-trip-fade", theme, car, it, anchor = if (fadeOnBridge) FIRST_LABEL_LAYER else BRIDGES_LAYER) }
-  onBridges?.let { RouteLayers(listOf(it), "ow-trip-bridge", theme, car) }
+  onBridges?.let { RouteLayers(listOf(it), "ow-trip-bridge", theme, car, traffic = listOfNotNull(bridgeTraffic)) }
 }
 
 /** One distance for both pieces of the route ahead: 300 m is about 18 s at 60 km/h. */
@@ -186,11 +205,20 @@ private fun routeWidth(theme: OverworldTheme) =
 
 /**
  * The themed route line over [sources], all casings under all lines so pieces of one route join
- * without a seam. [faded]: the piece just ahead of the arrow, drawn fading in (GTA VI).
+ * without a seam. [faded]: the piece just ahead of the arrow, drawn fading in (GTA VI). [traffic]:
+ * the slow and jammed stretches of these pieces (see [trafficData]), recoloured on top.
  */
 @Composable
 @MaplibreComposable
-private fun RouteLayers(sources: List<Source>, id: String, theme: OverworldTheme, car: Boolean, faded: Source? = null, anchor: String = FIRST_LABEL_LAYER) {
+private fun RouteLayers(
+    sources: List<Source>,
+    id: String,
+    theme: OverworldTheme,
+    car: Boolean,
+    faded: Source? = null,
+    anchor: String = FIRST_LABEL_LAYER,
+    traffic: List<Source> = emptyList(),
+) {
   val k = routeWidth(theme)
   val lineAt10 = (if (car) 4.5f else 3.5f) * k
   val lineAt18 = (if (car) 15f else 12f) * k
@@ -259,8 +287,56 @@ private fun RouteLayers(sources: List<Source>, id: String, theme: OverworldTheme
           join = const(LineJoin.Round),
       )
     }
+    // Traffic, like Google's route line: the slow and jammed stretches recoloured across the
+    // route's whole band. GTA V's casing is the route's own purple, so a red line only the inner
+    // width left purple down both sides of every jam; GTA VI's thin edge takes a paler tint of the
+    // traffic colour; Red Dead keeps its ink outline round it. Square ends, so a jam starts and
+    // stops where it does, not a round cap sooner.
+    val wholeBand = edge == 0f && theme.routeCasing == theme.routeLine
+    traffic.forEachIndexed { i, source ->
+      if (edge > 0f) {
+        LineLayer(
+            id = "$id-traffic-edge-$i",
+            source = source,
+            color = trafficColour(theme, tint = 0.4f),
+            width = casingWidth,
+            cap = const(LineCap.Butt),
+            join = const(LineJoin.Round),
+        )
+      }
+      LineLayer(
+          id = "$id-traffic-$i",
+          source = source,
+          color = trafficColour(theme),
+          width = if (wholeBand) casingWidth else lineWidth,
+          cap = const(LineCap.Butt),
+          join = const(LineJoin.Round),
+      )
+    }
   }
 }
+
+/**
+ * The colour of a traffic stretch from its "level": amber slow, red heavy, darkest where closed.
+ * Red Dead's route is already red, so its jams are the darker maroon ink. [tint]: mixed that far
+ * towards white, for GTA VI's paler route edge.
+ */
+private fun trafficColour(theme: OverworldTheme, tint: Float = 0f) =
+    (if (theme.skin == Skin.RDR) listOf(Color(0xFFD08A1E), Color(0xFF4A0A10), Color(0xFF1E1E1C))
+        else listOf(Color(0xFFFFB020), Color(0xFFFF3B30), Color(0xFF8F0E1A)))
+        .map { const(lerp(it, Color.White, tint)) }
+        .let { (slow, heavy, closed) -> switch(feature["level"].asNumber(), case(3, closed), case(2, heavy), fallback = slow) }
+
+/** The slow and jammed stretches of [route] between [from] and [to] metres, one feature each with its level. */
+private fun trafficData(route: RoutePolyline, spans: List<TrafficSpan>, from: Double, to: Double) =
+    GeoJsonData.JsonString(featureCollection(trafficFeatures(route, spans, from, to)))
+
+private fun trafficFeatures(route: RoutePolyline, spans: List<TrafficSpan>, from: Double, to: Double): List<String> =
+    spans
+        .filter { it.to > from && it.from < to }
+        .map { """{"type":"Feature","properties":{"level":${it.level}},"geometry":${lineGeometry(route.slice(maxOf(it.from, from), minOf(it.to, to)))}}""" }
+
+private fun featureCollection(features: List<String>) = """{"type":"FeatureCollection","features":[${features.joinToString(",")}]}"""
 
 /**
  * Clear at the arrow to [color] at the end of the piece, easing in like GTA VI's route does just
@@ -283,55 +359,14 @@ private fun lineGeometry(points: List<GeographicCoordinate>): String {
   return """{"type":"LineString","coordinates":[$coords]}"""
 }
 
-/**
- * Traffic on the route itself, like Google's route line: the slow and jammed stretches recoloured
- * (amber slow, red heavy, darkest where closed), only on the road still ahead ([from] metres on).
- * Red Dead's route is already red, so its jams are the darker maroon ink.
- */
+/** A whole route drawn at once, with its [traffic]: the directions preview. */
 @Composable
 @MaplibreComposable
-fun RouteTrafficLine(
-    points: List<GeographicCoordinate>,
-    spans: List<TrafficSpan>,
-    theme: OverworldTheme,
-    car: Boolean,
-    from: Double = 0.0,
-    id: String = "ow-route-traffic",
-) {
-  val line = remember(points) { RouteLine(points) }
-  // Trimmed behind the arrow every 25 m, not every frame.
-  val data =
-      remember(line, spans, (from / 25).toInt()) {
-        val features =
-            spans.filter { it.to > from }.joinToString(",") { span ->
-              val coords = line.slice(maxOf(span.from, from), span.to).joinToString(",") { "[${it.lng},${it.lat}]" }
-              """{"type":"Feature","properties":{"level":${span.level}},"geometry":{"type":"LineString","coordinates":[$coords]}}"""
-            }
-        GeoJsonData.JsonString("""{"type":"FeatureCollection","features":[$features]}""")
-      }
-  val source = rememberGeoJsonSource(data)
-  val (slow, heavy, closed) =
-      if (theme.skin == Skin.RDR) Triple(Color(0xFFD08A1E), Color(0xFF4A0A10), Color(0xFF1E1E1C))
-      else Triple(Color(0xFFFFB020), Color(0xFFFF3B30), Color(0xFF8F0E1A))
-  val k = routeWidth(theme)
-  Anchor.Below(FIRST_LABEL_LAYER) {
-    LineLayer(
-        id = id,
-        source = source,
-        color = switch(feature["level"].asNumber(), case(3, const(closed)), case(2, const(heavy)), fallback = const(slow)),
-        width = widthByZoom((if (car) 4.5f else 3.5f) * k, (if (car) 15f else 12f) * k),
-        cap = const(LineCap.Round),
-        join = const(LineJoin.Round),
-    )
-  }
-}
-
-/** A whole route drawn at once: the directions preview. */
-@Composable
-@MaplibreComposable
-fun ThemedRouteLine(points: List<GeographicCoordinate>, theme: OverworldTheme, car: Boolean) {
+fun ThemedRouteLine(points: List<GeographicCoordinate>, theme: OverworldTheme, car: Boolean, traffic: List<TrafficSpan> = emptyList()) {
   val source = rememberGeoJsonSource(remember(points) { GeoJsonData.JsonString(lineJson(points)) })
-  RouteLayers(listOf(source), "ow-route", theme, car)
+  val line = remember(points) { RoutePolyline(points) }
+  val jams = rememberGeoJsonSource(remember(line, traffic) { trafficData(line, traffic, 0.0, line.length) })
+  RouteLayers(listOf(source), "ow-route", theme, car, traffic = listOf(jams))
 }
 
 /**
