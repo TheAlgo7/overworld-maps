@@ -1,0 +1,527 @@
+{
+"shape": [
+[
+28.4979106,
+77.0880973
+],
+[
+28.4982204,
+77.0883282
+],
+[
+28.4986916,
+77.0887248
+],
+[
+28.4991378,
+77.0891724
+],
+[
+28.4995012,
+77.0895478
+],
+[
+28.499943,
+77.0899771
+],
+[
+28.5001765,
+77.0902124
+],
+[
+28.5004072,
+77.090438
+],
+[
+28.5006491,
+77.0906684
+],
+[
+28.5009408,
+77.090935
+],
+[
+28.5011451,
+77.0911145
+],
+[
+28.5013936,
+77.0913369
+],
+[
+28.5016149,
+77.0915266
+],
+[
+28.5018373,
+77.091719
+],
+[
+28.5020564,
+77.0919098
+],
+[
+28.5022483,
+77.0920577
+],
+[
+28.5021485,
+77.0922934
+],
+[
+28.5019839,
+77.0924926
+],
+[
+28.5017057,
+77.0922655
+],
+[
+28.5013541,
+77.0919775
+],
+[
+28.5011459,
+77.0917989
+],
+[
+28.5009491,
+77.0916347
+],
+[
+28.5007436,
+77.0914473
+],
+[
+28.5000385,
+77.0907999
+],
+[
+28.4998103,
+77.0905758
+],
+[
+28.4996125,
+77.0903873
+],
+[
+28.4993187,
+77.090099
+],
+[
+28.4989954,
+77.0898125
+],
+[
+28.4988111,
+77.089649
+],
+[
+28.4984698,
+77.0893461
+],
+[
+28.4982261,
+77.0893289
+],
+[
+28.4977667,
+77.0896984
+],
+[
+28.4976069,
+77.0898807
+],
+[
+28.497399,
+77.0902214
+],
+[
+28.4971714,
+77.0905919
+],
+[
+28.4969794,
+77.090881
+],
+[
+28.4968081,
+77.0911846
+],
+[
+28.4966027,
+77.0915359
+],
+[
+28.4962624,
+77.0920518
+],
+[
+28.4961051,
+77.0922772
+]
+],
+"tracepoints": [
+{
+"matchings_index": 0,
+"waypoint_index": null,
+"distance": 1.918,
+"location": [
+77.088081,
+28.49792
+]
+},
+{
+"matchings_index": 0,
+"waypoint_index": null,
+"distance": 1.857,
+"location": [
+77.088312,
+28.49823
+]
+},
+{
+"matchings_index": 0,
+"waypoint_index": null,
+"distance": 1.606,
+"location": [
+77.088712,
+28.498701
+]
+},
+{
+"matchings_index": 0,
+"waypoint_index": null,
+"distance": 2.535,
+"location": [
+77.089153,
+28.499153
+]
+},
+{
+"matchings_index": 0,
+"waypoint_index": null,
+"distance": 3.602,
+"location": [
+77.08952,
+28.499523
+]
+},
+{
+"matchings_index": 0,
+"waypoint_index": null,
+"distance": 2.84,
+"location": [
+77.089955,
+28.49996
+]
+},
+{
+"matchings_index": 0,
+"waypoint_index": null,
+"distance": 3.588,
+"location": [
+77.090184,
+28.500197
+]
+},
+{
+"matchings_index": 0,
+"waypoint_index": null,
+"distance": 4.162,
+"location": [
+77.090405,
+28.500431
+]
+},
+{
+"matchings_index": 0,
+"waypoint_index": null,
+"distance": 4.302,
+"location": [
+77.090635,
+28.500674
+]
+},
+{
+"matchings_index": 0,
+"waypoint_index": null,
+"distance": 5.12,
+"location": [
+77.090895,
+28.50097
+]
+},
+{
+"matchings_index": 0,
+"waypoint_index": null,
+"distance": 3.997,
+"location": [
+77.091083,
+28.501168
+]
+},
+{
+"matchings_index": 0,
+"waypoint_index": null,
+"distance": 2.938,
+"location": [
+77.091314,
+28.501411
+]
+},
+{
+"matchings_index": 0,
+"waypoint_index": null,
+"distance": 2.855,
+"location": [
+77.091503,
+28.50163
+]
+},
+{
+"matchings_index": 0,
+"waypoint_index": null,
+"distance": 3.361,
+"location": [
+77.091691,
+28.501855
+]
+},
+{
+"matchings_index": 0,
+"waypoint_index": null,
+"distance": 4.544,
+"location": [
+77.091872,
+28.50208
+]
+},
+{
+"matchings_index": 0,
+"waypoint_index": null,
+"distance": 4.121,
+"location": [
+77.092023,
+28.50227
+]
+},
+{
+"matchings_index": 0,
+"waypoint_index": 1,
+"distance": 29.377,
+"location": [
+77.092048,
+28.5023
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": 0,
+"distance": 0.892,
+"location": [
+77.092485,
+28.501989
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 2.053,
+"location": [
+77.092249,
+28.501717
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 3.762,
+"location": [
+77.091947,
+28.501375
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 3.925,
+"location": [
+77.091767,
+28.501167
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 4.387,
+"location": [
+77.091599,
+28.500973
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 3.666,
+"location": [
+77.091418,
+28.500764
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 3.362,
+"location": [
+77.090773,
+28.500057
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 2.151,
+"location": [
+77.090559,
+28.499822
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 1.931,
+"location": [
+77.090372,
+28.499624
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 1.708,
+"location": [
+77.090086,
+28.499329
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 2.571,
+"location": [
+77.089792,
+28.49901
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 2.725,
+"location": [
+77.089627,
+28.498826
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 0.942,
+"location": [
+77.089337,
+28.498472
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 4.171,
+"location": [
+77.089288,
+28.498217
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 2.236,
+"location": [
+77.089681,
+28.497754
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 1.641,
+"location": [
+77.089871,
+28.497595
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 2.18,
+"location": [
+77.090208,
+28.497383
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 2.072,
+"location": [
+77.09058,
+28.497156
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 0.627,
+"location": [
+77.090877,
+28.496975
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 1.883,
+"location": [
+77.091174,
+28.496794
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 2.535,
+"location": [
+77.091521,
+28.496584
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 0.327,
+"location": [
+77.092054,
+28.496265
+]
+},
+{
+"matchings_index": 1,
+"waypoint_index": null,
+"distance": 2.429,
+"location": [
+77.092291,
+28.496123
+]
+}
+],
+"note": "Valhalla trace_route tracepoints for Google's line through the NH-48 U-turn at Ambience (29 Oct 2026), shape points 20-59 only"
+}

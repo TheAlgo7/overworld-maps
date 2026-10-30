@@ -105,7 +105,16 @@ val UiFont =
  * Map details the Layers sheet switches. [buildings3d]: raised buildings in themes that have them
  * (GTA VI); off draws them flat, which is lighter work for the phone.
  */
-data class MapDetails(val traffic: Boolean, val signals: Boolean, val incidents: Boolean, val buildings3d: Boolean = true)
+data class MapDetails(
+    val traffic: Boolean,
+    val signals: Boolean,
+    val incidents: Boolean,
+    val buildings3d: Boolean = true,
+    /** The game's shop and place icons on the phone map. */
+    val placeIcons: Boolean = true,
+    /** The same on the car screen, where some drivers want only roads (switched from the car's Settings too). */
+    val carPlaceIcons: Boolean = true,
+)
 
 /** The time-of-day setting for themes with day, dusk and night palettes. */
 enum class MapTime(val label: String) {
@@ -188,6 +197,8 @@ class ThemeStore(context: Context) {
           signals = prefs.getBoolean("detail_signals", true),
           incidents = prefs.getBoolean("detail_incidents", true),
           buildings3d = prefs.getBoolean("detail_buildings3d", true),
+          placeIcons = prefs.getBoolean("detail_place_icons", true),
+          carPlaceIcons = prefs.getBoolean("detail_car_place_icons", true),
       )
   )
   /** Map details, like Google Maps' layers: live traffic, traffic lights and incidents. */
@@ -200,6 +211,8 @@ class ThemeStore(context: Context) {
       putBoolean("detail_signals", d.signals)
       putBoolean("detail_incidents", d.incidents)
       putBoolean("detail_buildings3d", d.buildings3d)
+      putBoolean("detail_place_icons", d.placeIcons)
+      putBoolean("detail_car_place_icons", d.carPlaceIcons)
     }
   }
 
@@ -232,6 +245,7 @@ object StyleCache {
    * and below the route: amber where roads are slower than usual, red where they are jammed, in
    * tones that suit the theme. [variant]: the time-of-day palette (see MapTime), if the theme has it.
    * [flat]: draw the theme's raised buildings flat (the Layers sheet's 3D buildings switch).
+   * [places]: false hides the game's place icons (the Place icons switch).
    */
   fun json(
       context: Context,
@@ -240,6 +254,7 @@ object StyleCache {
       trafficTiles: String? = null,
       variant: String? = null,
       flat: Boolean = false,
+      places: Boolean = true,
   ): String {
     val asset = theme.styleAsset(car, variant)
     val base =
@@ -249,9 +264,28 @@ object StyleCache {
           if (localSprite) json.replace("asset://sprites/overworld", "asset://sprites-local/overworld") else json
         }
     val flatten = flat && theme.buildings3d
-    val laid = if (flatten) cache.getOrPut("$asset+flat") { flatBuildings(base) } else base
+    var key = asset
+    var laid = base
+    if (flatten) {
+      key += "+flat"
+      laid = cache.getOrPut(key) { flatBuildings(laid) }
+    }
+    if (!places) {
+      val from = laid
+      key += "+noplaces"
+      laid = cache.getOrPut(key) { withoutLayer(from, "poi-blips") }
+    }
     if (trafficTiles == null) return laid
-    return cache.getOrPut("$asset${if (flatten) "+flat" else ""}+traffic") { withTraffic(laid, theme, car, trafficTiles) }
+    return cache.getOrPut("$key+traffic") { withTraffic(laid, theme, car, trafficTiles) }
+  }
+
+  private fun withoutLayer(style: String, id: String): String {
+    val root = JSONObject(style)
+    val layers = root.getJSONArray("layers")
+    val out = JSONArray()
+    for (i in 0 until layers.length()) layers.getJSONObject(i).takeIf { it.optString("id") != id }?.let { out.put(it) }
+    root.put("layers", out)
+    return root.toString()
   }
 
   /** The style without its raised buildings: the flat footprints stay at every zoom instead. */

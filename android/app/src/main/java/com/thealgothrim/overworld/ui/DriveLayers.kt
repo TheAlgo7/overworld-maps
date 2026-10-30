@@ -63,6 +63,7 @@ import com.thealgothrim.overworld.ui.skin.SkinPrimaryButton
 import com.thealgothrim.overworld.ui.skin.SkinRoundButton
 import com.thealgothrim.overworld.ui.skin.SkinRow
 import com.thealgothrim.overworld.ui.skin.SkinSpec
+import com.thealgothrim.overworld.ui.skin.SkinRecenterButton
 import com.thealgothrim.overworld.ui.skin.SkinText
 import com.thealgothrim.overworld.ui.skin.sheetFloat
 import com.thealgothrim.overworld.ui.skin.skinPanel
@@ -205,14 +206,7 @@ fun BoxScope.NavigationLayer(
     Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
       MapCredit(spec, Modifier.align(Alignment.BottomEnd))
       if (!following) {
-        Row(
-            Modifier.align(Alignment.CenterStart).skinPanel(spec).clickable(onClick = onRecenter).padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-          GameIconView(GameIcon.NAVIGATE, spec.fg, Modifier.size(18.dp))
-          Spacer(Modifier.width(8.dp))
-          SkinText(spec.title("Re-centre"), spec.title, if (spec.vi) 18.sp else 16.sp, spec.fg, spacing = if (spec.vi) spec.titleSpacing else TextUnit.Unspecified)
-        }
+        SkinRecenterButton(spec, onRecenter, Modifier.align(Alignment.CenterStart), label = "Re-centre", size = 48.dp)
       }
       if (following) {
         // Speed (when there is one) on the left, the street centred in whatever room is left.

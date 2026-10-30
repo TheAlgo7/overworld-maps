@@ -46,11 +46,14 @@
         },
         // HUD_COLOUR_WAYPOINT (164, 76, 242), drawn flat with no outline like the pause map and radar.
         route: { line: "#a44cf2", casing: "#a44cf2", glow: null },
-        // Shop blips: the game's white pictograms (T-shirt, scissors, spray gun...). No food or hotels:
-        // the GTA map only marks shops and services you can use.
+        // Blips: the game's white pictograms (T-shirt, scissors, spray gun...), and since 30 Oct the
+        // sheet's house, meditating figure, camera, P and plane for hotels, temples, landmarks,
+        // parking and airports (Gaurav wanted far more of the map marked). No food: GTA V has no
+        // blip for it.
         // Small, as on the game's radar: about two thirds of the player marker.
-        pois: { prefix: "gta-", minzoom: 15, size: 0.72,
-          only: ["bar", "doctor", "pharmacy", "bank", "barber", "clothes", "repair", "store", "fuel", "police", "theatre"] },
+        pois: { prefix: "gta-", minzoom: 14.5, size: 0.72,
+          only: ["bar", "doctor", "pharmacy", "bank", "barber", "clothes", "repair", "store", "fuel", "police", "theatre",
+            "hotel", "worship", "landmark", "parking", "airport"] },
       },
       // Radar arrow (radar_centre): white left half, #b3b3b3 right half, black outline. The app
       // draws Gaurav's own drawing of it (tools/blips/); these colours are the web preview's.
@@ -98,8 +101,10 @@
         patterns: { wood: "hatch", park: "stipple" }, patternsInCar: true, railDotsInCar: true,
         glow: null,
         roadLabels: false,
-        // The game's black-disc blips, small as on its map.
-        pois: { prefix: "poi-", size: 0.68 },
+        // The game's black-disc blips, small as on its map (only the kinds the sheet has a blip for).
+        pois: { prefix: "poi-", size: 0.68,
+          only: ["food", "bar", "doctor", "pharmacy", "bank", "post", "hotel", "train", "barber", "clothes", "repair", "store", "shop",
+            "market", "fuel", "police", "theatre", "landmark"] },
         // Android map lettering (bundled SDF glyphs, see tools/make_glyphs.py). The web preview
         // falls back to OpenFreeMap's Noto fonts below.
         fonts: { place: "RalewayBlack", city: "MerriweatherBlack", water: "CrimsonBoldItalic", pencil: "HomemadeApple" },
@@ -705,13 +710,30 @@
         ["police", ["police"]],
         ["theatre", ["cinema", "theatre"]],
         ["landmark", ["attraction", "museum", "monument", "castle"]],
+        ["worship", ["place_of_worship"]],
+        ["parking", ["parking"]],
+        ["airport", ["aerodrome"]],
       ];
-      const icon = ["match", ["get", "class"]];
-      for (const [name, classes, iconName] of groups) if (!P.only || P.only.includes(name)) icon.push(classes, P.prefix + (iconName || name));
-      icon.push("");
+      // By class, then by subclass: OpenStreetMap files most small shops as class "shop" with the
+      // kind in the subclass ("convenience", "beauty"), which by class alone got no blip.
+      const byKey = (key, fallback) => {
+        const e = ["match", ["get", key]];
+        const seen = new Set();
+        for (const [name, classes, iconName] of groups) {
+          if (P.only && !P.only.includes(name)) continue;
+          const fresh = classes.filter((c) => !seen.has(c) && (key === "class" || c !== "shop"));
+          fresh.forEach((c) => seen.add(c));
+          if (fresh.length) e.push(fresh, P.prefix + (iconName || name));
+        }
+        e.push(fallback);
+        return e;
+      };
+      const icon = byKey("class", byKey("subclass", ""));
       layers.push({
         id: "poi-blips", type: "symbol", source: "omt", "source-layer": "poi", minzoom: P.minzoom || 15.5,
-        filter: ["<=", ["coalesce", ["get", "rank"], 99], 20],
+        // Every place with a blip, not only OpenStreetMap's top-ranked ones: in a dense area like
+        // Chhatarpur the rank cap left a pharmacy and a shirt shop out of dozens of places.
+        // Collisions still thin them (icon-padding), the important first (sort key).
         layout: {
           "icon-image": icon,
           "icon-size": P.size || 0.95, "symbol-sort-key": ["coalesce", ["get", "rank"], 99], "icon-padding": 4,

@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -55,6 +56,13 @@ import org.maplibre.compose.style.BaseStyle
 import org.maplibre.compose.util.MaplibreComposable
 import uniffi.ferrostar.GeographicCoordinate
 import uniffi.ferrostar.TripState
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.DpRect
+import com.thealgothrim.overworld.search.Place
+import kotlinx.serialization.json.JsonPrimitive
+import org.maplibre.compose.camera.CameraProjection
+import org.maplibre.spatialk.geojson.Point
+import org.maplibre.compose.map.GestureOptions
 
 /** The phone map: themed style, route, arrow and waypoint over Ferrostar's navigation camera. */
 @Composable
@@ -66,6 +74,8 @@ fun OverworldPhoneMap(
     pickedDestination: GeographicCoordinate?,
     onLongPress: (GeographicCoordinate) -> Unit,
     previewRoute: List<GeographicCoordinate>? = null,
+    /** A shop, temple, petrol pump... tapped on the map: picked like a search result. */
+    onPlaceTap: (Place) -> Unit = {},
 ) {
   val context = LocalContext.current
   val details by AppModule.themeStore.details.collectAsState()
@@ -74,29 +84,42 @@ fun OverworldPhoneMap(
   // GTA VI changes palette with the time of day (day, golden hour, night); the others keep a single palette.
   val variant by AppModule.viewModel.mapVariant.collectAsState()
   val flat = !details.buildings3d
+  val places = details.placeIcons
   val baseStyle =
-      remember(theme.id, trafficTiles, variant, flat) { BaseStyle.Json(StyleCache.json(context, theme, car = false, trafficTiles, variant, flat)) }
-  NavigationMapView(
-      baseStyle = baseStyle,
-      navigationMapState = mapState,
-      uiState = rememberSmoothedUiState(uiState),
-      // No MapLibre ornaments: its (i) attribution button moved around with the camera padding.
-      // The OpenStreetMap credit is drawn by the screen instead (MapCredit).
-      mapOptions = MapOptions(ornamentOptions = OrnamentOptions.AllDisabled),
-      // The route is drawn by OverworldLayers, which trims it at the arrow.
-      routeOverlayBuilder = null,
-      navigationCameraOptions = cameraOptions,
-      showDefaultPuck = false,
-      onMapLongClick = { coordinate, _ ->
-        if (uiState.isNavigating()) NavigationMapClickResult.Pass
-        else {
-          onLongPress(coordinate)
-          NavigationMapClickResult.Consume
-        }
-      },
-  ) { state ->
-    OverworldLayers(state, theme, car = false, extras, details, previewRoute, pickedDestination, style = baseStyle, headingUp = mapState.headingUp)
+      remember(theme.id, trafficTiles, variant, flat, places) { BaseStyle.Json(StyleCache.json(context, theme, car = false, trafficTiles, variant, flat, places)) }
+  Box(Modifier.fillMaxSize().tiltGesture(mapState)) {
+    NavigationMapView(
+        baseStyle = baseStyle,
+        navigationMapState = mapState,
+        uiState = rememberSmoothedUiState(uiState),
+        // No MapLibre ornaments: its (i) attribution button moved around with the camera padding.
+        // The OpenStreetMap credit is drawn by the screen instead (MapCredit).
+        // Tilt is ours (tiltGesture): MapLibre's started late and moved half as far.
+        mapOptions = MapOptions(gestureOptions = PHONE_GESTURES, ornamentOptions = OrnamentOptions.AllDisabled),
+        // The route is drawn by OverworldLayers, which trims it at the arrow.
+        routeOverlayBuilder = null,
+        navigationCameraOptions = cameraOptions,
+        showDefaultPuck = false,
+        onMapLongClick = { coordinate, _ ->
+          if (uiState.isNavigating()) NavigationMapClickResult.Pass
+          else {
+            onLongPress(coordinate)
+            NavigationMapClickResult.Consume
+          }
+        },
+        onMapClick = { _, at ->
+          val place = if (uiState.isNavigating()) null else mapState.cameraState.projection?.let { placeAt(it, at) }
+          if (place == null) NavigationMapClickResult.Pass
+          else {
+            onPlaceTap(place)
+            NavigationMapClickResult.Consume
+          }
+        },
+    ) { state ->
+      OverworldLayers(state, theme, car = false, extras, details, previewRoute, pickedDestination, style = baseStyle, headingUp = mapState.headingUp, glide = mapState.glide)
+    }
   }
+  RecenterGlideEffect(mapState)
 }
 
 /**
@@ -284,8 +307,9 @@ private fun CarMapView(
   val context = LocalContext.current
   val variant by AppModule.viewModel.mapVariant.collectAsState()
   val flat = !details.buildings3d
+  val places = details.carPlaceIcons
   val baseStyle =
-      remember(theme.id, trafficTiles, variant, flat) { BaseStyle.Json(StyleCache.json(context, theme, car = true, trafficTiles, variant, flat)) }
+      remember(theme.id, trafficTiles, variant, flat, places) { BaseStyle.Json(StyleCache.json(context, theme, car = true, trafficTiles, variant, flat, places)) }
   NavigationMapView(
       baseStyle = baseStyle,
       navigationMapState = mapState,
@@ -295,8 +319,9 @@ private fun CarMapView(
       routeOverlayBuilder = null,
       showDefaultPuck = false,
   ) { state ->
-    OverworldLayers(state, theme, car = true, extras, details, previewRoute, null, style = baseStyle, headingUp = mapState.headingUp)
+    OverworldLayers(state, theme, car = true, extras, details, previewRoute, null, style = baseStyle, headingUp = mapState.headingUp, glide = mapState.glide)
   }
+  RecenterGlideEffect(mapState)
 }
 
 /**
@@ -318,8 +343,11 @@ private fun OverworldLayers(
     style: Any,
     /** Whether the camera follows heading-up (see ThemedPuck). */
     headingUp: () -> Boolean,
+    /** The map's re-centre, which aims at this arrow. */
+    glide: RecenterGlide,
 ) {
   val shown = rememberDisplayedPosition(state)
+  SideEffect { glide.shown = shown }
   val trip = state.routeGeometry?.takeIf { state.isNavigating() && it.size >= 2 }
   val route = shown?.route
   if (trip != null && route != null) {
@@ -329,12 +357,38 @@ private fun OverworldLayers(
   }
   RoadFeatureLayers(visibleFeatures(extras, details), theme, car)
   val end = trip?.lastOrNull() ?: previewRoute?.lastOrNull() ?: pin
+  SavedPlacesLayer(theme, car, end)
   end?.let { ThemedDestination(it, theme, car) }
   // Stops added on the way (Nearby during a trip) get the waypoint marker too.
   (state.tripState as? TripState.Navigating)?.remainingWaypoints?.dropLast(1)?.forEachIndexed { i, stop ->
     ThemedDestination(stop.coordinate, theme, car, id = "ow-stop-$i")
   }
   shown?.let { ThemedPuck(it, theme, car, style, headingUp) }
+}
+
+/**
+ * The map's place icon under a finger at [at] (a fingertip's width around it), as a place to pick:
+ * its OpenStreetMap name and kind ("Restaurant"). Null where there's none, or it has no name.
+ */
+private fun placeAt(projection: CameraProjection, at: DpOffset): Place? {
+  val r = 22.dp
+  val box = DpRect(at.x - r, at.y - r, at.x + r, at.y + r)
+  // Your own places first: Home over a shop that happens to share the spot.
+  val hits =
+      listOf(SAVED_LAYERS, setOf("poi-blips")).flatMap { runCatching { projection.queryRenderedFeatures(box, it) }.getOrNull().orEmpty() }
+  for (f in hits) {
+    val props = f.properties ?: continue
+    fun text(key: String) = (props[key] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }
+    if (props.containsKey("detail")) {
+      val point = f.geometry as? Point ?: continue
+      return Place(text("name") ?: continue, text("detail").orEmpty(), GeographicCoordinate(point.latitude, point.longitude))
+    }
+    val name = text("name:en") ?: text("name_en") ?: text("name") ?: continue
+    val point = f.geometry as? Point ?: continue
+    val kind = (text("subclass") ?: text("class"))?.replace('_', ' ')?.replaceFirstChar { it.uppercase() } ?: "Place"
+    return Place(name, kind, GeographicCoordinate(point.latitude, point.longitude))
+  }
+  return null
 }
 
 /** Whether the camera follows the car heading-up. */
@@ -355,3 +409,6 @@ fun visibleFeatures(extras: RouteExtras, details: MapDetails): List<RoadFeature>
     }
   }
 }
+
+/** The map's own gestures on the phone, all but tilt. */
+private val PHONE_GESTURES = GestureOptions(isTiltEnabled = false)

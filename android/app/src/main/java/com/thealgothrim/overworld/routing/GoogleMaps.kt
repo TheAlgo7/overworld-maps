@@ -41,7 +41,9 @@ class GoogleMaps(http: OkHttpClient) {
   /** A place from Google's search: name, address, where, and what it is ("Apostolic church"). */
   data class GooglePlace(val name: String, val address: String?, val at: GeographicCoordinate, val category: String?)
 
-  private val client = http.newBuilder().cookieJar(MemoryCookies()).build()
+  // Google answers in under a second when it answers at all. A reroute waited out the app's 20 s
+  // timeout on a dead connection before Valhalla was asked (14 s on 30 Oct): give up sooner.
+  private val client = http.newBuilder().cookieJar(MemoryCookies()).callTimeout(java.time.Duration.ofSeconds(5)).build()
   @Volatile private var warmedAt = 0L
 
   suspend fun driving(from: GeographicCoordinate, to: GeographicCoordinate): List<GoogleRoute> =

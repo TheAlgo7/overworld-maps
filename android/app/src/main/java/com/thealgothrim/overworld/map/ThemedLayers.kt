@@ -62,6 +62,7 @@ import uniffi.ferrostar.GeographicCoordinate
 import com.thealgothrim.overworld.traffic.TrafficSpan
 import org.maplibre.compose.expressions.dsl.case
 import org.maplibre.compose.expressions.dsl.switch
+import org.maplibre.spatialk.units.extensions.inMeters
 
 /** First label layer in every Overworld style; the route is drawn just under it. */
 private const val FIRST_LABEL_LAYER = "label-water"
@@ -393,8 +394,10 @@ fun ThemedPuck(
   val screenUp = headingUp()
   // Moved every frame straight from the animation, without composing anything (see ThemedRouteAhead).
   val lastBearing = remember { doubleArrayOf(0.0) }
-  fun puckData(location: Location, up: Boolean): GeoJsonData {
-    val course = location.courseDegrees ?: lastBearing[0]
+  fun puckData(location: Location, up: Boolean, compass: Double?): GeoJsonData {
+    // Slow or standing on the phone: where the phone points (see PhoneCompass).
+    val slow = (location.speed?.distancePerSecond?.inMeters ?: 0.0) < SLOW_MS
+    val course = (if (!car && slow) compass else null) ?: location.courseDegrees ?: lastBearing[0]
     lastBearing[0] = course
     val bearing = if (up) 0.0 else course
     val position = location.position.value
@@ -404,10 +407,12 @@ fun ThemedPuck(
   }
   val source =
       rememberGeoJsonSource(
-          remember(shown, style, screenUp) { Snapshot.withoutReadObservation { puckData(shown.location, screenUp) } },
+          remember(shown, style, screenUp) { Snapshot.withoutReadObservation { puckData(shown.location, screenUp, PhoneCompass.heading.value) } },
           options = GeoJsonOptions(synchronousUpdate = true),
       )
-  LaunchedEffect(source, shown, screenUp) { snapshotFlow { shown.location }.collect { source.setData(puckData(it, screenUp)) } }
+  LaunchedEffect(source, shown, screenUp) {
+    snapshotFlow { shown.location to PhoneCompass.heading.value }.collect { (at, compass) -> source.setData(puckData(at, screenUp, compass)) }
+  }
   val art =
       ImageBitmap.imageResource(
           when (theme.skin) {
@@ -597,3 +602,6 @@ private class DiamondPainter(private val fill: Color, private val stroke: Color)
     drawPath(path, stroke, style = Stroke(width = size.minDimension * 0.09f, join = StrokeJoin.Round))
   }
 }
+
+/** About 5 km/h: slower, the phone's arrow points where the phone does (see PhoneCompass). */
+private const val SLOW_MS = 1.5

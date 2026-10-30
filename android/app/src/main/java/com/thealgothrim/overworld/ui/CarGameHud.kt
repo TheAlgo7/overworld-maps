@@ -1,5 +1,7 @@
 package com.thealgothrim.overworld.ui
 
+import com.thealgothrim.overworld.ui.skin.SkinPillButton
+import com.thealgothrim.overworld.ui.skin.SkinRecenterButton
 import com.thealgothrim.overworld.ui.skin.SkinRoundButton
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideInHorizontally
@@ -41,6 +43,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -221,6 +224,11 @@ object CarTapTargets {
   val zoomReleasedAt = mutableLongStateOf(0L)
   /** When the driver last zoomed: + or -, or a pinch. */
   val zoomedAt = mutableLongStateOf(0L)
+  /** When the hidden map buttons last came up, and the bottom one: a tap that came with them presses none. */
+  @Volatile var buttonsUpAt = 0L
+  @Volatile var overviewUpAt = 0L
+  /** The map button last pressed and when, for its pulse. */
+  val pressed = mutableStateOf<Pair<String, Long>?>(null)
 }
 
 /**
@@ -442,7 +450,11 @@ private fun rememberTouchedRecently(): Boolean {
  * route overview (sound and overview on a trip only). Android Auto's were plain grey ones it draws
  * itself, and it ignores the colours an app asks for, so these replace them. Pressed through map taps (see
  * CarNavigationScreen); they keep out of the way while driving, except that once the map has been
- * moved (dragged, zoomed, the overview) the bottom one turns into re-centre and stays.
+ * moved (dragged, zoomed, the overview) the bottom one turns into a Re-centre pill and stays.
+ *
+ * Android Auto passes a tap on the map on about half a second after the finger lifts (it waits to
+ * see if a second tap makes a double-tap zoom), so the buttons come up at the touch itself, and a
+ * press shows at once with a pulse when it lands.
  */
 @Composable
 private fun MapButtons(spec: SkinSpec, uiState: NavigationUiState, modifier: Modifier, trip: Boolean = true) {
@@ -452,23 +464,45 @@ private fun MapButtons(spec: SkinSpec, uiState: NavigationUiState, modifier: Mod
   val shown = rememberTouchedRecently()
   val enter = fadeIn(com.thealgothrim.overworld.map.layoutSpring()) + slideInHorizontally(com.thealgothrim.overworld.map.layoutSpring()) { it / 2 }
   val exit = fadeOut() + slideOutHorizontally { it / 2 }
-  Column(modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+  // With no trip there's no route to show, so only re-centre.
+  val bottomShown = if (trip) shown || moved else moved
+  // The tap that brings buttons up is not a press of one (see passTapsTo).
+  LaunchedEffect(shown) { if (shown) CarTapTargets.buttonsUpAt = System.currentTimeMillis() }
+  LaunchedEffect(bottomShown) { if (bottomShown) CarTapTargets.overviewUpAt = System.currentTimeMillis() }
+  Column(modifier, verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.End) {
     AnimatedVisibility(shown, enter = enter, exit = exit) {
       Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        if (trip) MapButton(spec, if (uiState.isMuted == true) GameIcon.SOUND_OFF else GameIcon.SOUND_ON) { CarTapTargets.mute = it }
-        MapButton(spec, GameIcon.ZOOM_IN) { CarTapTargets.zoomIn = it }
-        MapButton(spec, GameIcon.ZOOM_OUT) { CarTapTargets.zoomOut = it }
+        if (trip) MapButton(spec, if (uiState.isMuted == true) GameIcon.SOUND_OFF else GameIcon.SOUND_ON, "mute") { CarTapTargets.mute = it }
+        MapButton(spec, GameIcon.ZOOM_IN, "zoomIn") { CarTapTargets.zoomIn = it }
+        MapButton(spec, GameIcon.ZOOM_OUT, "zoomOut") { CarTapTargets.zoomOut = it }
       }
     }
-    // With no trip there's no route to show, so only re-centre.
-    AnimatedVisibility(if (trip) shown || moved else moved, enter = enter, exit = exit) {
-      MapButton(spec, if (moved) GameIcon.NAVIGATE else GameIcon.ROUTE) { CarTapTargets.overview = it }
+    AnimatedVisibility(bottomShown, enter = enter, exit = exit) {
+      if (moved) MapButton(spec, GameIcon.NAVIGATE, "overview", label = "Re-centre") { CarTapTargets.overview = it }
+      else MapButton(spec, GameIcon.ROUTE, "overview") { CarTapTargets.overview = it }
     }
   }
 }
 
 @Composable
-private fun MapButton(spec: SkinSpec, icon: GameIcon, target: (Rect?) -> Unit) {
+private fun MapButton(spec: SkinSpec, icon: GameIcon, key: String, label: String? = null, target: (Rect?) -> Unit) {
   DisposableEffect(Unit) { onDispose { target(null) } }
-  SkinRoundButton(spec, icon, {}, Modifier.size(60.dp).onGloballyPositioned { target(it.boundsInRoot()) })
+  // A quick dip when Android Auto's tap lands on this button.
+  val press by CarTapTargets.pressed
+  val dip = remember { androidx.compose.animation.core.Animatable(1f) }
+  LaunchedEffect(press) {
+    if (press?.first != key) return@LaunchedEffect
+    dip.snapTo(0.84f)
+    dip.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.45f, stiffness = 900f))
+  }
+  val modifier =
+      Modifier.onGloballyPositioned { target(it.boundsInRoot()) }.graphicsLayer {
+        scaleX = dip.value
+        scaleY = dip.value
+      }
+  when {
+    key == "overview" && label != null -> SkinRecenterButton(spec, {}, modifier, label = label, size = 60.dp)
+    label != null -> SkinPillButton(spec, icon, label, {}, modifier.height(60.dp))
+    else -> SkinRoundButton(spec, icon, {}, modifier.size(60.dp))
+  }
 }

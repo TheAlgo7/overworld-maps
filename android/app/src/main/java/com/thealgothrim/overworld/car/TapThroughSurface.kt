@@ -60,10 +60,14 @@ fun ComposableScreen.passTapsTo(onTap: (x: Float, y: Float, shift: Float) -> Uni
 
         // Android Auto shrinks the visible area to the stable one while its buttons are up (at the
         // touch, before the tap itself arrives) and gives the room back when they go, 10 s later.
+        // That shrink is the touch itself, about half a second before Android Auto hands over the
+        // tap (it waits out a double-tap): our buttons come up with it, not after.
         fun noteHostButtons() {
           val v = visible ?: return
           val s = stable ?: return
-          CarTapTargets.hostButtonsUp.value = !(v.contains(s) && v != s)
+          val up = !(v.contains(s) && v != s)
+          if (up && CarTapTargets.hostButtonsUp.value == false) CarTapTargets.touchedAt.longValue = System.currentTimeMillis()
+          CarTapTargets.hostButtonsUp.value = up
         }
         override fun onScroll(distanceX: Float, distanceY: Float) {
           // A drag counts as a touch: the map buttons come up for it too.

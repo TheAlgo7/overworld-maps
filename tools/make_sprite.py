@@ -59,6 +59,11 @@ GTA_POIS = {
     "gta-fuel": (12, 3),  # petrol pump
     "gta-police": (0, 12),  # police shield
     "gta-theatre": (3, 11),  # film camera
+    "gta-hotel": (14, 7),  # tower block (the safehouse house is kept for Home, below)
+    "gta-worship": (5, 12),  # figure sitting in meditation
+    "gta-landmark": (5, 7),  # photo camera
+    "gta-parking": (7, 0),  # P
+    "gta-airport": (8, 1),  # plane
 }
 
 
@@ -148,4 +153,36 @@ for scale, suffix in [(1, ""), (2, "@2x")]:
         local.update({name: vi(cell, scale) for name, cell in VI_POIS.items()})
     if len(local) > len(patterns):
         write(LOCAL, local, scale, suffix)
+
+# Your own places on the map, in each game's blip: GTA V's safehouse, briefcase and star (green, as
+# GTA Online marks what you own), Red
+# Dead's home, GTA VI's pink house. 96 px PNGs the app loads by name (map/SavedPlacesLayer.kt);
+# where a game has no blip for one (Red Dead's work and star, GTA VI's work and star) the app
+# draws its own icon in that game's blip style instead.
+SAVED = ROOT / "android" / "app" / "src" / "local" / "assets" / "saved-blips"
+saved = {}
+if GTA_SHEET.exists():
+    sheet = Image.open(GTA_SHEET).convert("RGBA")
+    for kind, (r, c) in {"home": (0, 4), "work": (11, 9), "star": (7, 14)}.items():
+        icon = sheet.crop((c * 64, r * 64, c * 64 + 64, r * 64 + 64)).resize((96, 96), Image.LANCZOS)
+        # Green, as GTA Online marks a property you own; the black edge stays.
+        px = icon.load()
+        for y in range(icon.height):
+            for x in range(icon.width):
+                red, g, b, a = px[x, y]
+                v = (red + g + b) / 765
+                px[x, y] = (int(0x35 * v), int(0x9A * v), int(0x47 * v), a)
+        saved[f"gta5-{kind}"] = icon
+if BLIPS.exists():
+    home = poi("blip_proc_home", 4)
+    # A waypoint-red rim sets it apart from the shop discs around it.
+    ImageDraw.Draw(home).ellipse([4, 4, 91, 91], outline=(0xCC, 0, 0, 255), width=6)
+    saved["rdr2-home"] = home
+if (VI_BLIPS / "r3c4.png").exists():
+    saved["gta6-home"] = vi((3, 4), 4)
+if saved:
+    SAVED.mkdir(parents=True, exist_ok=True)
+    for name, img in saved.items():
+        img.save(SAVED / f"{name}.png")
+
 print("sprites ->", MAIN, "and", LOCAL if len(local) > len(patterns) else "(no local blips)")

@@ -49,6 +49,7 @@ import com.thealgothrim.overworld.ui.skin.SkinChip
 import com.thealgothrim.overworld.ui.skin.SkinDivider
 import com.thealgothrim.overworld.ui.skin.SkinPanel
 import com.thealgothrim.overworld.ui.skin.SkinPrimaryButton
+import com.thealgothrim.overworld.ui.skin.SkinRecenterButton
 import com.thealgothrim.overworld.ui.skin.SkinRoundButton
 import com.thealgothrim.overworld.ui.skin.SkinRow
 import com.thealgothrim.overworld.ui.skin.SkinSecondaryButton
@@ -79,6 +80,10 @@ fun BoxScope.BrowseLayer(
     onSettings: () -> Unit,
     onLayers: () -> Unit,
     onLocate: () -> Unit,
+    /** The map turns with the phone (locate tapped twice): the locate button shows the arrow. */
+    compass: Boolean = false,
+    /** The map follows the arrow; moved away, locate becomes the player's marker to come back to. */
+    following: Boolean = true,
     onNorthUp: () -> Unit,
     mapArea: String? = null,
     metresPerDp: Double? = null,
@@ -181,13 +186,18 @@ fun BoxScope.BrowseLayer(
   // ---- bottom: locate button, then the place sheet
   if (!searchOpen) {
     Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-      Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 14.dp, bottom = 14.dp), verticalAlignment = Alignment.Bottom) {
-        Column(Modifier.weight(1f)) {
-          if (!spec.rdr && destination == null && metresPerDp != null) GtaMapCorner(spec, mapArea, metresPerDp, Modifier.padding(bottom = 8.dp))
-          MapCredit(spec)
+      // The corner box and the locate button share a bottom edge; the map credit runs under both.
+      Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 14.dp, bottom = 4.dp), verticalAlignment = Alignment.Bottom) {
+        Box(Modifier.weight(1f)) {
+          if (!spec.rdr && destination == null && metresPerDp != null) GtaMapCorner(spec, mapArea, metresPerDp)
         }
-        SkinRoundButton(spec, GameIcon.LOCATE, onLocate)
+        when {
+          compass -> SkinRoundButton(spec, GameIcon.NAVIGATE, onLocate, tint = spec.accent)
+          following -> SkinRoundButton(spec, GameIcon.LOCATE, onLocate, tint = spec.accent)
+          else -> SkinRecenterButton(spec, onLocate)
+        }
       }
+      MapCredit(spec, Modifier.padding(start = 12.dp, bottom = 8.dp))
       if (destination != null) {
         PlaceSheet(spec, destination, planner, saved, here, onDirections)
       }

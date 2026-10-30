@@ -2,6 +2,7 @@ package com.thealgothrim.overworld.ui.skin
 
 import com.thealgothrim.overworld.search.Nearby
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,6 +32,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -39,6 +43,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -171,31 +176,91 @@ fun SkinPanel(spec: SkinSpec, modifier: Modifier = Modifier, content: @Composabl
 @Composable
 fun SkinRoundButton(spec: SkinSpec, icon: GameIcon, onClick: () -> Unit, modifier: Modifier = Modifier, tint: Color = spec.fg) {
   Box(
-      modifier
-          .size(52.dp)
-          .then(if (spec.vi) Modifier.outerShadow(CircleShape, blur = 6.dp, drop = 1.5.dp) else Modifier.shadow(8.dp, CircleShape, clip = false))
-          .background(
-              when (spec.skin) {
-                Skin.GTA -> Color(0xE6000000)
-                Skin.GTA6 -> Vi.Glass
-                Skin.RDR -> Rdr.OffBlack
-              },
-              CircleShape,
-          )
-          .then(
-              when (spec.skin) {
-                Skin.GTA -> Modifier
-                Skin.GTA6 -> Modifier.border(1.dp, Vi.Hairline, CircleShape)
-                Skin.RDR -> Modifier.border(1.5.dp, Rdr.Grey.copy(alpha = 0.7f), CircleShape)
-              }
-          )
-          .clip(CircleShape)
-          .clickable(onClick = onClick),
+      modifier.size(52.dp).mapButtonFace(spec, CircleShape).clickable(onClick = onClick),
       contentAlignment = Alignment.Center,
   ) {
     GameIconView(icon, tint, Modifier.size(26.dp))
   }
 }
+
+/**
+ * A map button with its word beside the icon, in the round buttons' solid face (Re-centre, like
+ * Google Maps' pill): a word reads at a glance where a lone icon in the corner didn't.
+ */
+@Composable
+fun SkinPillButton(spec: SkinSpec, icon: GameIcon, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+  val shape = RoundedCornerShape(percent = 50)
+  Row(
+      modifier.height(52.dp).mapButtonFace(spec, shape).clickable(onClick = onClick).padding(start = 18.dp, end = 22.dp),
+      verticalAlignment = Alignment.CenterVertically,
+  ) {
+    GameIconView(icon, spec.fg, Modifier.size(24.dp))
+    Spacer(Modifier.width(10.dp))
+    SkinText(spec.title(label), spec.title, spec.titleSize(if (spec.vi) 19.sp else 18.sp, 21.sp), spec.fg, spacing = spec.titleSpacing)
+  }
+}
+
+/** The player's own marker (his art for each game, the one drawn on the map). */
+val SkinSpec.puck: Int
+  get() =
+      when (skin) {
+        Skin.GTA -> com.thealgothrim.overworld.R.drawable.puck_gta5
+        Skin.RDR -> com.thealgothrim.overworld.R.drawable.puck_rdr2
+        Skin.GTA6 -> com.thealgothrim.overworld.R.drawable.puck_gta6
+      }
+
+/**
+ * Re-centre: the player's own marker on the map buttons' face, ringed in the route colour, so it
+ * reads as "back to me" at a glance where a crosshair in the corner didn't. With [label], a pill
+ * (the car, and the phone on a trip); without, a round button. [size] is the button's height.
+ */
+@Composable
+fun SkinRecenterButton(spec: SkinSpec, onClick: () -> Unit, modifier: Modifier = Modifier, label: String? = null, size: Dp = 52.dp) {
+  val shape = if (label != null) RoundedCornerShape(percent = 50) else CircleShape
+  val ring = (size.value / 20f).coerceAtLeast(2f).dp
+  Row(
+      modifier
+          .height(size)
+          .then(if (label == null) Modifier.width(size) else Modifier)
+          .mapButtonFace(spec, shape)
+          .border(ring, spec.accent, shape)
+          .clickable(onClick = onClick)
+          .padding(start = if (label != null) size * 0.22f else 0.dp, end = if (label != null) size * 0.4f else 0.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = if (label == null) Arrangement.Center else Arrangement.Start,
+  ) {
+    Image(
+        ImageBitmap.imageResource(spec.puck),
+        contentDescription = label ?: "Re-centre",
+        modifier = Modifier.size(size * 0.56f),
+        filterQuality = FilterQuality.High,
+    )
+    if (label != null) {
+      Spacer(Modifier.width(size * 0.18f))
+      SkinText(spec.title(label), spec.title, spec.titleSize(if (spec.vi) 19.sp else 18.sp, 21.sp), spec.fg, spacing = spec.titleSpacing)
+    }
+  }
+}
+
+/** The solid face the map's own buttons share, per game. */
+private fun Modifier.mapButtonFace(spec: SkinSpec, shape: androidx.compose.ui.graphics.Shape): Modifier =
+    this.then(if (spec.vi) Modifier.outerShadow(shape, blur = 6.dp, drop = 1.5.dp) else Modifier.shadow(8.dp, shape, clip = false))
+        .background(
+            when (spec.skin) {
+              Skin.GTA -> Color(0xE6000000)
+              Skin.GTA6 -> Vi.Glass
+              Skin.RDR -> Rdr.OffBlack
+            },
+            shape,
+        )
+        .then(
+            when (spec.skin) {
+              Skin.GTA -> Modifier
+              Skin.GTA6 -> Modifier.border(1.dp, Vi.Hairline, shape)
+              Skin.RDR -> Modifier.border(1.5.dp, Rdr.Grey.copy(alpha = 0.7f), shape)
+            }
+        )
+        .clip(shape)
 
 /** Primary action (Directions, Start): the theme's route colour. GTA VI's pink takes dark text. */
 @Composable

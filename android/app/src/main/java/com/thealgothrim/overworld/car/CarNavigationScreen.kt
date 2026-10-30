@@ -49,6 +49,9 @@ import com.thealgothrim.overworld.map.carHudInsets
 import com.thealgothrim.overworld.map.carHudScale
 import com.thealgothrim.overworld.map.rememberDriveTilt
 import com.thealgothrim.overworld.ui.CarTapTargets
+import com.thealgothrim.overworld.map.glide
+import com.thealgothrim.overworld.map.glideRecenter
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -124,15 +127,23 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
     // it (the buttons are 50 to 56 dp, smaller still when the HUD shrinks); where two overlap, the
     // nearer button wins.
     passTapsTo { x, y, shift ->
-      CarTapTargets.touchedAt.longValue = System.currentTimeMillis()
+      val now = System.currentTimeMillis()
+      CarTapTargets.touchedAt.longValue = now
       val previewing = viewModel.planner.value.preview != null
+      // Map buttons that came up with this very touch (see MapButtons) aren't pressed by it.
+      val buttonsSettled = now - CarTapTargets.buttonsUpAt >= REVEAL_MS
+      val overviewSettled = now - CarTapTargets.overviewUpAt >= REVEAL_MS
+      fun press(key: String, action: () -> Unit): () -> Unit = {
+        CarTapTargets.pressed.value = key to now
+        action()
+      }
       val targets =
           listOfNotNull(
               CarTapTargets.camera?.let { it to { viewModel.markCamera() } },
-              CarTapTargets.mute?.let { it to { viewModel.toggleMute() } },
-              CarTapTargets.zoomIn?.let { it to { CarTapTargets.zoomedAt.longValue = System.currentTimeMillis(); mapState?.zoomIn(); Unit } },
-              CarTapTargets.zoomOut?.let { it to { CarTapTargets.zoomedAt.longValue = System.currentTimeMillis(); mapState?.zoomOut(); Unit } },
-              CarTapTargets.overview?.let { it to { toggleOverview() } },
+              CarTapTargets.mute?.takeIf { buttonsSettled }?.let { it to press("mute") { viewModel.toggleMute() } },
+              CarTapTargets.zoomIn?.takeIf { buttonsSettled }?.let { it to press("zoomIn") { zoomBy(1.0) } },
+              CarTapTargets.zoomOut?.takeIf { buttonsSettled }?.let { it to press("zoomOut") { zoomBy(-1.0) } },
+              CarTapTargets.overview?.takeIf { overviewSettled }?.let { it to press("overview") { toggleOverview() } },
               CarTapTargets.home?.let { it to { AppModule.saved.state.value.home?.let { h -> viewModel.startNavigation(h.coordinate, "Home") }; Unit } },
               CarTapTargets.work?.let { it to { AppModule.saved.state.value.work?.let { w -> viewModel.startNavigation(w.coordinate, "Work") }; Unit } },
               CarTapTargets.start?.takeIf { previewing }?.let { it to { viewModel.startPreview() } },
@@ -292,6 +303,12 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
                           .setOnClickListener { screenManager.push(CarNearbyScreen(carContext)) }
                           .build()
                   )
+                  .addAction(
+                      Action.Builder()
+                          .setTitle(carContext.getString(R.string.settings))
+                          .setOnClickListener { screenManager.push(CarSettingsScreen(carContext)) }
+                          .build()
+                  )
                   .build()
           )
           .apply {
@@ -321,7 +338,7 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
           .build()
     }
 
-    // Not navigating: the themed map with Saved and Theme. In game-HUD mode the "Where to?" card is
+    // Not navigating: the themed map with Search, Nearby, Saved and Settings. In game-HUD mode the "Where to?" card is
     // drawn on the map in the theme; otherwise Android Auto shows it as its own message card.
     val preview = viewModel.planner.value.preview
     cancelPreviewOnBack.isEnabled = preview != null
@@ -349,8 +366,8 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
             )
             .addAction(
                 Action.Builder()
-                    .setTitle(carContext.getString(R.string.next_theme))
-                    .setOnClickListener { themeStore.cycle() }
+                    .setTitle(carContext.getString(R.string.settings))
+                    .setOnClickListener { screenManager.push(CarSettingsScreen(carContext)) }
                     .build()
             )
             .build()
@@ -402,9 +419,15 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
           )
           .build()
 
+  /** The driver's own zoom, held for a while against the automatic one (see AutoZoomEffect). */
+  private fun zoomBy(delta: Double) {
+    CarTapTargets.zoomedAt.longValue = System.currentTimeMillis()
+    if (delta > 0) mapState?.zoomIn(delta, ZOOM_MS) else mapState?.zoomOut(-delta, ZOOM_MS)
+  }
+
   /** Follow the car heading-up, the way the map runs with no trip. */
   private fun followCar(state: NavigationMapState) {
-    state.cameraMode = NavigationCameraMode.FOLLOW_USER_WITH_BEARING
+    state.glide.start(NavigationCameraMode.FOLLOW_USER_WITH_BEARING)
   }
 
   /**
@@ -415,7 +438,7 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
     val state = mapState ?: return
     when {
       !state.isTrackingUser -> {
-        if (uiState?.isNavigating() == true) state.recenter(isNavigating = true) else followCar(state)
+        if (uiState?.isNavigating() == true) state.glideRecenter(isNavigating = true) else followCar(state)
         CarTapTargets.zoomReleasedAt.longValue = System.currentTimeMillis()
       }
       CarTapTargets.zoomHeld.value -> CarTapTargets.zoomReleasedAt.longValue = System.currentTimeMillis()
@@ -427,6 +450,12 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
     invalidate()
   }
 }
+
+/** A tap's zoom step: quicker than Ferrostar's 300 ms, since Android Auto already held the tap half a second. */
+private val ZOOM_MS = 200.milliseconds
+
+/** A tap this soon after the map buttons came up brought them up; it presses none. */
+private const val REVEAL_MS = 650L
 
 /** The car map's following zoom at about 40 km/h, before the theme's own offset (see DriveCamera). */
 private const val CAR_ZOOM = 16.4

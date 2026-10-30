@@ -117,6 +117,10 @@ fun BoxScope.MapLayersSheet(theme: OverworldTheme, onClose: () -> Unit) {
           if (live) "Accidents, road works, closures and jams, with alerts ahead." else "Needs a free TomTom key.",
           checked = details.incidents && live, enabled = live,
       ) { store.setDetails(details.copy(incidents = !details.incidents)) }
+      SkinDivider(spec)
+      ToggleRow(spec, "Place icons", "The game's shop, food and petrol icons. Tap one to go there.", checked = details.placeIcons) {
+        store.setDetails(details.copy(placeIcons = !details.placeIcons))
+      }
       if (theme.buildings3d) {
         SkinDivider(spec)
         ToggleRow(

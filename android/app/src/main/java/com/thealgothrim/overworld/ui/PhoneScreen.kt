@@ -52,6 +52,10 @@ import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.OverworldViewModel
 import com.thealgothrim.overworld.map.rememberOverworldMapState
 import com.thealgothrim.overworld.map.OverworldPhoneMap
+import com.thealgothrim.overworld.map.glideRecenter
+import com.thealgothrim.overworld.map.CompassModeEffect
+import com.thealgothrim.overworld.map.PhoneCompass
+import com.thealgothrim.overworld.map.glide
 import com.thealgothrim.overworld.theme.Skin
 import com.thealgothrim.overworld.ui.gta.GtaBigMessage
 import com.thealgothrim.overworld.ui.rdr.RdrBigMessage
@@ -126,9 +130,18 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
     val d = planner.destination ?: return@LaunchedEffect
     if (planner.preview != null) return@LaunchedEffect
     mapState.cameraMode = NavigationCameraMode.FREE
+    // A quick flight down onto the place, tilted the way the theme drives (RDR2 stays flat, like its
+    // map), set above the place card: 500 ms to zoom 16, as the Mapbox game-map apps do. It was a
+    // flat 900 ms drift to zoom 15 that read as slow.
     mapState.cameraState.animateTo(
-        CameraPosition(target = Position(d.coordinate.lng, d.coordinate.lat), zoom = 15.0),
-        duration = 900.milliseconds,
+        CameraPosition(
+            target = Position(d.coordinate.lng, d.coordinate.lat),
+            zoom = 16.0,
+            tilt = driveCamera.tilt,
+            bearing = mapState.cameraState.position.bearing,
+            padding = PaddingValues(bottom = 240.dp),
+        ),
+        duration = 500.milliseconds,
     )
   }
   LaunchedEffect(planner.preview) {
@@ -146,8 +159,26 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
     }
   }
 
-  // Locate asks Android to turn location on first when it is off, like Google Maps.
-  val locate = rememberWithLocationOn { mapState.recenter(isNavigating = navigating) }
+  // Locate asks Android to turn location on first when it is off, like Google Maps. A second tap,
+  // already following, is compass mode: the map turns with the phone (a third goes back north-up).
+  var compass by remember { mutableStateOf(false) }
+  LaunchedEffect(navigating) { if (navigating) compass = false }
+  val locate = rememberWithLocationOn {
+    when {
+      navigating -> mapState.glideRecenter(isNavigating = true)
+      !compass && mapState.cameraMode == NavigationCameraMode.FOLLOW_USER -> {
+        compass = true
+        mapState.glide.start(NavigationCameraMode.FOLLOW_USER_WITH_BEARING)
+      }
+      else -> {
+        compass = false
+        mapState.glideRecenter(isNavigating = false)
+      }
+    }
+  }
+  CompassModeEffect(mapState, compass) { compass = false }
+  // The arrow points where the phone does while slow, off a trip (on one it follows the road).
+  PhoneCompass.Effect(on = !navigating)
 
   // GTA V's pause map names the area under the map's centre (bottom-left, with the scale bar).
   var mapArea by remember { mutableStateOf<String?>(null) }
@@ -186,13 +217,14 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
       uiState.routeGeometry?.boundingBox()?.let {
         mapState.showRouteOverview(boundingBox = it, paddingValues = PaddingValues(start = 56.dp, end = 56.dp, top = 220.dp, bottom = 260.dp))
       }
-    } else mapState.recenter(isNavigating = true)
+    } else mapState.glideRecenter(isNavigating = true)
   }
 
   Box(Modifier.fillMaxSize().background(theme.pageFor(variant))) {
     OverworldPhoneMap(
         theme = theme,
-        uiState = uiState,
+        // Compass mode turns the map itself; GPS's course would fight it.
+        uiState = if (compass) uiState.copy(location = uiState.location?.copy(courseOverGround = null)) else uiState,
         mapState = mapState,
         cameraOptions = cameraOptions,
         pickedDestination = planner.destination?.coordinate,
@@ -200,6 +232,10 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
         onLongPress = {
           searchOpen = false
           viewModel.dropPin(it)
+        },
+        onPlaceTap = {
+          searchOpen = false
+          viewModel.choose(it)
         },
     )
     if (theme.paperOverlay) PaperOverlay()
@@ -272,6 +308,8 @@ fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
                 onSettings = { settingsOpen = true },
                 onLayers = { layersOpen = true },
                 onLocate = locate,
+                compass = compass,
+                following = mapState.isTrackingUser,
                 onNorthUp = northUp,
                 mapArea = mapArea,
                 metresPerDp = scale,

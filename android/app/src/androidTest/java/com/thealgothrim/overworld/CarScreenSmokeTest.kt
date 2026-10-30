@@ -48,14 +48,17 @@ class CarScreenSmokeTest {
       }
     }
 
-    // Idle: themed message, a theme switch, and pan on the map.
+    // Idle: themed message, Settings (whose first row switches the theme), and pan on the map.
     val idle = main { screen.onGetTemplate() } as NavigationTemplate
     val message = idle.navigationInfo as MessageInfo
     assertEquals("GTA V", message.title.toString())
     val titles = idle.actionStrip!!.actions.map { it.title.toString() }
-    assertEquals(listOf("Search", "Nearby", "Saved", "Theme"), titles)
-    val themeAction = idle.actionStrip!!.actions[3]
-    main { themeAction.onClickDelegate!!.sendClick(NoopCallback) }
+    assertEquals(listOf("Search", "Nearby", "Saved", "Settings"), titles)
+    main { idle.actionStrip!!.actions[3].onClickDelegate!!.sendClick(NoopCallback) }
+    val settings = main { (screen.screenManager.top as com.thealgothrim.overworld.car.CarSettingsScreen).onGetTemplate() } as androidx.car.app.model.ListTemplate
+    assertEquals(listOf("Map", "Driving"), settings.sectionedLists.map { it.header.toString() })
+    val themeRow = settings.sectionedLists[0].itemList.items[0] as androidx.car.app.model.Row
+    main { themeRow.onClickDelegate!!.sendClick(NoopCallback) }
     assertEquals("rdr2", store.theme.value.id)
 
     // A real trip: Valhalla route, simulated driving, started with the phone app open.
