@@ -9,6 +9,8 @@
    GTA V's shop blips go in the same local sheet ("gta-*"), cut from the game's blip texture sheet
    in "Reference - GTA V/blips" (a 16x16 grid of 64 px icons: white pictograms, black outline).
    GTA VI's ("vi-*") come from "Reference - GTA VI/blips" (tools/cut_vi_blips.py).
+   Where Gaurav's generated icon set has a game's places (tools/make_icons.py), those win: one
+   look for every kind, and kinds the blip sheets never had (cafe, ATM, school, toilets).
 
 Run: python tools/make_sprite.py   (needs Pillow)
 """
@@ -16,6 +18,8 @@ import json
 from pathlib import Path
 
 from PIL import Image, ImageDraw
+
+from make_icons import art
 
 ROOT = Path(__file__).resolve().parent.parent
 MAIN = ROOT / "android" / "app" / "src" / "main" / "assets" / "sprites"
@@ -65,6 +69,17 @@ GTA_POIS = {
     "gta-parking": (7, 0),  # P
     "gta-airport": (8, 1),  # plane
 }
+
+
+# Places from the generated set (tools/make_icons.py), by the map's POI kind (prototype/themes.js).
+ART_POIS = ["food", "cafe", "fastfood", "bar", "hospital", "doctor", "pharmacy", "bank", "post", "hotel", "train",
+            "barber", "clothes", "repair", "store", "market", "fuel", "charging", "police", "theatre", "landmark",
+            "worship", "school", "gym", "parking", "airport", "toilet", "mall", "tyre"]
+
+
+def generated(game: str, prefix: str, size: int, scale: int) -> dict:
+    found = {f"{prefix}{kind}": art(game, kind, size * scale, margin=0.04) for kind in ART_POIS}
+    return {name: img for name, img in found.items() if img is not None}
 
 
 # Map icon name -> (row, column) of GTA VI's blips, cut from Gaurav's sheet by tools/cut_vi_blips.py
@@ -151,6 +166,9 @@ for scale, suffix in [(1, ""), (2, "@2x")]:
         local.update({name: gta(cell, scale) for name, cell in GTA_POIS.items()})
     if (VI_BLIPS / "r0c0.png").exists():
         local.update({name: vi(cell, scale) for name, cell in VI_POIS.items()})
+    # Each at its game's blip size, so a generated icon matches the blips it stands beside.
+    for game, prefix, size in [("gta5", "gta-", 22), ("rdr2", "poi-", 24), ("gta6", "vi-", 22)]:
+        local.update(generated(game, prefix, size, scale))
     if len(local) > len(patterns):
         write(LOCAL, local, scale, suffix)
 
@@ -180,6 +198,12 @@ if BLIPS.exists():
     saved["rdr2-home"] = home
 if (VI_BLIPS / "r3c4.png").exists():
     saved["gta6-home"] = vi((3, 4), 4)
+# The generated set's own places (green home, office and star for GTA V) win here too.
+for game in ["gta5", "rdr2", "gta6"]:
+    for kind in ["home", "work", "star"]:
+        img = art(game, f"my_{kind}", 96, margin=0.04)
+        if img is not None:
+            saved[f"{game}-{kind}"] = img
 if saved:
     SAVED.mkdir(parents=True, exist_ok=True)
     for name, img in saved.items():

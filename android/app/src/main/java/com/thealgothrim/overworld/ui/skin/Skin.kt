@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,7 +32,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.res.imageResource
@@ -412,7 +415,7 @@ fun RowScope.SkinRowSpacer() = Spacer(Modifier.weight(1f))
 
 enum class GameIcon {
   SEARCH, SETTINGS, LOCATE, CLOSE, BACK, STAR, STAR_FILLED, HOME, WORK, RECENT, PIN, SOUND_ON, SOUND_OFF,
-  ROUTE, CHEVRON_UP, CHEVRON_DOWN, NORTH, NAVIGATE, CAR, LAYERS,
+  ROUTE, OVERVIEW, CHEVRON_UP, CHEVRON_DOWN, NORTH, NAVIGATE, CAR, LAYERS,
   FUEL, FOOD, PARKING, TOILET, HOSPITAL, HOTEL, CAMERA, ZOOM_IN, ZOOM_OUT,
 }
 
@@ -428,10 +431,20 @@ val Nearby.icon: GameIcon
         Nearby.HOTEL -> GameIcon.HOTEL
       }
 
-/** Simple line icons drawn in code, so they match any theme and stay sharp on the car screen. */
+/**
+ * The game's own icon from its generated set where a build has it ([IconArt]), tinted by [color]:
+ * its white takes the colour and its black edge stays. Else simple line icons drawn in code, so
+ * they match any theme and stay sharp on the car screen.
+ */
 @Composable
 fun GameIconView(icon: GameIcon, color: Color, modifier: Modifier = Modifier) {
-  Canvas(modifier) { drawGameIcon(icon, color) }
+  val skin = LocalIconSkin.current
+  val art = remember(skin, icon) { skin?.let { IconArt.get(it, icon) } }
+  if (art != null) {
+    Image(art, contentDescription = null, modifier = modifier, colorFilter = ColorFilter.tint(color, BlendMode.Modulate), filterQuality = FilterQuality.High)
+  } else {
+    Canvas(modifier) { drawGameIcon(icon, color) }
+  }
 }
 
 fun DrawScope.drawGameIcon(icon: GameIcon, color: Color) {
@@ -528,7 +541,8 @@ fun DrawScope.drawGameIcon(icon: GameIcon, color: Color) {
         drawLine(color, p(21.5f, 9f), p(15.5f, 15f), strokeWidth = w, cap = StrokeCap.Round)
       }
     }
-    GameIcon.ROUTE -> {
+    // Drawn alike; the generated sets give the overview its own (a route in a frame).
+    GameIcon.ROUTE, GameIcon.OVERVIEW -> {
       drawCircle(color, 2.6f * u, p(6f, 19f))
       drawCircle(color, 2.6f * u, p(18f, 5f))
       drawPath(path(6f to 16f, 6f to 12f, 18f to 12f, 18f to 8f), color, style = line)

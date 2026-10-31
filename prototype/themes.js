@@ -46,14 +46,14 @@
         },
         // HUD_COLOUR_WAYPOINT (164, 76, 242), drawn flat with no outline like the pause map and radar.
         route: { line: "#a44cf2", casing: "#a44cf2", glow: null },
-        // Blips: the game's white pictograms (T-shirt, scissors, spray gun...), and since 30 Oct the
-        // sheet's house, meditating figure, camera, P and plane for hotels, temples, landmarks,
-        // parking and airports (Gaurav wanted far more of the map marked). No food: GTA V has no
-        // blip for it.
-        // Small, as on the game's radar: about two thirds of the player marker.
+        // Blips: white pictograms with a black edge, from Gaurav's generated GTA V set
+        // (tools/make_icons.py), or the game's own blips where a build has only those. Every kind
+        // the set has an icon for, except bus stops and unclassified shops: Delhi has one every few
+        // metres. Small, as on the game's radar: about two thirds of the player marker.
         pois: { prefix: "gta-", minzoom: 14.5, size: 0.72,
-          only: ["bar", "doctor", "pharmacy", "bank", "barber", "clothes", "repair", "store", "fuel", "police", "theatre",
-            "hotel", "worship", "landmark", "parking", "airport"] },
+          only: ["cafe", "fastfood", "food", "bar", "hospital", "doctor", "pharmacy", "bank", "post", "hotel", "train",
+            "barber", "clothes", "repair", "store", "market", "fuel", "charging", "police", "theatre", "landmark",
+            "worship", "parking", "airport", "school", "gym", "toilet", "mall", "tyre"] },
       },
       // Radar arrow (radar_centre): white left half, #b3b3b3 right half, black outline. The app
       // draws Gaurav's own drawing of it (tools/blips/); these colours are the web preview's.
@@ -101,10 +101,13 @@
         patterns: { wood: "hatch", park: "stipple" }, patternsInCar: true, railDotsInCar: true,
         glow: null,
         roadLabels: false,
-        // The game's black-disc blips, small as on its map (only the kinds the sheet has a blip for).
+        // Black-disc blips, small as on the game's map: Gaurav's generated Red Dead set
+        // (tools/make_icons.py), or the game's own where a build has only those. Every kind the set
+        // has an icon for, except bus stops (Delhi has one every few metres).
         pois: { prefix: "poi-", size: 0.68,
-          only: ["food", "bar", "doctor", "pharmacy", "bank", "post", "hotel", "train", "barber", "clothes", "repair", "store", "shop",
-            "market", "fuel", "police", "theatre", "landmark"] },
+          only: ["cafe", "fastfood", "food", "bar", "hospital", "doctor", "pharmacy", "bank", "post", "hotel", "train", "barber",
+            "clothes", "repair", "store", "shop", "market", "fuel", "charging", "police", "theatre", "landmark", "worship", "parking",
+            "airport", "school", "gym", "toilet", "mall", "tyre"] },
         // Android map lettering (bundled SDF glyphs, see tools/make_glyphs.py). The web preview
         // falls back to OpenFreeMap's Noto fonts below.
         fonts: { place: "RalewayBlack", city: "MerriweatherBlack", water: "CrimsonBoldItalic", pencil: "HomemadeApple" },
@@ -174,10 +177,14 @@
         // tenth of its width), the same by day, at golden hour and at night; it fades in just
         // ahead of the arrow.
         route: { line: "#fb74a5", casing: "#ffa5d4", edge: 0.1, glow: null, fade: 130 },
-        // Shops and services as GTA VI's own blips: pale rounded squares with a slate rim (red for
-        // medical), from the sheet Gaurav saved (tools/cut_vi_blips.py); personal builds only.
+        // Shops and services as GTA VI's blips: pale rounded squares with a slate rim (red for
+        // medical), Gaurav's generated set (tools/make_icons.py), or the sheet he saved
+        // (tools/cut_vi_blips.py) where a build has only that; personal builds only. Every kind the
+        // set has an icon for, except bus stops and shops OpenStreetMap doesn't classify.
         pois: { prefix: "vi-", minzoom: 15.2, size: 0.85,
-          only: ["food", "bar", "doctor", "pharmacy", "barber", "clothes", "repair", "store", "fuel"] },
+          only: ["cafe", "fastfood", "food", "bar", "hospital", "doctor", "pharmacy", "bank", "post", "hotel", "train", "barber",
+            "clothes", "repair", "store", "market", "fuel", "charging", "police", "theatre", "landmark", "worship", "parking",
+            "airport", "school", "gym", "toilet", "mall", "tyre"] },
       },
       variants: {
         // Golden hour: the minimap dims and warms; roads keep their lead over the ground.
@@ -690,9 +697,14 @@
       // Shops and services as the game's blips: RDR2's black discs, GTA V's white pictograms,
       // GTA VI's rounded squares (icons ship in the app's local sprite, cut from the games' blips).
       const P = m.pois === true ? { prefix: "poi-" } : m.pois;
+      // A kind with its own icon comes before the broader one it's part of: a theme without that
+      // icon (not in its "only") leaves those places to the broader kind.
       const groups = [
+        ["cafe", ["cafe"]],
+        ["fastfood", ["fast_food", "food_court"]],
         ["food", ["restaurant", "fast_food", "food_court", "cafe", "ice_cream", "bakery"]],
         ["bar", ["bar", "pub", "beer", "alcohol_shop"]],
+        ["hospital", ["hospital"]],
         ["doctor", ["hospital", "doctors", "clinic", "dentist"]],
         ["pharmacy", ["pharmacy", "chemist"]],
         ["bank", ["bank", "atm"]],
@@ -713,6 +725,12 @@
         ["worship", ["place_of_worship"]],
         ["parking", ["parking"]],
         ["airport", ["aerodrome"]],
+        ["school", ["school", "college"]],
+        ["gym", ["fitness_centre", "sports_centre"]],
+        ["toilet", ["toilets"]],
+        ["mall", ["mall"]],
+        ["charging", ["charging_station"]],
+        ["tyre", ["tyres"]],
       ];
       // By class, then by subclass: OpenStreetMap files most small shops as class "shop" with the
       // kind in the subclass ("convenience", "beauty"), which by class alone got no blip.

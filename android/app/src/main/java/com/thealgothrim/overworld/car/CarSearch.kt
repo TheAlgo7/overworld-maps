@@ -29,6 +29,7 @@ import com.thealgothrim.overworld.search.Place
 import com.thealgothrim.overworld.traffic.metres
 import com.thealgothrim.overworld.ui.formatDistance
 import com.thealgothrim.overworld.ui.skin.GameIcon
+import com.thealgothrim.overworld.ui.skin.IconArt
 import com.thealgothrim.overworld.ui.skin.drawGameIcon
 import com.thealgothrim.overworld.ui.skin.icon
 import kotlinx.coroutines.CancellationException
@@ -156,8 +157,12 @@ class CarNearbyListScreen(carContext: CarContext, private val kind: Nearby) : Sc
           .build()
 }
 
-/** A game icon (the same drawings as the phone) as a white Android Auto icon. */
+/**
+ * A game icon (the same as the phone's: the theme's generated art where the build has it, else the
+ * drawing) as a white Android Auto icon.
+ */
 fun carIcon(icon: GameIcon): CarIcon {
+  IconArt.get(AppModule.themeStore.theme.value.skin, icon)?.let { return CarIcon.Builder(IconCompat.createWithBitmap(it.asAndroidBitmap())).build() }
   val size = 96
   val image = ImageBitmap(size, size)
   CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(image), Size(size.toFloat(), size.toFloat())) {

@@ -5,6 +5,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -15,11 +16,14 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.thealgothrim.overworld.theme.OverworldTheme
 import com.thealgothrim.overworld.theme.Skin
 import com.thealgothrim.overworld.traffic.RoadFeature
 import com.thealgothrim.overworld.traffic.RoadFeatureKind
+import com.thealgothrim.overworld.ui.skin.IconArt
 import kotlinx.serialization.json.buildJsonObject
 import org.maplibre.compose.expressions.dsl.const
 import org.maplibre.compose.expressions.dsl.image
@@ -101,11 +105,21 @@ private fun rim(kind: RoadFeatureKind, skin: Skin): Color =
           else -> Color(0xFFACA8A6)
         }
 
-/** Draws one road-feature icon: a round badge with the glyph, or a signal head for lights. */
+/**
+ * Draws one road-feature icon: the theme's generated art where the build has it (GTA V's red speed
+ * camera, crashed cars, digger), else a round badge with the glyph, or a signal head for lights.
+ */
 class RoadFeaturePainter(private val kind: RoadFeatureKind, private val skin: Skin) : Painter() {
   override val intrinsicSize: Size = Size.Unspecified
+  // Not for lights: the drawn signal head's red, amber and green read better at their small size.
+  private val art = if (kind == RoadFeatureKind.TRAFFIC_LIGHT) null else IconArt.get(skin, kind.name.lowercase())
 
   override fun DrawScope.onDraw() {
+    art?.let {
+      val s = size.minDimension.toInt()
+      drawImage(it, dstOffset = IntOffset((size.width.toInt() - s) / 2, (size.height.toInt() - s) / 2), dstSize = IntSize(s, s), filterQuality = FilterQuality.High)
+      return
+    }
     if (kind == RoadFeatureKind.TRAFFIC_LIGHT) {
       drawTrafficLight()
       return

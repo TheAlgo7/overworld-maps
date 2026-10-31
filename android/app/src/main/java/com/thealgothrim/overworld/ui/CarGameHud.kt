@@ -479,7 +479,7 @@ private fun MapButtons(spec: SkinSpec, uiState: NavigationUiState, modifier: Mod
     }
     AnimatedVisibility(bottomShown, enter = enter, exit = exit) {
       if (moved) MapButton(spec, GameIcon.NAVIGATE, "overview", label = "Re-centre") { CarTapTargets.overview = it }
-      else MapButton(spec, GameIcon.ROUTE, "overview") { CarTapTargets.overview = it }
+      else MapButton(spec, GameIcon.OVERVIEW, "overview") { CarTapTargets.overview = it }
     }
   }
 }

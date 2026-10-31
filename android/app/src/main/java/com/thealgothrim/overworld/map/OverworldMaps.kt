@@ -43,6 +43,7 @@ import com.thealgothrim.overworld.traffic.RoadFeature
 import com.thealgothrim.overworld.traffic.RoadFeatureKind
 import com.thealgothrim.overworld.ui.CarGameHud
 import com.thealgothrim.overworld.ui.PaperOverlay
+import com.thealgothrim.overworld.ui.skin.LocalIconSkin
 import com.thealgothrim.overworld.ui.vi.ViEdgeMarkers
 import com.thealgothrim.overworld.ui.vi.ViMapLight
 import com.thealgothrim.overworld.theme.Skin
@@ -165,7 +166,7 @@ fun OverworldCarMap(
     // Applied inside the scaling, the room shrank with the HUD: in the split screen, where the map
     // starts a media card's width in, the cards slid under the media card and were cut off.
     Box(Modifier.fillMaxSize().padding(stable)) {
-    CompositionLocalProvider(LocalDensity provides Density(density.density * hudScale, density.fontScale)) {
+    CompositionLocalProvider(LocalDensity provides Density(density.density * hudScale, density.fontScale), LocalIconSkin provides theme.skin) {
     Box(Modifier.fillMaxSize().padding(12.dp)) {
       val gameHud by AppModule.themeStore.carGameHud.collectAsState()
       val area by AppModule.viewModel.area.collectAsState()

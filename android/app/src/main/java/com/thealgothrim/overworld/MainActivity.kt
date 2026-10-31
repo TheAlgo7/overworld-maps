@@ -13,11 +13,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.thealgothrim.overworld.car.navigationDestination
 import com.thealgothrim.overworld.ui.PhoneScreen
+import com.thealgothrim.overworld.ui.skin.LocalIconSkin
 import uniffi.ferrostar.createFerrostarLogger
 
 class MainActivity : ComponentActivity() {
@@ -65,7 +67,7 @@ class MainActivity : ComponentActivity() {
         permissions.launch(wanted.toTypedArray())
       }
 
-      PhoneScreen()
+      CompositionLocalProvider(LocalIconSkin provides theme.skin) { PhoneScreen() }
     }
     // Not again after the screen is rebuilt (dark mode switched, say): the place is already shown.
     if (savedInstanceState == null) openPlace(intent)
