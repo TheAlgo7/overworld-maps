@@ -191,7 +191,7 @@ To check a world's car screen without a head unit, debug builds have `CarPreview
 
 ## Put it in the car
 
-Android Auto won't show a sideloaded navigation app in a real car ([Google's testing docs](https://developer.android.com/training/cars/testing)). It has to come from Google Play. Play's **internal testing** track skips the review and reaches up to 100 testers within minutes, which is the quickest way into your own car:
+Whether a sideloaded build shows up in a real car depends on the phone and Android Auto version: it works in some cars with **Unknown sources** turned on in Android Auto's developer settings, and not in others. Installing from Google Play is the dependable route ([Google's testing docs](https://developer.android.com/training/cars/testing)). Play's **internal testing** track skips the review and reaches up to 100 testers within minutes, which is the quickest way into your own car:
 
 1. Create a Google Play Console developer account (USD 25 once, plus an identity check), then **Create app** with the package name `com.thealgothrim.overworld`.
 2. Make an upload key (`keytool -genkeypair -keystore overworld-upload.jks -alias upload -keyalg RSA -keysize 4096 -validity 12000`) and put `uploadStoreFile`, `uploadStorePassword`, `uploadKeyAlias` and `uploadKeyPassword` in `android/local.properties`. Keep the key out of the repo. Play re-signs the app with its own key, and a lost upload key can be reset in Play Console.
