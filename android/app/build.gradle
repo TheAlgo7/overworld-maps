@@ -21,8 +21,8 @@ android {
         // The Car App Library needs 29 (Android 10).
         minSdk 29
         targetSdk 36
-        versionCode 18
-        versionName "0.5.8"
+        versionCode 19
+        versionName "0.5.9"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         // Live traffic (TomTom free tier). Put tomtomKey=... in local.properties.
@@ -116,6 +116,8 @@ dependencies {
     implementation 'com.squareup.okhttp3:okhttp'
 
     implementation 'com.google.android.gms:play-services-location:21.3.0'
+    // Asks Google Play whether a newer Overworld is out (UpdateCheck).
+    implementation 'com.google.android.play:app-update:2.1.0'
 
     testImplementation 'junit:junit:4.13.2'
     // Android's org.json is a stub in plain unit tests; the real one reads the saved Google answers.

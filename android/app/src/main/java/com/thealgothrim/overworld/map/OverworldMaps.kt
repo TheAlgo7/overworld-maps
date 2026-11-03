@@ -9,10 +9,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import com.thealgothrim.overworld.car.CarMapGestures
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -42,6 +46,11 @@ import com.thealgothrim.overworld.theme.OverworldTheme
 import com.thealgothrim.overworld.traffic.RoadFeature
 import com.thealgothrim.overworld.traffic.RoadFeatureKind
 import com.thealgothrim.overworld.ui.CarGameHud
+import com.thealgothrim.overworld.ui.CarTapTargets
+import com.thealgothrim.overworld.ui.CarPanelActions
+import com.thealgothrim.overworld.ui.CarPanelView
+import com.thealgothrim.overworld.ui.CarPanels
+import com.thealgothrim.overworld.ui.skin.spec
 import com.thealgothrim.overworld.ui.PaperOverlay
 import com.thealgothrim.overworld.ui.skin.LocalIconSkin
 import com.thealgothrim.overworld.ui.vi.ViEdgeMarkers
@@ -134,14 +143,24 @@ fun OverworldCarMap(
     mapState: NavigationMapState,
     cameraOptions: NavigationCameraOptions,
     surfaceAreaTracker: SurfaceAreaTracker,
+    /** What the themed Settings, Saved and Nearby panel's taps do; no panel without them. */
+    panelActions: CarPanelActions? = null,
 ) {
   val uiState by viewModel.navigationUiState.collectAsState()
   surfaceAreaTracker.rememberGestureDelegate(mapState)
   val surfaceArea by screenSurfaceState(surfaceAreaTracker)
   val density = LocalDensity.current
+  // Drags, flicks and pinches go to our own handling (see CarMapGestures), Ferrostar's only as a fallback.
+  val gestureScope = rememberCoroutineScope()
+  val currentDensity by rememberUpdatedState(density.density)
+  DisposableEffect(mapState) {
+    val gestures = CarMapGestures(mapState, gestureScope) { currentDensity }
+    CarMapGestures.active = gestures
+    onDispose { if (CarMapGestures.active === gestures) CarMapGestures.active = null }
+  }
   val roomTarget = carHudInsets(surfaceArea)
   val stable = animatedPadding(roomTarget, "hud-room")
-  val details by AppModule.themeStore.details.collectAsState()
+  val details by AppModule.themeStore.carDetails.collectAsState()
   val extras by AppModule.viewModel.extras.collectAsState()
   val trafficTiles = AppModule.traffic.flowTilesUrl?.takeIf { details.traffic }
   val planner by AppModule.viewModel.planner.collectAsState()
@@ -152,7 +171,7 @@ fun OverworldCarMap(
     // Same paper as the phone, a little lighter so the roads stay crisp at a glance.
     if (theme.paperOverlay) PaperOverlay(strength = 0.75f)
     if (theme.skin == Skin.GTA6) {
-      val variant by AppModule.viewModel.mapVariant.collectAsState()
+      val variant by AppModule.viewModel.carMapVariant.collectAsState()
       ViMapLight(variant)
       // The minimap's "N" and, when the destination is off the map, its pink dot on the edge.
       val destination = (uiState.routeGeometry?.takeIf { uiState.isNavigating() } ?: planner.preview?.route?.geometry)?.lastOrNull()
@@ -170,10 +189,12 @@ fun OverworldCarMap(
     Box(Modifier.fillMaxSize().padding(12.dp)) {
       val gameHud by AppModule.themeStore.carGameHud.collectAsState()
       val area by AppModule.viewModel.area.collectAsState()
-      if (gameHud) {
+      val panelUp = CarPanels.open != null && themedListsOn() && panelActions != null
+      // The panel takes the left column, in place of the HUD's cards.
+      if (gameHud && !panelUp) {
         val vm = AppModule.viewModel
-        CarGameHud(theme, uiState, area, extras, vm.remainingSeconds(uiState, extras), vm.hazardAhead(uiState, extras), planner.preview)
-      } else {
+        CarGameHud(theme, uiState, area, extras, vm.remainingSeconds(uiState, extras), vm.hazardAhead(uiState, extras), planner.preview, panelActions)
+      } else if (!gameHud) {
         uiState.currentStepRoadName
             ?.takeIf { it.isNotBlank() && uiState.isNavigating() }
             ?.let { road ->
@@ -196,8 +217,13 @@ fun OverworldCarMap(
               )
             }
       }
+      // Settings, Saved or Nearby, in the theme, in the left column.
+      val panel = CarPanels.open
+      if (panelUp && panel != null && panelActions != null) {
+        CarPanelView(panel, theme, theme.spec, panelActions, Modifier.align(Alignment.TopStart))
+      }
       // OpenStreetMap attribution stays readable on the car screen too.
-      val variant by AppModule.viewModel.mapVariant.collectAsState()
+      val variant by AppModule.viewModel.carMapVariant.collectAsState()
       Text(
           text = "© OpenStreetMap contributors",
           color = if (theme.isDark(variant)) Color.White.copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.6f),
@@ -227,15 +253,16 @@ fun OverworldClusterMap(
     room: PaddingValues,
 ) {
   val uiState by viewModel.navigationUiState.collectAsState()
-  val details by AppModule.themeStore.details.collectAsState()
+  val details by AppModule.themeStore.carDetails.collectAsState()
   val extras by AppModule.viewModel.extras.collectAsState()
   val trafficTiles = AppModule.traffic.flowTilesUrl?.takeIf { details.traffic }
   val planner by AppModule.viewModel.planner.collectAsState()
   Box(Modifier.fillMaxSize()) {
-    CarMapView(theme, uiState, mapState, cameraOptions, trafficTiles, extras, details, planner.preview?.route?.geometry)
+    // Roads and the route only: place icons are clutter at the cluster's size and distance.
+    CarMapView(theme, uiState, mapState, cameraOptions, trafficTiles, extras, details.copy(placeIcons = false), planner.preview?.route?.geometry)
     if (theme.paperOverlay) PaperOverlay(strength = 0.75f)
     if (theme.skin == Skin.GTA6) {
-      val variant by AppModule.viewModel.mapVariant.collectAsState()
+      val variant by AppModule.viewModel.carMapVariant.collectAsState()
       ViMapLight(variant)
       val destination = (uiState.routeGeometry?.takeIf { uiState.isNavigating() } ?: planner.preview?.route?.geometry)?.lastOrNull()
       ViEdgeMarkers(mapState.cameraState, destination, room)
@@ -251,7 +278,10 @@ fun OverworldClusterMap(
  */
 @Composable
 fun carHudInsets(surfaceArea: SurfaceArea?): PaddingValues {
-  val area = surfaceArea?.stableArea ?: return PaddingValues(0.dp)
+  // With a list open over the map, the stable area still takes in the list's side; the visible
+  // area is what the list leaves, and the cards move over to it.
+  val panel = CarTapTargets.panelOpen.value
+  val area = (if (panel) surfaceArea?.visibleArea else null) ?: surfaceArea?.stableArea ?: return PaddingValues(0.dp)
   val surfaceSize = LocalWindowInfo.current.containerSize
   // In split screen the map is a smaller window with round corners, and the HUD's own margin
   // shrinks with the HUD: "Where to?" sat right in the corner and had its edge cut off in the
@@ -306,9 +336,9 @@ private fun CarMapView(
     previewRoute: List<GeographicCoordinate>?,
 ) {
   val context = LocalContext.current
-  val variant by AppModule.viewModel.mapVariant.collectAsState()
+  val variant by AppModule.viewModel.carMapVariant.collectAsState()
   val flat = !details.buildings3d
-  val places = details.carPlaceIcons
+  val places = details.placeIcons
   val baseStyle =
       remember(theme.id, trafficTiles, variant, flat, places) { BaseStyle.Json(StyleCache.json(context, theme, car = true, trafficTiles, variant, flat, places)) }
   NavigationMapView(
@@ -413,3 +443,9 @@ fun visibleFeatures(extras: RouteExtras, details: MapDetails): List<RoadFeature>
 
 /** The map's own gestures on the phone, all but tilt. */
 private val PHONE_GESTURES = GestureOptions(isTiltEnabled = false)
+
+@Composable
+private fun themedListsOn(): Boolean {
+  val on by AppModule.themeStore.carThemedLists.collectAsState()
+  return on
+}

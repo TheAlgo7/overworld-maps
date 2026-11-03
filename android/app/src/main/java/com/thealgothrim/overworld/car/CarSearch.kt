@@ -46,6 +46,12 @@ import kotlinx.coroutines.launch
  * becomes a stop on the way instead, and the trip goes on to its destination after it.
  */
 private fun Screen.preview(place: Place) {
+  previewOrStop(carContext, place)
+  screenManager.popToRoot()
+}
+
+/** A place picked on the car: its route preview, or on a trip a stop on the way. */
+internal fun previewOrStop(carContext: CarContext, place: Place) {
   val vm = AppModule.viewModel
   if (vm.navigationUiState.value.isNavigating()) {
     vm.addStop(place) { ok ->
@@ -55,10 +61,11 @@ private fun Screen.preview(place: Place) {
     vm.choose(place)
     vm.directions()
   }
-  screenManager.popToRoot()
 }
 
-private fun Screen.placeRows(places: List<Place>, empty: String = "Nothing found"): ItemList {
+private fun Screen.placeRows(places: List<Place>, empty: String = "Nothing found"): ItemList = placeRows(places, empty) { preview(it) }
+
+private fun placeRows(places: List<Place>, empty: String, onPick: (Place) -> Unit): ItemList {
   val here = AppModule.viewModel.currentCoordinate ?: AppModule.viewModel.startPoint
   val list = ItemList.Builder().setNoItemsMessage(empty)
   places.take(MAX_ROWS).forEach { place ->
@@ -68,7 +75,7 @@ private fun Screen.placeRows(places: List<Place>, empty: String = "Nothing found
         Row.Builder()
             .setTitle(place.name)
             .addText(listOf(away, place.detail).filter { it.isNotBlank() }.joinToString("  ·  "))
-            .setOnClickListener { preview(place) }
+            .setOnClickListener { onPick(place) }
             .build()
     )
   }
@@ -76,7 +83,7 @@ private fun Screen.placeRows(places: List<Place>, empty: String = "Nothing found
 }
 
 /** Search by name, address, plus code or coordinates. Recent places show before typing. */
-class CarSearchScreen(carContext: CarContext) : Screen(carContext) {
+class CarSearchScreen(carContext: CarContext, private val resultsOnMap: Boolean = false) : Screen(carContext) {
   private var query = ""
   private var results: List<Place>? = null
   private var job: Job? = null
@@ -106,9 +113,16 @@ class CarSearchScreen(carContext: CarContext) : Screen(carContext) {
         object : SearchTemplate.SearchCallback {
           override fun onSearchTextChanged(searchText: String) = find(searchText, 300)
 
-          override fun onSearchSubmitted(searchText: String) = find(searchText, 0)
+          // Search pressed: with the themed lists, back to the map, where the results open in the panel.
+          override fun onSearchSubmitted(searchText: String) {
+            if (resultsOnMap && searchText.isNotBlank()) {
+              setResult(searchText.trim())
+              finish()
+            } else find(searchText, 0)
+          }
         }
-    val shown = results ?: if (query.isBlank()) AppModule.saved.state.value.recents else null
+    // Trips started without a name ("Destination", "Dropped pin") say nothing in a list of places.
+    val shown = results ?: if (query.isBlank()) AppModule.saved.state.value.recents.filter { it.name !in UNNAMED_PLACES } else null
     return SearchTemplate.Builder(callback)
         .setHeaderAction(Action.BACK)
         .setSearchHint("Place, address or plus code")
@@ -123,20 +137,25 @@ class CarSearchScreen(carContext: CarContext) : Screen(carContext) {
 
 /** Petrol, food, parking, toilets, hospitals and hotels, one tap each. */
 class CarNearbyScreen(carContext: CarContext) : Screen(carContext) {
-  override fun onGetTemplate(): Template {
-    val grid = ItemList.Builder()
-    Nearby.entries.forEach { kind ->
-      grid.addItem(
-          GridItem.Builder()
-              .setTitle(kind.label)
-              .setImage(carIcon(kind.icon))
-              .setOnClickListener { screenManager.push(CarNearbyListScreen(carContext, kind)) }
-              .build()
-      )
-    }
-    return GridTemplate.Builder().setTitle("Nearby").setHeaderAction(Action.BACK).setSingleList(grid.build()).build()
-  }
+  override fun onGetTemplate(): Template = nearbyGridTemplate(withBack = true) { screenManager.push(CarNearbyListScreen(carContext, it)) }
 }
+
+/** The kinds of nearby place, one tap each. Its own screen or a map panel. */
+internal fun nearbyGridTemplate(withBack: Boolean, onKind: (Nearby) -> Unit): GridTemplate {
+  val grid = ItemList.Builder()
+  Nearby.entries.forEach { kind ->
+    grid.addItem(GridItem.Builder().setTitle(kind.label).setImage(carIcon(kind.icon)).setOnClickListener { onKind(kind) }.build())
+  }
+  return GridTemplate.Builder().setTitle("Nearby").apply { if (withBack) setHeaderAction(Action.BACK) }.setSingleList(grid.build()).build()
+}
+
+/** The closest places of [kind] ([places] null while they load). Its own screen or a map panel. */
+internal fun nearbyListTemplate(kind: Nearby, places: List<Place>?, withBack: Boolean, onPick: (Place) -> Unit): ListTemplate =
+    ListTemplate.Builder()
+        .setTitle(kind.label)
+        .apply { if (withBack) setHeaderAction(Action.BACK) }
+        .apply { places?.let { setSingleList(placeRows(it, "Nothing found", onPick)) } ?: setLoading(true) }
+        .build()
 
 /** The closest places of one kind, nearest first. */
 class CarNearbyListScreen(carContext: CarContext, private val kind: Nearby) : Screen(carContext) {
@@ -149,12 +168,7 @@ class CarNearbyListScreen(carContext: CarContext, private val kind: Nearby) : Sc
     }
   }
 
-  override fun onGetTemplate(): Template =
-      ListTemplate.Builder()
-          .setTitle(kind.label)
-          .setHeaderAction(Action.BACK)
-          .apply { places?.let { setSingleList(placeRows(it)) } ?: setLoading(true) }
-          .build()
+  override fun onGetTemplate(): Template = nearbyListTemplate(kind, places, withBack = true) { preview(it) }
 }
 
 /**
@@ -162,7 +176,7 @@ class CarNearbyListScreen(carContext: CarContext, private val kind: Nearby) : Sc
  * drawing) as a white Android Auto icon.
  */
 fun carIcon(icon: GameIcon): CarIcon {
-  IconArt.get(AppModule.themeStore.theme.value.skin, icon)?.let { return CarIcon.Builder(IconCompat.createWithBitmap(it.asAndroidBitmap())).build() }
+  IconArt.get(AppModule.themeStore.carTheme.value.skin, icon)?.let { return CarIcon.Builder(IconCompat.createWithBitmap(it.asAndroidBitmap())).build() }
   val size = 96
   val image = ImageBitmap(size, size)
   CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(image), Size(size.toFloat(), size.toFloat())) {
@@ -170,6 +184,8 @@ fun carIcon(icon: GameIcon): CarIcon {
   }
   return CarIcon.Builder(IconCompat.createWithBitmap(image.asAndroidBitmap())).build()
 }
+
+internal val UNNAMED_PLACES = setOf("Destination", "Dropped pin")
 
 /** Android Auto shows at most six rows while driving. */
 private const val MAX_ROWS = 6

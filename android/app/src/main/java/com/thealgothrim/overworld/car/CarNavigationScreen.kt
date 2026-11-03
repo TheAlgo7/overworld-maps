@@ -2,6 +2,9 @@ package com.thealgothrim.overworld.car
 
 import androidx.activity.OnBackPressedCallback
 import androidx.car.app.CarContext
+import androidx.car.app.versioning.CarAppApiLevels
+import androidx.car.app.navigation.model.MapController
+import androidx.car.app.navigation.model.MapWithContentTemplate
 import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
 import androidx.car.app.model.CarColor
@@ -39,6 +42,8 @@ import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.SurfaceAreaTracker
 import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.screenSurfaceState
 import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.R
+import com.thealgothrim.overworld.search.Nearby
+import com.thealgothrim.overworld.search.Place
 import com.thealgothrim.overworld.theme.Skin
 import com.thealgothrim.overworld.map.rememberOverworldMapState
 import com.thealgothrim.overworld.map.OverworldCarMap
@@ -49,6 +54,11 @@ import com.thealgothrim.overworld.map.carHudInsets
 import com.thealgothrim.overworld.map.carHudScale
 import com.thealgothrim.overworld.map.rememberDriveTilt
 import com.thealgothrim.overworld.ui.CarTapTargets
+import com.thealgothrim.overworld.ui.CarPanel
+import com.thealgothrim.overworld.ui.CarPanelActions
+import com.thealgothrim.overworld.ui.CarPanels
+import com.thealgothrim.overworld.ui.skin.GameIcon
+import androidx.car.app.Screen
 import com.thealgothrim.overworld.map.glide
 import com.thealgothrim.overworld.map.glideRecenter
 import kotlin.time.Duration.Companion.milliseconds
@@ -59,6 +69,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import uniffi.ferrostar.DrivingSide
@@ -107,20 +119,172 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
         override fun handleOnBackPressed() = viewModel.cancelPreview()
       }
 
+  /**
+   * Settings, Saved and Nearby open over the live map, as Google Maps opens its lists, never as a
+   * screen of their own: car-app-compose pauses the map under any screen pushed over it. Drawn by
+   * Overworld in the theme by default (CarPanelView, its taps checked in passTapsTo); with that
+   * switched off, Android Auto's own list beside the map (MapWithContentTemplate, Car App API 7).
+   * Either way coming back to the NavigationTemplate restarts Android Auto's five-template count.
+   */
+  private val panel: CarPanel?
+    get() = CarPanels.open
+
+  private val themedLists: Boolean
+    get() = themeStore.carThemedLists.value
+
+  /**
+   * Android Auto's lists beside the map need Car App API 7 on the head unit; older ones get the
+   * separate screens. Read when a list opens: the level isn't known yet while the screen is built
+   * (nor ever in tests).
+   */
+  private val hostPanels: Boolean
+    get() = runCatching { carContext.carAppApiLevel >= CarAppApiLevels.LEVEL_7 }.getOrDefault(false)
+
+  /** Back in a panel: from a nearby list to the kinds, otherwise back to the map. */
+  private val panelBack =
+      object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() = open(if (panel is CarPanel.NearbyList) CarPanel.NearbyKinds else null)
+      }
+
+  private fun open(next: CarPanel?) {
+    CarPanels.open = next
+    CarTapTargets.panelOpen.value = next != null && !themedLists
+    panelBack.isEnabled = next != null
+    invalidate()
+  }
+
+  /**
+   * Android Auto's strip stays up beside the themed panel (a map screen must have one) and works as
+   * its tabs: Nearby switches the panel to Nearby, and the open one's button closes it.
+   */
+  private fun show(next: CarPanel, screen: () -> Screen) =
+      when {
+        !themedLists && !hostPanels -> screenManager.push(screen())
+        panel == next || (next == CarPanel.NearbyKinds && panel is CarPanel.NearbyList) -> open(null)
+        else -> open(next)
+      }
+
+  private fun showSettings() = show(CarPanel.Settings) { CarSettingsScreen(carContext) }
+
+  private fun showSaved() = show(CarPanel.Saved) { SavedPlacesScreen(carContext) }
+
+  private fun showNearby() = show(CarPanel.NearbyKinds) { CarNearbyScreen(carContext) }
+
+  private fun loadNearby(kind: Nearby) {
+    open(CarPanel.NearbyList(kind, null))
+    scope.launch {
+      val found = viewModel.findNearby(kind)
+      // Only if that list is still the one open.
+      if ((panel as? CarPanel.NearbyList)?.kind == kind) open(CarPanel.NearbyList(kind, found))
+    }
+  }
+
+  /**
+   * Android Auto's keyboard page (the only place an app may have a keyboard), then, with the themed
+   * lists on, the results in the panel over the map rather than in that page's own list.
+   */
+  private fun search() {
+    open(null)
+    screenManager.pushForResult(CarSearchScreen(carContext, themedLists)) { result ->
+      val query = result as? String ?: return@pushForResult
+      open(CarPanel.Results(query, null))
+      scope.launch {
+        val found = runCatching { AppModule.search.search(query, viewModel.currentCoordinate) }.getOrDefault(emptyList())
+        if ((panel as? CarPanel.Results)?.query == query) open(CarPanel.Results(query, found))
+      }
+    }
+  }
+
+  private fun pickSaved(place: Place) {
+    open(null)
+    viewModel.startNavigation(place.coordinate, place.name)
+  }
+
+  private fun pickNearby(place: Place) {
+    open(null)
+    previewOrStop(carContext, place)
+  }
+
+  private val panelActions =
+      object : CarPanelActions {
+        override fun showNearby() = this@CarNavigationScreen.showNearby()
+
+        override fun showSaved() = this@CarNavigationScreen.showSaved()
+
+        override fun showSettings() = this@CarNavigationScreen.showSettings()
+
+        override fun search() = this@CarNavigationScreen.search()
+
+        override fun endTrip() {
+          open(null)
+          viewModel.stopNavigation()
+        }
+
+        override fun close() = open(null)
+
+        override fun back() = panelBack.handleOnBackPressed()
+
+        override fun nearby(kind: Nearby) = loadNearby(kind)
+
+        override fun pickNearby(place: Place) = this@CarNavigationScreen.pickNearby(place)
+
+        override fun pickSaved(place: Place) = this@CarNavigationScreen.pickSaved(place)
+      }
+
+  /** Android Auto's own list beside the map, for when the themed panel is switched off. */
+  private fun hostPanelTemplate(p: CarPanel): Template {
+    val content =
+        when (p) {
+          CarPanel.Settings -> carSettingsTemplate(withBack = true)
+          CarPanel.Saved -> savedPlacesTemplate(withBack = true, onPick = ::pickSaved)
+          CarPanel.NearbyKinds -> nearbyGridTemplate(withBack = true, onKind = ::loadNearby)
+          is CarPanel.NearbyList -> nearbyListTemplate(p.kind, p.places, withBack = true, onPick = ::pickNearby)
+          // Not reached: results only open as the themed panel (see search()).
+          is CarPanel.Results -> nearbyGridTemplate(withBack = true, onKind = ::loadNearby)
+        }
+    return MapWithContentTemplate.Builder()
+        .setContentTemplate(content)
+        // PAN keeps drags and pinches on the map beside the list.
+        .setMapController(MapController.Builder().setMapActionStrip(ActionStrip.Builder().addAction(Action.PAN).build()).build())
+        .build()
+  }
+
+  /**
+   * Android Auto's strip with the game HUD: only search, with the theme's own search icon. A map
+   * screen must keep a strip of Android Auto's; the other buttons are drawn in the theme beside it
+   * (CarThemedStrip), and typing needs Android Auto's keyboard page anyway.
+   */
+  private fun searchStrip(): ActionStrip =
+      ActionStrip.Builder()
+          .addAction(
+              Action.Builder()
+                  .setIcon(carIcon(GameIcon.SEARCH))
+                  .setOnClickListener { search() }
+                  .build()
+          )
+          .build()
+
   init {
     navigationManagerBridge.start(scope)
     observeJob =
         viewModel.navigationUiState
             .onEach {
               uiState = it
-              invalidate()
+              // Android Auto's list over the map doesn't change with each fix; the map under it does on its own.
+              if (panel == null || themedLists) invalidate()
             }
             .launchIn(scope)
-    themeStore.theme.onEach { invalidate() }.launchIn(scope)
+    // The Settings list shows changes from the phone's remote, and its own toggles, at once.
+    merge(themeStore.carDetails, themeStore.carMapTime, themeStore.carCamButton, viewModel.cameraBeep)
+        .onEach { if (panel == CarPanel.Settings && !themedLists) invalidate() }
+        .launchIn(scope)
+    themeStore.carTheme.onEach { invalidate() }.launchIn(scope)
     themeStore.carGameHud.onEach { invalidate() }.launchIn(scope)
     // The phone's route preview shows on the car too, with Start and Cancel.
     viewModel.planner.onEach { invalidate() }.launchIn(scope)
     carContext.onBackPressedDispatcher.addCallback(this, cancelPreviewOnBack)
+    // Added last, so it runs first: a panel closes before Back reaches the preview.
+    carContext.onBackPressedDispatcher.addCallback(this, panelBack)
 
     // Buttons drawn on the map (+ Cam, Home and Work, the preview card's Start and Cancel), pressed
     // through map taps. Each takes at least Android Auto's minimum touch target, 76 x 76 dp, around
@@ -128,6 +292,22 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
     // nearer button wins.
     passTapsTo { x, y, shift ->
       val now = System.currentTimeMillis()
+      if (panel != null && themedLists) {
+        val parts = CarTapTargets.panelTargets.entries.filter { it.key != "panel" }.map { (key, target) -> Triple(key, target.first, target.second) }
+        val inside = CarTapTargets.panelTargets["panel"]?.first
+        val hit =
+            listOf(Offset(x + shift, y), Offset(x, y)).firstNotNullOfOrNull { tap ->
+              parts.filter { (_, rect, _) -> rect.forCarTouch(carDensity).contains(tap) }.minByOrNull { (_, rect, _) -> (rect.center - tap).getDistanceSquared() }
+            }
+        when {
+          hit != null -> {
+            CarTapTargets.pressed.value = hit.first to now
+            hit.third()
+          }
+          inside == null || listOf(Offset(x + shift, y), Offset(x, y)).none { inside.contains(it) } -> open(null)
+        }
+        return@passTapsTo
+      }
       CarTapTargets.touchedAt.longValue = now
       val previewing = viewModel.planner.value.preview != null
       // Map buttons that came up with this very touch (see MapButtons) aren't pressed by it.
@@ -140,6 +320,16 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
       val targets =
           listOfNotNull(
               CarTapTargets.camera?.let { it to { viewModel.markCamera() } },
+              // The menu row that comes up with a touch, once it's up: that touch presses nothing.
+              *CarTapTargets.stripTargets.entries
+                  .filter { !previewing && buttonsSettled }
+                  .map { (key, target) -> target.first to press(key, target.second) }
+                  .toTypedArray(),
+              // The "Where to?" card, always there while it shows.
+              *CarTapTargets.cardTargets.entries
+                  .filter { !previewing }
+                  .map { (key, target) -> target.first to press(key, target.second) }
+                  .toTypedArray(),
               CarTapTargets.mute?.takeIf { buttonsSettled }?.let { it to press("mute") { viewModel.toggleMute() } },
               CarTapTargets.zoomIn?.takeIf { buttonsSettled }?.let { it to press("zoomIn") { zoomBy(1.0) } },
               CarTapTargets.zoomOut?.takeIf { buttonsSettled }?.let { it to press("zoomOut") { zoomBy(-1.0) } },
@@ -184,7 +374,7 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
 
   @Composable
   override fun content() {
-    val theme by themeStore.theme.collectAsState()
+    val theme by themeStore.carTheme.collectAsState()
     val surfaceArea by screenSurfaceState(surfaceAreaTracker)
     // From the stable area: the part Android Auto keeps clear even while its buttons show. The
     // visible area changes as they come and go, and the arrow moved with it.
@@ -268,11 +458,13 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
         mapState = state,
         cameraOptions = cameraOptions,
         surfaceAreaTracker = surfaceAreaTracker,
+        panelActions = panelActions,
     )
   }
 
   override fun onGetTemplate(): Template {
-    val theme = themeStore.theme.value
+    panel?.takeIf { !themedLists }?.let { return hostPanelTemplate(it) }
+    val theme = themeStore.carTheme.value
     val state = uiState
     val tripState = state?.tripState
     if (state != null && state.isNavigating() && tripState != null) {
@@ -288,7 +480,7 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
               tripState.progress()?.let { setDestinationTravelEstimate(it.toMetricTravelEstimate(timeColor)) }
             }
           }
-          .setActionStrip(
+          .setActionStrip(if (themeStore.carGameHud.value) searchStrip() else
               ActionStrip.Builder()
                   .addAction(
                       Action.Builder()
@@ -300,17 +492,16 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
                   .addAction(
                       Action.Builder()
                           .setTitle(carContext.getString(R.string.nearby))
-                          .setOnClickListener { screenManager.push(CarNearbyScreen(carContext)) }
+                          .setOnClickListener { showNearby() }
                           .build()
                   )
                   .addAction(
                       Action.Builder()
                           .setTitle(carContext.getString(R.string.settings))
-                          .setOnClickListener { screenManager.push(CarSettingsScreen(carContext)) }
+                          .setOnClickListener { showSettings() }
                           .build()
                   )
-                  .build()
-          )
+                  .build())
           .apply {
             // With the game HUD, its own themed map buttons stand in for these (see MapButtons).
             // PAN alone still has to be there: without it Android Auto keeps drags and pinches on
@@ -355,19 +546,19 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
             .addAction(
                 Action.Builder()
                     .setTitle(carContext.getString(R.string.nearby))
-                    .setOnClickListener { screenManager.push(CarNearbyScreen(carContext)) }
+                    .setOnClickListener { showNearby() }
                     .build()
             )
             .addAction(
                 Action.Builder()
                     .setTitle(carContext.getString(R.string.saved))
-                    .setOnClickListener { screenManager.push(SavedPlacesScreen(carContext)) }
+                    .setOnClickListener { showSaved() }
                     .build()
             )
             .addAction(
                 Action.Builder()
                     .setTitle(carContext.getString(R.string.settings))
-                    .setOnClickListener { screenManager.push(CarSettingsScreen(carContext)) }
+                    .setOnClickListener { showSettings() }
                     .build()
             )
             .build()
@@ -377,7 +568,7 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
             setNavigationInfo(MessageInfo.Builder(theme.name).setText(carContext.getString(R.string.car_idle_hint)).build())
           }
         }
-        .setActionStrip(idleActions)
+        .setActionStrip(if (themeStore.carGameHud.value) searchStrip() else idleActions)
         .setMapActionStrip(
             // The game HUD draws its own zoom and re-centre buttons (see MapButtons); PAN stays so
             // the map can still be dragged and pinched.

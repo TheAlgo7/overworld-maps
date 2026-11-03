@@ -20,10 +20,12 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.math.sqrt
 import org.maplibre.compose.camera.CameraProjection
 import org.maplibre.compose.camera.CameraState
 import org.maplibre.spatialk.geojson.Position
@@ -76,9 +78,13 @@ fun ViEdgeMarkers(camera: CameraState, destination: GeographicCoordinate?, room:
     destination?.let { d ->
       val target = Position(d.lng, d.lat)
       val p = projection.screenLocationFromPosition(target)
-      // On the map: the map's own waypoint shows it. The projection of a point past the horizon can
-      // still land inside the frame, so it also has to be in the region the camera really sees.
-      val onMap = p.x in left..right && p.y in top..bottom && sees(projection, target)
+      // On the map: the map's own waypoint shows it, anywhere in the frame. Testing against the HUD's
+      // inset box put a second dot on the edge beside a waypoint plainly in view near the top of the
+      // tilted car map. The projection of a point past the horizon can still land inside the frame,
+      // so it also has to map back to itself.
+      val half = WAYPOINT_SIZE / 2
+      val inFrame = p.x in half..(maxWidth - half) && p.y in half..(maxHeight - half)
+      val onMap = inFrame && inFront(projection, p, target, position.target)
       if (!onMap) EdgeDisc(border(bearing(position.target, target) - position.bearing), WAYPOINT_SIZE, Vi.Pink, Color(0xFF2A0F1C))
     }
   }
@@ -94,20 +100,23 @@ private fun EdgeDisc(at: DpOffset, size: Dp, fill: Color, ring: Color, content: 
   }
 }
 
-/** Whether [p] is inside the ground the camera shows (its near and far corners). */
-private fun sees(projection: CameraProjection, p: Position): Boolean {
-  val v = projection.queryVisibleRegion()
-  val quad = listOf(v.nearLeft, v.nearRight, v.farRight, v.farLeft)
-  var inside = false
-  for (i in quad.indices) {
-    val a = quad[i]
-    val b = quad[(i + 1) % quad.size]
-    if ((a.latitude > p.latitude) != (b.latitude > p.latitude)) {
-      val x = a.longitude + (p.latitude - a.latitude) / (b.latitude - a.latitude) * (b.longitude - a.longitude)
-      if (p.longitude < x) inside = !inside
-    }
-  }
-  return inside
+/**
+ * Whether [target], drawn at [screen], is really on the ground in view: the ground under that
+ * screen point is [target] again. A point behind the camera or past the horizon projects into the
+ * frame too, but the ground under its screen point is somewhere else.
+ */
+private fun inFront(projection: CameraProjection, screen: DpOffset, target: Position, from: Position): Boolean {
+  val back = projection.positionFromScreenLocation(screen)
+  return metres(back, target) < 30.0 + 0.05 * metres(from, target)
+}
+
+private fun metres(a: Position, b: Position): Double {
+  val la1 = Math.toRadians(a.latitude)
+  val la2 = Math.toRadians(b.latitude)
+  val dla = la2 - la1
+  val dlo = Math.toRadians(b.longitude - a.longitude)
+  val h = sin(dla / 2) * sin(dla / 2) + cos(la1) * cos(la2) * sin(dlo / 2) * sin(dlo / 2)
+  return 2 * 6_371_000.0 * asin(sqrt(h))
 }
 
 /** The initial bearing from [a] to [b], degrees clockwise from north. */

@@ -46,7 +46,7 @@ class CarPreviewActivity : ComponentActivity() {
     }
     val cluster = intent.getBooleanExtra("cluster", false)
     setContent {
-      val theme by AppModule.themeStore.theme.collectAsState()
+      val theme by AppModule.themeStore.carTheme.collectAsState()
       val viewModel = AppModule.viewModel
       val uiState by viewModel.navigationUiState.collectAsState()
       // The whole window stands in for the area Android Auto leaves free, as on the car screen.
@@ -55,8 +55,8 @@ class CarPreviewActivity : ComponentActivity() {
       // The same camera as CarNavigationScreen: the game's tilt, the arrow low and right of centre.
       val driveCamera = theme.skin.driveCamera
       val zoom = 16.4 + driveCamera.zoomOffset
-      // The cluster's arrow is centred across (CarClusterScreen).
-      val follow = safeStablePadding(area, top = 0.45f, start = if (cluster) 0f else 0.25f)
+      // The cluster's arrow is centred across and 70% down (CarClusterScreen).
+      val follow = safeStablePadding(area, top = if (cluster) 0.4f else 0.45f, start = if (cluster) 0f else 0.25f)
       val cameraOptions =
           navigationCameraOptions()
               .copy(

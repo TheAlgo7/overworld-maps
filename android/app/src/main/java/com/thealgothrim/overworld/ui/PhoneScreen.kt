@@ -80,6 +80,21 @@ import org.maplibre.spatialk.geojson.Position
  */
 @Composable
 fun PhoneScreen(viewModel: OverworldViewModel = AppModule.viewModel) {
+  // With Android Auto on, the phone is the car's remote (RemoteScreen); "Phone map" brings the map
+  // back until the car disconnects, and Back returns to the remote.
+  val projecting = rememberCarProjecting()
+  var phoneMap by rememberSaveable { mutableStateOf(false) }
+  LaunchedEffect(projecting) { if (!projecting) phoneMap = false }
+  if (projecting && !phoneMap) {
+    RemoteScreen(viewModel, onShowMap = { phoneMap = true })
+    return
+  }
+  BackHandler(projecting) { phoneMap = false }
+  PhoneMapScreen(viewModel)
+}
+
+@Composable
+private fun PhoneMapScreen(viewModel: OverworldViewModel) {
   val theme by AppModule.themeStore.theme.collectAsState()
   val spec = theme.spec
   val uiState by viewModel.navigationUiState.collectAsState()

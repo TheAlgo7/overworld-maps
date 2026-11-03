@@ -135,7 +135,7 @@ fun BoxScope.MapLayersSheet(theme: OverworldTheme, onClose: () -> Unit) {
 }
 
 @Composable
-private fun ThemeCard(spec: SkinSpec, t: OverworldTheme, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+internal fun ThemeCard(spec: SkinSpec, t: OverworldTheme, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
   val frame = if (selected) spec.accent else spec.fg.copy(alpha = 0.25f)
   // GTA VI's cards are rounded like the rest of its glass.
   val shape = RoundedCornerShape(if (spec.vi) 10.dp else 0.dp)
@@ -165,7 +165,7 @@ private fun ThemeCard(spec: SkinSpec, t: OverworldTheme, selected: Boolean, modi
 }
 
 @Composable
-private fun ToggleRow(spec: SkinSpec, title: String, subtitle: String, checked: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun ToggleRow(spec: SkinSpec, title: String, subtitle: String, checked: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
   Row(
       Modifier.fillMaxWidth().heightIn(min = 58.dp).then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier).padding(vertical = 8.dp),
       verticalAlignment = Alignment.CenterVertically,
@@ -186,7 +186,7 @@ private fun ToggleRow(spec: SkinSpec, title: String, subtitle: String, checked: 
 }
 
 @Composable
-private fun Tick(color: Color) {
+internal fun Tick(color: Color) {
   Canvas(Modifier.size(16.dp)) {
     val s = size.width
     val tick = Path().apply { moveTo(s * 0.15f, s * 0.55f); lineTo(s * 0.42f, s * 0.8f); lineTo(s * 0.88f, s * 0.22f) }

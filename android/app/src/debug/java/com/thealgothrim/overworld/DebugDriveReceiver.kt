@@ -36,6 +36,27 @@ class DebugDriveReceiver : BroadcastReceiver() {
     val vm = AppModule.viewModel
     when (intent.action) {
       "com.thealgothrim.overworld.DEBUG_STOP" -> vm.stopNavigation()
+      // --es open settings|saved|nearby|none: the car's themed panel, for screenshots.
+      "com.thealgothrim.overworld.DEBUG_PANEL" ->
+          com.thealgothrim.overworld.ui.CarPanels.open =
+              when (intent.getStringExtra("open")) {
+                "settings" -> com.thealgothrim.overworld.ui.CarPanel.Settings
+                "saved" -> com.thealgothrim.overworld.ui.CarPanel.Saved
+                "nearby" -> com.thealgothrim.overworld.ui.CarPanel.NearbyKinds
+                else -> null
+              }
+      // --es as home|work --es name X --ef lat --ef lng: set Home or Work without tapping through the phone.
+      "com.thealgothrim.overworld.DEBUG_SAVE" -> {
+        val place =
+            com.thealgothrim.overworld.search.Place(
+                intent.getStringExtra("name") ?: "Home",
+                "",
+                GeographicCoordinate(intent.getFloatExtra("lat", 0f).toDouble(), intent.getFloatExtra("lng", 0f).toDouble()),
+            )
+        if (intent.getStringExtra("as") == "work") AppModule.saved.setWork(place) else AppModule.saved.setHome(place)
+      }
+      // --ez on true|false: the phone's car remote without a car (RemoteScreen).
+      "com.thealgothrim.overworld.DEBUG_REMOTE" -> com.thealgothrim.overworld.ui.CarRemote.forced = intent.getBooleanExtra("on", true)
       "com.thealgothrim.overworld.DEBUG_CHIME" -> com.thealgothrim.overworld.traffic.CameraChime.play(context)
       // How fast a virtual display like the car's runs, with and without asking for 60 Hz (logcat
       // under DebugDrive). Works with the phone locked: nothing shows on its screen.
@@ -145,10 +166,17 @@ class DebugDriveReceiver : BroadcastReceiver() {
         )
       }
       "com.thealgothrim.overworld.DEBUG_DRIVE" -> {
-        intent.getStringExtra("theme")?.let { AppModule.themeStore.select(it) }
+        intent.getStringExtra("theme")?.let {
+          // Both screens: the car keeps its own theme since 0.5.9.
+          AppModule.themeStore.select(it)
+          AppModule.themeStore.selectCar(it)
+        }
         // --es time night (auto, day, dusk, night): GTA VI's time-of-day palette, as in Settings.
         intent.getStringExtra("time")?.let { t ->
-          runCatching { com.thealgothrim.overworld.theme.MapTime.valueOf(t.uppercase()) }.getOrNull()?.let { AppModule.themeStore.setMapTime(it) }
+          runCatching { com.thealgothrim.overworld.theme.MapTime.valueOf(t.uppercase()) }.getOrNull()?.let {
+            AppModule.themeStore.setMapTime(it)
+            AppModule.themeStore.setCarMapTime(it)
+          }
         }
         if (intent.hasExtra("lat") && intent.hasExtra("lng")) {
           val to = GeographicCoordinate(intent.getFloatExtra("lat", 0f).toDouble(), intent.getFloatExtra("lng", 0f).toDouble())

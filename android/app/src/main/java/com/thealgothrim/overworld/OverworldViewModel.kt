@@ -496,6 +496,12 @@ class OverworldViewModel :
           .distinctUntilChanged()
           .stateIn(viewModelScope, SharingStarted.Eagerly, variantFor(AppModule.themeStore.theme.value, AppModule.themeStore.mapTime.value))
 
+  /** [mapVariant] for the car screen, which keeps its own theme and time of day. */
+  val carMapVariant: StateFlow<String?> =
+      combine(AppModule.themeStore.carTheme, AppModule.themeStore.carMapTime, everyMinute()) { theme, time, _ -> variantFor(theme, time) }
+          .distinctUntilChanged()
+          .stateIn(viewModelScope, SharingStarted.Eagerly, variantFor(AppModule.themeStore.carTheme.value, AppModule.themeStore.carMapTime.value))
+
   private fun variantFor(theme: OverworldTheme, time: MapTime): String? {
     if (theme.variants.isEmpty()) return null
     val at = startPoint

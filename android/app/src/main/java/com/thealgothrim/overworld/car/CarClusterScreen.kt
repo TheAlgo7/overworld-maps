@@ -1,6 +1,7 @@
 package com.thealgothrim.overworld.car
 
 import android.content.Intent
+import android.graphics.Rect
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.Session
@@ -12,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.rallista.car.app.compose.ComposableScreen
@@ -22,6 +24,7 @@ import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.screenSurfaceState
 import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.R
 import com.thealgothrim.overworld.map.AutoZoomEffect
+import com.thealgothrim.overworld.map.CLUSTER_REACH
 import com.thealgothrim.overworld.map.OverworldClusterMap
 import com.thealgothrim.overworld.map.animatedPadding
 import com.thealgothrim.overworld.map.driveCamera
@@ -43,8 +46,8 @@ class OverworldClusterSession : Session() {
 
 /**
  * The cluster's map (see OverworldClusterMap). Nothing on a cluster can be touched, so it only
- * follows the car heading-up, on a trip or not, with the arrow centred across and three quarters
- * down, where GTA VI's minimap keeps it.
+ * follows the car heading-up, on a trip or not, with the arrow centred across and low, about 70%
+ * down, so most of the map is road ahead.
  */
 class CarClusterScreen(carContext: CarContext) : ComposableScreen(carContext) {
   private val surfaceAreaTracker = SurfaceAreaTracker { surfaceGestureCallback = it }
@@ -62,19 +65,24 @@ class CarClusterScreen(carContext: CarContext) : ComposableScreen(carContext) {
 
   @Composable
   override fun content() {
-    val theme by AppModule.themeStore.theme.collectAsState()
+    val theme by AppModule.themeStore.carTheme.collectAsState()
     val surfaceArea by screenSurfaceState(surfaceAreaTracker)
     val driveCamera = theme.skin.driveCamera
     val zoom = CLUSTER_ZOOM + driveCamera.zoomOffset
     val navState = AppModule.viewModel.navigationUiState.collectAsState()
     val tilt = rememberDriveTilt(driveCamera, navState)
-    // Inside the room the car leaves free of its own turn and time cards.
-    val room = safeStablePadding(surfaceArea?.stableArea)
-    val follow = animatedPadding(safeStablePadding(surfaceArea?.stableArea, top = 0.45f), "cluster-follow")
+    // Inside the room the car leaves free of its own turn and time cards. The Curvv's cluster
+    // reports no such room, and with none the arrow sat dead centre (his 2 Nov video): the whole
+    // surface stands in then, and the arrow sits low, clear of the odometer strip the car draws
+    // along the bottom.
+    val surface = LocalWindowInfo.current.containerSize
+    val area = surfaceArea?.stableArea ?: Rect(0, 0, surface.width, surface.height)
+    val room = safeStablePadding(area)
+    val follow = animatedPadding(safeStablePadding(area, top = FOLLOW_TOP), "cluster-follow")
     val cameraOptions =
         navigationCameraOptions().copy(browsingPadding = follow, navigationPadding = follow, navigationZoom = zoom, navigationTilt = tilt)
     val state = rememberOverworldMapState(cameraOptions, initialCameraMode = NavigationCameraMode.FOLLOW_USER_WITH_BEARING)
-    AutoZoomEffect(state, navState, base = zoom)
+    AutoZoomEffect(state, navState, base = zoom, reach = CLUSTER_REACH)
     val navigating = navState.value.isNavigating()
     LaunchedEffect(navigating, state) {
       if (navigating) {
@@ -99,3 +107,6 @@ class CarClusterScreen(carContext: CarContext) : ComposableScreen(carContext) {
 
 /** The cluster's following zoom at about 40 km/h, before the theme's own offset: a little wider than the car screen's, for its smaller map. */
 private const val CLUSTER_ZOOM = 16.1
+
+/** The arrow's place: the share of the room above the camera's centre, so the arrow is (1 + this) / 2 down. */
+private const val FOLLOW_TOP = 0.4f

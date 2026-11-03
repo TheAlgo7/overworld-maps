@@ -73,6 +73,9 @@ object AppModule {
   private val defaultStartLocation =
       UserLocation(defaultStart, 6.0, null, Instant.now(), null)
 
+  /** Whether a newer Overworld is out (see UpdateCheck). */
+  val updates: UpdateCheck by lazy { UpdateCheck(context, httpClient) }
+
   val httpClient: OkHttpClient by lazy {
     OkHttpClient.Builder()
         .callTimeout(Duration.ofSeconds(20))

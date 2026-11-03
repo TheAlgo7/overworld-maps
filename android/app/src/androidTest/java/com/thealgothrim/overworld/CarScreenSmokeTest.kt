@@ -37,7 +37,10 @@ class CarScreenSmokeTest {
     val appContext = instrumentation.targetContext
     AppModule.init(appContext)
     val store = AppModule.themeStore
-    main { store.select("gta5") }
+    main {
+      store.select("gta5")
+      store.selectCar("gta5")
+    }
     // Android Auto card mode first: the idle message and the turn card come from the host.
     main { store.setCarGameHud(false) }
 
@@ -54,12 +57,23 @@ class CarScreenSmokeTest {
     assertEquals("GTA V", message.title.toString())
     val titles = idle.actionStrip!!.actions.map { it.title.toString() }
     assertEquals(listOf("Search", "Nearby", "Saved", "Settings"), titles)
+    // Settings opens the themed panel over the map by default...
+    main { idle.actionStrip!!.actions[3].onClickDelegate!!.sendClick(NoopCallback) }
+    assertEquals(com.thealgothrim.overworld.ui.CarPanel.Settings, com.thealgothrim.overworld.ui.CarPanels.open)
+    main { idle.actionStrip!!.actions[3].onClickDelegate!!.sendClick(NoopCallback) }
+    assertEquals(null, com.thealgothrim.overworld.ui.CarPanels.open)
+    // ...and Android Auto's own list with the themed lists off (a separate screen where the head
+    // unit's Car App API level is unknown, as in this test).
+    main { store.setCarThemedLists(false) }
     main { idle.actionStrip!!.actions[3].onClickDelegate!!.sendClick(NoopCallback) }
     val settings = main { (screen.screenManager.top as com.thealgothrim.overworld.car.CarSettingsScreen).onGetTemplate() } as androidx.car.app.model.ListTemplate
     assertEquals(listOf("Map", "Driving"), settings.sectionedLists.map { it.header.toString() })
     val themeRow = settings.sectionedLists[0].itemList.items[0] as androidx.car.app.model.Row
     main { themeRow.onClickDelegate!!.sendClick(NoopCallback) }
-    assertEquals("rdr2", store.theme.value.id)
+    // The car's own theme: the phone keeps its.
+    assertEquals("rdr2", store.carTheme.value.id)
+    assertEquals("gta5", store.theme.value.id)
+    main { store.setCarThemedLists(true) }
 
     // A real trip: Valhalla route, simulated driving, started with the phone app open.
     appContext.startActivity(
@@ -81,7 +95,7 @@ class CarScreenSmokeTest {
     val routing = driving.navigationInfo as RoutingInfo
     assertNotNull("no current step on the turn card", routing.currentStep)
     assertNotNull("no ETA", driving.destinationTravelEstimate)
-    val expected = store.theme.value.carCard.toArgb()
+    val expected = store.carTheme.value.carCard.toArgb()
     assertEquals(CarColor.TYPE_CUSTOM, driving.backgroundColor!!.type)
     assertEquals(expected, driving.backgroundColor!!.color)
     assertEquals(4, driving.mapActionStrip!!.actions.size)
@@ -100,7 +114,10 @@ class CarScreenSmokeTest {
     assertEquals(null, gameHud.destinationTravelEstimate)
 
     AppModule.viewModel.stopNavigation()
-    main { store.select("gta5") }
+    main {
+      store.select("gta5")
+      store.selectCar("gta5")
+    }
   }
 
   private object NoopCallback : androidx.car.app.OnDoneCallback

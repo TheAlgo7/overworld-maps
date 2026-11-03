@@ -25,7 +25,9 @@ import uniffi.ferrostar.VisualInstructionContent
  * and U-turns for right-hand traffic; where traffic keeps left (India) they are mirrored, with the
  * side swapped, so roundabouts circle clockwise and U-turns curl right. "End of road" (a
  * T-junction) draws the crossing road as a thin hollow bar that reads as a glitch at card size;
- * Google shows a plain turn there, so do we.
+ * Google shows a plain turn there, so do we. ManeuverImage also draws nothing when the step has no
+ * modifier, which is how Valhalla sends "arrive" (GTA VI's pink square sat empty for the last
+ * stretch of every trip): no modifier means straight on.
  */
 @Composable
 fun TurnArrow(content: VisualInstructionContent, side: DrivingSide?, tint: Color, modifier: Modifier = Modifier) {
@@ -44,6 +46,7 @@ private fun VisualInstructionContent.drawnArrow(context: Context, side: DrivingS
     return context.resources.getIdentifier("direction_$name", "drawable", context.packageName) != 0
   }
   val given = maneuverType ?: return Arrow(this, false)
+  val maneuverModifier = maneuverModifier ?: ManeuverModifier.STRAIGHT
   val type =
       when (given) {
         ManeuverType.EXIT_ROUNDABOUT -> ManeuverType.ROUNDABOUT
@@ -56,10 +59,10 @@ private fun VisualInstructionContent.drawnArrow(context: Context, side: DrivingS
   val uTurn = keepsLeft && maneuverModifier == ManeuverModifier.U_TURN
   val tries =
       listOf(
-          Triple(type, if (circles) maneuverModifier?.otherSide() else maneuverModifier, circles || uTurn),
+          Triple(type, if (circles) maneuverModifier.otherSide() else maneuverModifier, circles || uTurn),
           Triple(ManeuverType.TURN, maneuverModifier, uTurn),
           Triple(ManeuverType.CONTINUE, maneuverModifier, uTurn),
-          Triple(ManeuverType.CONTINUE, null, false),
+          Triple(ManeuverType.CONTINUE, ManeuverModifier.STRAIGHT, false),
       )
   val (t, m, mirrored) = tries.firstOrNull { (t, m, _) -> drawn(t, m) } ?: return Arrow(this, false)
   return Arrow(copy(maneuverType = t, maneuverModifier = m), mirrored)

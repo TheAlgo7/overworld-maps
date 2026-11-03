@@ -110,10 +110,8 @@ data class MapDetails(
     val signals: Boolean,
     val incidents: Boolean,
     val buildings3d: Boolean = true,
-    /** The game's shop and place icons on the phone map. */
+    /** The game's shop and place icons. */
     val placeIcons: Boolean = true,
-    /** The same on the car screen, where some drivers want only roads (switched from the car's Settings too). */
-    val carPlaceIcons: Boolean = true,
 )
 
 /** The time-of-day setting for themes with day, dusk and night palettes. */
@@ -135,7 +133,11 @@ enum class MapTime(val label: String) {
   fun next() = entries[(ordinal + 1) % entries.size]
 }
 
-/** The selected theme, shared by the phone and the Android Auto screen. */
+/**
+ * The selected theme and map settings. The phone and the Android Auto screen each keep their own
+ * (GTA V on the phone, GTA VI in the car, say), like Google Maps keeps its car settings apart; the
+ * car's start out as the phone's were.
+ */
 class ThemeStore(context: Context) {
   private val prefs = context.getSharedPreferences("overworld", Context.MODE_PRIVATE)
   private val _theme = MutableStateFlow(byId(prefs.getString(KEY, null)))
@@ -149,6 +151,20 @@ class ThemeStore(context: Context) {
   fun cycle() {
     val i = THEMES.indexOfFirst { it.id == _theme.value.id }
     select(THEMES[(i + 1) % THEMES.size].id)
+  }
+
+  private val _carTheme = MutableStateFlow(byId(prefs.getString(KEY_CAR_THEME, null) ?: prefs.getString(KEY, null)))
+  /** The car screen's theme (and its instrument cluster's). */
+  val carTheme: StateFlow<OverworldTheme> = _carTheme.asStateFlow()
+
+  fun selectCar(id: String) {
+    _carTheme.value = byId(id)
+    prefs.edit { putString(KEY_CAR_THEME, id) }
+  }
+
+  fun cycleCar() {
+    val i = THEMES.indexOfFirst { it.id == _carTheme.value.id }
+    selectCar(THEMES[(i + 1) % THEMES.size].id)
   }
 
   private val _carGameHud = MutableStateFlow(prefs.getBoolean(KEY_CAR_HUD, true))
@@ -172,6 +188,18 @@ class ThemeStore(context: Context) {
     prefs.edit { putBoolean(KEY_CAR_CAM, on) }
   }
 
+  private val _carThemedLists = MutableStateFlow(prefs.getBoolean(KEY_CAR_LISTS, true))
+  /**
+   * The car's Settings, Saved and Nearby drawn by Overworld in the theme, over the map. Off: Android
+   * Auto's own plain lists beside the map (the kind Play's Android Auto review expects).
+   */
+  val carThemedLists: StateFlow<Boolean> = _carThemedLists.asStateFlow()
+
+  fun setCarThemedLists(on: Boolean) {
+    _carThemedLists.value = on
+    prefs.edit { putBoolean(KEY_CAR_LISTS, on) }
+  }
+
   private val _useGoogle = MutableStateFlow(prefs.getBoolean(KEY_GOOGLE, true))
   /** Routes, traffic times and search from Google Maps (see routing/GoogleMaps.kt); off uses only the open services. */
   val useGoogle: StateFlow<Boolean> = _useGoogle.asStateFlow()
@@ -191,6 +219,16 @@ class ThemeStore(context: Context) {
     prefs.edit { putString(KEY_MAP_TIME, time.name) }
   }
 
+  private val _carMapTime =
+      MutableStateFlow(runCatching { MapTime.valueOf(prefs.getString(KEY_CAR_MAP_TIME, null) ?: "") }.getOrDefault(_mapTime.value))
+  /** The car screen's time of day. */
+  val carMapTime: StateFlow<MapTime> = _carMapTime.asStateFlow()
+
+  fun setCarMapTime(time: MapTime) {
+    _carMapTime.value = time
+    prefs.edit { putString(KEY_CAR_MAP_TIME, time.name) }
+  }
+
   private val _details = MutableStateFlow(
       MapDetails(
           traffic = prefs.getBoolean("detail_traffic", false),
@@ -198,7 +236,6 @@ class ThemeStore(context: Context) {
           incidents = prefs.getBoolean("detail_incidents", true),
           buildings3d = prefs.getBoolean("detail_buildings3d", true),
           placeIcons = prefs.getBoolean("detail_place_icons", true),
-          carPlaceIcons = prefs.getBoolean("detail_car_place_icons", true),
       )
   )
   /** Map details, like Google Maps' layers: live traffic, traffic lights and incidents. */
@@ -212,7 +249,32 @@ class ThemeStore(context: Context) {
       putBoolean("detail_incidents", d.incidents)
       putBoolean("detail_buildings3d", d.buildings3d)
       putBoolean("detail_place_icons", d.placeIcons)
-      putBoolean("detail_car_place_icons", d.carPlaceIcons)
+    }
+  }
+
+  private val _carDetails = MutableStateFlow(
+      _details.value.let { phone ->
+        MapDetails(
+            traffic = prefs.getBoolean("car_detail_traffic", phone.traffic),
+            signals = prefs.getBoolean("car_detail_signals", phone.signals),
+            incidents = prefs.getBoolean("car_detail_incidents", phone.incidents),
+            buildings3d = prefs.getBoolean("car_detail_buildings3d", phone.buildings3d),
+            // Before the car had its own details, its place icons were this one switch.
+            placeIcons = prefs.getBoolean("detail_car_place_icons", true),
+        )
+      }
+  )
+  /** The car screen's map details, switched from its own Settings. */
+  val carDetails: StateFlow<MapDetails> = _carDetails.asStateFlow()
+
+  fun setCarDetails(d: MapDetails) {
+    _carDetails.value = d
+    prefs.edit {
+      putBoolean("car_detail_traffic", d.traffic)
+      putBoolean("car_detail_signals", d.signals)
+      putBoolean("car_detail_incidents", d.incidents)
+      putBoolean("car_detail_buildings3d", d.buildings3d)
+      putBoolean("detail_car_place_icons", d.placeIcons)
     }
   }
 
@@ -220,8 +282,11 @@ class ThemeStore(context: Context) {
     private const val KEY = "theme"
     private const val KEY_CAR_HUD = "car_game_hud"
     private const val KEY_CAR_CAM = "car_cam_button"
+    private const val KEY_CAR_LISTS = "car_themed_lists"
     private const val KEY_GOOGLE = "use_google"
     private const val KEY_MAP_TIME = "map_time"
+    private const val KEY_CAR_THEME = "car_theme"
+    private const val KEY_CAR_MAP_TIME = "car_map_time"
 
     /** Ids before the 2026-09-28 rename. */
     private val LEGACY = mapOf("metro" to "gta5", "frontier" to "rdr2", "vice" to "gta6")

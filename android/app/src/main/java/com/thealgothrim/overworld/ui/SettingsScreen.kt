@@ -95,13 +95,21 @@ fun SettingsScreen(
   val cameraBeep by AppModule.viewModel.cameraBeep.collectAsState()
   val marked by AppModule.cameras.all.collectAsState()
   val live = AppModule.traffic.hasLiveTraffic
+  val update by AppModule.updates.available.collectAsState()
   val (lockedReady, setUpLocked) = rememberLockedPhoneSetup()
   var selected by remember { mutableStateOf<String?>(null) }
 
   val detailsOn =
       listOf(details.traffic && live, details.signals, details.incidents && live, theme.buildings3d && details.buildings3d).count { it }
   val sections =
-      listOf(
+      listOfNotNull(
+          // A newer Overworld is out: first, so it's seen.
+          update?.let { u ->
+            Section(
+                "Update",
+                listOf(Setting("Update available", "A newer Overworld is out. Tap to get it.", value = u.label) { AppModule.updates.open(u) }),
+            )
+          },
           Section(
               "Map",
               listOfNotNull(

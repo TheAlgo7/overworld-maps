@@ -10,6 +10,7 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -81,15 +82,19 @@ fun BoxScope.CarGameHud(
     remaining: Double?,
     hazard: HazardAhead?,
     preview: RoutePreview?,
+    /** The themed strip's and panel's actions (see CarThemedStrip); no strip without them. */
+    actions: CarPanelActions? = null,
 ) {
   val spec = theme.spec
+  val trip = uiState.isNavigating() && uiState.progress != null
   val progress = uiState.progress
   val lost by AppModule.viewModel.gpsLost.collectAsState()
   if (!uiState.isNavigating() || progress == null) {
     val estimate by AppModule.viewModel.estimatedKmh.collectAsState()
     // GPS speed, or the speed worked out from movement when a fix has none.
     val moving = rememberFreeDriving(uiState.location?.speed?.value ?: estimate?.div(3.6) ?: 0.0)
-    if (preview == null) MapButtons(spec, uiState, Modifier.align(Alignment.BottomEnd).padding(bottom = 24.dp), trip = false)
+    // Under the themed panel they showed through it; it has its own buttons.
+    if (preview == null && CarPanels.open == null) MapButtons(spec, uiState, Modifier.align(Alignment.BottomEnd).padding(bottom = 24.dp), trip = false)
     when {
       preview != null -> Appear(Modifier.align(Alignment.TopStart)) { PreviewCard(spec, preview, extras, Modifier) }
       lost -> Appear(Modifier.align(Alignment.TopStart)) { LostCard(spec, Modifier) }
@@ -97,7 +102,10 @@ fun BoxScope.CarGameHud(
       // Google's free drive. The "Where to?" card comes back once the car is parked.
       moving -> {
         StreetLine(spec, listOfNotNull(area), Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp))
-        hazard?.let { HazardRow(spec, it, Modifier.align(Alignment.TopStart).widthIn(max = 420.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 14.dp), textSize = 20.sp, icon = 40.dp) }
+        Column(Modifier.align(Alignment.TopStart), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          hazard?.let { HazardRow(spec, it, Modifier.widthIn(max = 420.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 14.dp), textSize = 20.sp, icon = 40.dp) }
+          actions?.let { CarMenuReveal(spec, trip = false, actions = it) }
+        }
         val speed = rememberSpeedNow(uiState)
         // The speedometer in the same corner as on a trip, over the limit sign and + Cam.
         Column(Modifier.align(Alignment.BottomStart)) {
@@ -108,12 +116,17 @@ fun BoxScope.CarGameHud(
           }
         }
       }
-      else -> Appear(Modifier.align(Alignment.TopStart)) { ParkedCard(spec, Modifier) }
+      else -> Appear(Modifier.align(Alignment.TopStart)) { if (actions != null) CarWhereToCard(spec, actions) else ParkedCard(spec, Modifier) }
     }
     return
   }
 
-  Appear(Modifier.align(Alignment.TopStart)) { TurnCard(spec, uiState, hazard, Modifier) }
+  // Nearby, Settings and End come up under the turn card at a touch. Over the speedometer they
+  // widened the time card's column and pushed the limit sign aside.
+  Column(Modifier.align(Alignment.TopStart), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Appear(Modifier) { TurnCard(spec, uiState, hazard, Modifier) }
+    actions?.let { CarMenuReveal(spec, trip = true, actions = it) }
+  }
 
   Row(Modifier.align(Alignment.BottomStart).fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
     val left = remaining ?: progress.durationRemaining
@@ -143,7 +156,7 @@ fun BoxScope.CarGameHud(
     // Keeps the street name clear of the map buttons on the right.
     Spacer(Modifier.width(96.dp))
   }
-  MapButtons(spec, uiState, Modifier.align(Alignment.BottomEnd).padding(bottom = 24.dp))
+  if (CarPanels.open == null) MapButtons(spec, uiState, Modifier.align(Alignment.BottomEnd).padding(bottom = 24.dp))
 }
 
 @Composable
@@ -229,6 +242,14 @@ object CarTapTargets {
   @Volatile var overviewUpAt = 0L
   /** The map button last pressed and when, for its pulse. */
   val pressed = mutableStateOf<Pair<String, Long>?>(null)
+  /** Android Auto's own list is open beside the map (Settings, Saved, Nearby): the HUD keeps to the part it leaves. */
+  val panelOpen = mutableStateOf(false)
+  /** The "Where to?" card's parts (see CarWhereToCard), always pressable while it shows. */
+  val cardTargets = java.util.concurrent.ConcurrentHashMap<String, Pair<Rect, () -> Unit>>()
+  /** The menu row that comes up with a touch (see CarMenuReveal), by key. */
+  val stripTargets = java.util.concurrent.ConcurrentHashMap<String, Pair<Rect, () -> Unit>>()
+  /** The themed car panel's tap areas (see CarPanelView), by key; "panel" is the panel itself. */
+  val panelTargets = java.util.concurrent.ConcurrentHashMap<String, Pair<Rect, () -> Unit>>()
 }
 
 /**
@@ -400,7 +421,11 @@ private const val STOPPED_SPEED = 1.0
 private const val STOPPED_HOLD_MS = 180_000L
 
 /** The map buttons show for this long after a touch, as long as Android Auto keeps its own up (10 s). */
-private const val CAM_SHOWN_MS = 10_000L
+/**
+ * Android Auto's own buttons stay 10 s after the last touch (measured on the DHU, 3 Nov). Ours hear
+ * of the touch a few frames late, so they count from that moment for a little less, to leave with it.
+ */
+private const val CAM_SHOWN_MS = 9_750L
 
 /**
  * A card that fades and settles in (a slight grow on a soft spring) when it appears, instead of
@@ -428,14 +453,15 @@ private fun Appear(modifier: Modifier, content: @Composable () -> Unit) {
  * strip) it read as "up" for good and kept ours on.
  */
 @Composable
-private fun rememberTouchedRecently(): Boolean {
+internal fun rememberTouchedRecently(): Boolean {
   val hostUp by CarTapTargets.hostButtonsUp
   val touchedAt by CarTapTargets.touchedAt
   var touched by remember { mutableStateOf(false) }
   LaunchedEffect(touchedAt) {
     if (touchedAt == 0L) return@LaunchedEffect
     touched = true
-    delay(CAM_SHOWN_MS)
+    // From the touch itself, not from when this ran.
+    delay((CAM_SHOWN_MS - (System.currentTimeMillis() - touchedAt)).coerceAtLeast(0L))
     touched = false
   }
   // Android Auto's buttons went away after the touch: ours go too.
@@ -462,8 +488,10 @@ private fun MapButtons(spec: SkinSpec, uiState: NavigationUiState, modifier: Mod
   val zoomHeld by CarTapTargets.zoomHeld
   val moved = !following || zoomHeld
   val shown = rememberTouchedRecently()
-  val enter = fadeIn(com.thealgothrim.overworld.map.layoutSpring()) + slideInHorizontally(com.thealgothrim.overworld.map.layoutSpring()) { it / 2 }
-  val exit = fadeOut() + slideOutHorizontally { it / 2 }
+  // A quick plain fade, like Android Auto's own buttons beside them: they used to slide in on a
+  // spring and landed after Android Auto's had already appeared, which looked off.
+  val enter = fadeIn(tween(HOST_FADE_MS))
+  val exit = fadeOut(tween(HOST_FADE_MS))
   // With no trip there's no route to show, so only re-centre.
   val bottomShown = if (trip) shown || moved else moved
   // The tap that brings buttons up is not a press of one (see passTapsTo).
@@ -506,3 +534,4 @@ private fun MapButton(spec: SkinSpec, icon: GameIcon, key: String, label: String
     else -> SkinRoundButton(spec, icon, {}, modifier.size(60.dp))
   }
 }
+

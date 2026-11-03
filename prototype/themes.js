@@ -693,9 +693,10 @@
         paint: { "text-color": L.road, "text-halo-color": L.roadHalo, "text-halo-width": 1.4, "text-opacity": 0.85 },
       });
     }
-    if (m.pois && !car) {
+    if (m.pois) {
       // Shops and services as the game's blips: RDR2's black discs, GTA V's white pictograms,
       // GTA VI's rounded squares (icons ship in the app's local sprite, cut from the games' blips).
+      // The car gets them too, a size up for arm's length (its Settings switch turns them off).
       const P = m.pois === true ? { prefix: "poi-" } : m.pois;
       // A kind with its own icon comes before the broader one it's part of: a theme without that
       // icon (not in its "only") leaves those places to the broader kind.
@@ -754,7 +755,7 @@
         // Collisions still thin them (icon-padding), the important first (sort key).
         layout: {
           "icon-image": icon,
-          "icon-size": P.size || 0.95, "symbol-sort-key": ["coalesce", ["get", "rank"], 99], "icon-padding": 4,
+          "icon-size": (P.size || 0.95) * (car ? 1.15 : 1), "symbol-sort-key": ["coalesce", ["get", "rank"], 99], "icon-padding": 4,
         },
       });
     }

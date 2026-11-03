@@ -69,17 +69,25 @@ fun ComposableScreen.passTapsTo(onTap: (x: Float, y: Float, shift: Float) -> Uni
           if (up && CarTapTargets.hostButtonsUp.value == false) CarTapTargets.touchedAt.longValue = System.currentTimeMillis()
           CarTapTargets.hostButtonsUp.value = up
         }
-        override fun onScroll(distanceX: Float, distanceY: Float) {
-          // A drag counts as a touch: the map buttons come up for it too.
-          CarTapTargets.touchedAt.longValue = System.currentTimeMillis()
-          inner.onScroll(distanceX, distanceY)
+        // A drag or pinch counts as a touch: the map buttons come up for it too. Noted a few times a
+        // second, not on every event: each note restarts the buttons' timers and redraws them.
+        fun touched(now: Long) {
+          if (now - CarTapTargets.touchedAt.longValue > TOUCH_NOTE_MS) CarTapTargets.touchedAt.longValue = now
         }
-        override fun onFling(velocityX: Float, velocityY: Float) = inner.onFling(velocityX, velocityY)
+        override fun onScroll(distanceX: Float, distanceY: Float) {
+          touched(System.currentTimeMillis())
+          CarMapGestures.active?.scroll(distanceX, distanceY) ?: inner.onScroll(distanceX, distanceY)
+        }
+        override fun onFling(velocityX: Float, velocityY: Float) {
+          CarMapGestures.active?.fling(velocityX, velocityY) ?: inner.onFling(velocityX, velocityY)
+        }
         override fun onScale(focusX: Float, focusY: Float, scaleFactor: Float) {
           // A pinch: the driver's own zoom, held like the + / - buttons' (see AutoZoomEffect).
-          CarTapTargets.zoomedAt.longValue = System.currentTimeMillis()
-          CarTapTargets.touchedAt.longValue = CarTapTargets.zoomedAt.longValue
-          inner.onScale(focusX + windowShift(width, visible), focusY, scaleFactor)
+          val now = System.currentTimeMillis()
+          if (now - CarTapTargets.zoomedAt.longValue > TOUCH_NOTE_MS) CarTapTargets.zoomedAt.longValue = now
+          touched(now)
+          val x = if (focusX >= 0f) focusX + windowShift(width, visible) else focusX
+          CarMapGestures.active?.scale(x, focusY, scaleFactor) ?: inner.onScale(x, focusY, scaleFactor)
         }
 
         override fun onClick(x: Float, y: Float) = onTap(x, y, windowShift(width, visible))
@@ -108,3 +116,4 @@ internal fun windowShift(width: Int, visible: Rect?): Float {
 }
 
 private const val TAG = "CarSurface"
+private const val TOUCH_NOTE_MS = 250L

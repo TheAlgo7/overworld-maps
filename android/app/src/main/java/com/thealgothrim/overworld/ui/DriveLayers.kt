@@ -276,7 +276,7 @@ private fun SheetIconButton(spec: SkinSpec, icon: GameIcon, onClick: () -> Unit,
 
 /** The turn banner, in the game's HUD box. Adds a "Then" strip when the next turn follows quickly. */
 @Composable
-private fun TurnBanner(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardAhead?) {
+internal fun TurnBanner(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardAhead?) {
   val content = uiState.visualInstruction?.primaryContent
   val distance = uiState.progress?.distanceToNextManeuver?.let(::formatDistance).orEmpty()
   val road = content?.text?.trim().orEmpty()

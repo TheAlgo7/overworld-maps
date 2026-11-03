@@ -35,21 +35,31 @@ val Skin.driveCamera: DriveCamera
       }
 
 /**
+ * How far the following camera may pull back. The main car screen and the phone stay close in like
+ * the games' minimaps; the instrument cluster's small map, seen past the steering wheel, pulls back
+ * further at speed and frames turns from further out, so it reads at a glance.
+ */
+data class ZoomReach(val speed: Double, val frameOut: Double)
+
+val SCREEN_REACH = ZoomReach(speed = 1.2, frameOut = MAX_FRAME_OUT)
+val CLUSTER_REACH = ZoomReach(speed = 1.7, frameOut = 1.3)
+
+/**
  * The zoom Google Maps would pick: closer in slow city traffic and before a turn, pulled back on a
  * fast straight road so more of it ahead shows. [base] is the zoom at about 40 km/h.
  */
-fun autoZoom(base: Double, speedMs: Double?, toTurnMetres: Double?): Double {
+fun autoZoom(base: Double, speedMs: Double?, toTurnMetres: Double?, reach: ZoomReach = SCREEN_REACH): Double {
   val kmh = (speedMs ?: 0.0) * 3.6
-  // 20 km/h and under: base + 0.4. 110 km/h and over: base - 0.8. The games' minimaps stay close
-  // in; pulled back further, the tilted 3D map turned into a sea of rooftops.
-  var zoom = base + 0.4 - ((kmh - 20.0).coerceIn(0.0, 90.0) / 90.0) * 1.2
+  // 20 km/h and under: base + 0.4. 110 km/h and over: base - 0.8 (the screen's reach). The games'
+  // minimaps stay close in; pulled back further, the tilted 3D map turned into a sea of rooftops.
+  var zoom = base + 0.4 - ((kmh - 20.0).coerceIn(0.0, 90.0) / 90.0) * reach.speed
   if (toTurnMetres != null) {
     // A long way to the next turn on a fast road: a little further out still.
     if (toTurnMetres > 2_000 && kmh > 50) zoom -= 0.3
     // The turn coming up from 1.5 km: out far enough to show it, as Google Maps frames the next
     // turn. Overworld used to notice it only 400 m out (Android navigation study, section 1).
     if (toTurnMetres in 400.0..1_500.0) {
-      val framed = (base + log2(FRAME_METRES / toTurnMetres)).coerceAtLeast(base - MAX_FRAME_OUT)
+      val framed = (base + log2(FRAME_METRES / toTurnMetres)).coerceAtLeast(base - reach.frameOut)
       zoom = minOf(zoom, framed)
     }
     // From 400 m out, come in to base + 0.8 by the last 80 m.
@@ -73,11 +83,13 @@ fun AutoZoomEffect(
     held: MutableState<Boolean>? = null,
     release: State<Long>? = null,
     zoomedAt: State<Long>? = null,
+    reach: ZoomReach = SCREEN_REACH,
 ) {
   LaunchedEffect(state, base) {
     var written: Double? = null
     var heldUntil = 0L
     var lastFrame = 0L
+    var arrived = false
     var released = release?.value
     var zoomed = zoomedAt?.value
     fun report(on: Boolean) {
@@ -118,10 +130,18 @@ fun AutoZoomEffect(
         continue
       }
       val ui = uiState.value
-      val target = autoZoom(base, ui.location?.speed?.value, ui.progress?.distanceToNextManeuver?.takeIf { ui.isNavigating() })
+      val target = autoZoom(base, ui.location?.speed?.value, ui.progress?.distanceToNextManeuver?.takeIf { ui.isNavigating() }, reach)
       val dt = if (lastFrame == 0L) 16L else (now - lastFrame).coerceIn(1L, 250L)
       lastFrame = now
       val gap = target - position.zoom
+      // The first frame of following goes straight to the zoom: eased at 0.6 levels a second, the
+      // map opened in the car on the whole district and crept in for about four seconds.
+      if (!arrived) {
+        arrived = true
+        state.cameraState.position = position.copy(zoom = target)
+        written = target
+        continue
+      }
       if (abs(gap) < 0.01) {
         written = position.zoom
         delay(250)

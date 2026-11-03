@@ -1,5 +1,10 @@
 package com.thealgothrim.overworld.ui
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -119,7 +124,12 @@ fun BoxScope.BrowseLayer(
           modifier = Modifier.weight(1f),
       )
       Spacer(Modifier.width(10.dp))
-      SkinRoundButton(spec, GameIcon.SETTINGS, onSettings)
+      // A dot when a newer Overworld is out (Settings says which and where).
+      val update by AppModule.updates.available.collectAsState()
+      Box {
+        SkinRoundButton(spec, GameIcon.SETTINGS, onSettings)
+        if (update != null) Box(Modifier.align(Alignment.TopEnd).size(14.dp).background(spec.accent, CircleShape).border(2.dp, Color.Black, CircleShape))
+      }
     }
 
     if (searchOpen) {
@@ -128,30 +138,7 @@ fun BoxScope.BrowseLayer(
         if (planner.query.isBlank()) {
           SavedList(spec, saved, here, shortcutHint, onChoose)
         } else {
-          val results = planner.results
-          if (results.isEmpty()) {
-            SkinText(
-                when {
-                  planner.searching -> "Searching…"
-                  planner.nearby != null -> "Nothing found within 10 km."
-                  else -> "No places found. For a place only Google Maps knows, open it there, tap Share and pick Overworld."
-                },
-                spec.body, 16.sp, spec.sub, Modifier.padding(16.dp), maxLines = 3,
-            )
-          }
-          results.forEachIndexed { i, place ->
-            if (i > 0) SkinDivider(spec)
-            SkinRow(
-                spec,
-                place.name,
-                { focus.clearFocus(); onChoose(place) },
-                // Along a trip the note ("On the way · 2.4 km ahead", "+3 min") leads.
-                subtitle = listOfNotNull(place.note, place.detail.takeIf { it.isNotBlank() }).joinToString("  ·  "),
-                icon = planner.nearby?.icon ?: GameIcon.PIN,
-                highlighted = i == 0,
-                trailing = here?.let { formatDistance(distanceMeters(it, place.coordinate)) },
-            )
-          }
+          SearchResults(spec, planner, here) { focus.clearFocus(); onChoose(it) }
         }
       }
     } else if (destination == null) {
@@ -205,8 +192,37 @@ fun BoxScope.BrowseLayer(
   }
 }
 
+/** Search or Nearby results, best first, or why there are none. */
 @Composable
-private fun SearchBar(
+internal fun SearchResults(spec: SkinSpec, planner: PlannerState, here: GeographicCoordinate?, onChoose: (Place) -> Unit) {
+  val results = planner.results
+  if (results.isEmpty()) {
+    SkinText(
+        when {
+          planner.searching -> "Searching…"
+          planner.nearby != null -> "Nothing found within 10 km."
+          else -> "No places found. For a place only Google Maps knows, open it there, tap Share and pick Overworld."
+        },
+        spec.body, 16.sp, spec.sub, Modifier.padding(16.dp), maxLines = 3,
+    )
+  }
+  results.forEachIndexed { i, place ->
+    if (i > 0) SkinDivider(spec)
+    SkinRow(
+        spec,
+        place.name,
+        { onChoose(place) },
+        // Along a trip the note ("On the way · 2.4 km ahead", "+3 min") leads.
+        subtitle = listOfNotNull(place.note, place.detail.takeIf { it.isNotBlank() }).joinToString("  ·  "),
+        icon = planner.nearby?.icon ?: GameIcon.PIN,
+        highlighted = i == 0,
+        trailing = here?.let { formatDistance(distanceMeters(it, place.coordinate)) },
+    )
+  }
+}
+
+@Composable
+internal fun SearchBar(
     spec: SkinSpec,
     query: String,
     placeName: String?,
@@ -257,7 +273,7 @@ private fun SearchBar(
 }
 
 @Composable
-private fun SavedList(spec: SkinSpec, saved: SavedState, here: GeographicCoordinate?, hint: String?, onChoose: (Place) -> Unit) {
+internal fun SavedList(spec: SkinSpec, saved: SavedState, here: GeographicCoordinate?, hint: String?, onChoose: (Place) -> Unit) {
   fun away(p: Place) = here?.let { formatDistance(distanceMeters(it, p.coordinate)) }
   hint?.let { SkinText(it, spec.body, 15.sp, spec.good, Modifier.padding(14.dp), maxLines = 3) }
   var rows = 0
@@ -287,7 +303,7 @@ private fun SavedList(spec: SkinSpec, saved: SavedState, here: GeographicCoordin
 
 /** The place sheet: name, address, distance, and Directions / Save. */
 @Composable
-private fun PlaceSheet(
+internal fun PlaceSheet(
     spec: SkinSpec,
     place: Place,
     planner: PlannerState,

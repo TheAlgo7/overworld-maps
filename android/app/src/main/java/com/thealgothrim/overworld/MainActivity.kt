@@ -1,5 +1,7 @@
 package com.thealgothrim.overworld
 
+import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -102,6 +104,8 @@ class MainActivity : ComponentActivity() {
     // are started here but never shut down with this screen.
     AppModule.startVoice()
     AppModule.viewModel.mapInView(true)
+    // A newer version out? (Settings shows a dot.) At most every few hours.
+    lifecycleScope.launch { AppModule.updates.check() }
   }
 
   override fun onStop() {
