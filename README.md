@@ -45,9 +45,9 @@ It is a personal project, built first for one car: a Tata Curvv with a 10.25-inc
 
 ## Get it
 
-**On the phone:** download the APK from the [latest release](https://github.com/TheAlgo7/overworld-maps/releases/latest) and open it (Android 10 or newer; allow installs from your browser or files app when asked). This build uses free stand-in fonts in place of the games' own (see [Game fonts and art](#game-fonts-and-art)) and takes live traffic from Google alone.
+**On the phone:** download the APK from the [latest release](https://github.com/TheAlgo7/overworld-maps/releases/latest) and open it (Android 10 or newer; allow installs from your browser or files app when asked). **The APK is for the phone only: it doesn't show up in Android Auto.** It uses free stand-in fonts in place of the games' own (see [Game fonts and art](#game-fonts-and-art)) and takes live traffic from Google alone.
 
-**In the car:** Android Auto only shows navigation apps installed from Google Play, so the car needs the Play copy. Overworld is in testing on Google Play: join the [Algothrim testers group](https://groups.google.com/g/algothrim-testers) with the Google account on your phone, then open [Overworld's Play testing page](https://play.google.com/apps/testing/com.thealgothrim.overworld) on the phone, tap **Become a tester** and install. Updates arrive as ordinary Play Store updates. The APK and the Play copy are signed differently, so uninstall one before installing the other.
+**In the car:** Android Auto only shows navigation apps installed from Google Play, so the car needs the Play copy. Testers on the APK found it missing from their car's screen, and the Play copy works there. Overworld is in testing on Google Play: email your Gmail address to [gaurav@thealgothrim.com](mailto:gaurav@thealgothrim.com?subject=Overworld%20Play%20testing) to be added, then open the invite link on your phone, tap **Become a tester** and install. Updates arrive as ordinary Play Store updates. The APK and the Play copy are signed differently, so uninstall one before installing the other.
 
 ## Screenshots
 
