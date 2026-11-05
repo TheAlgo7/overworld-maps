@@ -1,12 +1,15 @@
 package com.thealgothrim.overworld.car
 
 import android.content.Intent
+import android.content.res.Configuration
 import androidx.car.app.CarAppService
 import androidx.car.app.Screen
 import androidx.car.app.ScreenManager
 import androidx.car.app.Session
 import androidx.car.app.SessionInfo
 import androidx.car.app.validation.HostValidator
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import com.thealgothrim.overworld.AppModule
 import uniffi.ferrostar.GeographicCoordinate
 
@@ -23,14 +26,34 @@ class OverworldCarAppService : CarAppService() {
 }
 
 class OverworldCarSession : Session() {
+  init {
+    lifecycle.addObserver(
+        object : DefaultLifecycleObserver {
+          // Car gone: Auto on the car's map goes back to following the sun until the next one reports.
+          override fun onDestroy(owner: LifecycleOwner) = AppModule.viewModel.setCarDark(null)
+        }
+    )
+  }
+
   override fun onCreateScreen(intent: Intent): Screen {
     AppModule.init(carContext)
     // Voice prompts must work even if the phone app was never opened this session.
     AppModule.startVoice()
     AppModule.ferrostarCore.spokenInstructionObserver = AppModule.spokenInstructions
     AppModule.viewModel.refreshLocationPermission()
+    AppModule.viewModel.setCarDark(carContext.isDarkMode)
     navigateTo(intent)
-    return CarNavigationScreen(carContext)
+    val map = CarNavigationScreen(carContext)
+    if (AppModule.viewModel.locationAllowed.value) return map
+    // Opened in the car before location was ever allowed (a fresh install): say so on the car
+    // screen, over the map, which waits underneath (see CarLocationScreen).
+    carContext.getCarService(ScreenManager::class.java).push(map)
+    return CarLocationScreen(carContext)
+  }
+
+  /** The car switched between day and night (dusk, a tunnel, headlights): the map follows. */
+  override fun onCarConfigurationChanged(newConfiguration: Configuration) {
+    AppModule.viewModel.setCarDark(carContext.isDarkMode)
   }
 
   /**

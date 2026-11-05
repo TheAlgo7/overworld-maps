@@ -11,6 +11,8 @@ import androidx.car.app.model.Template
 import androidx.car.app.model.Toggle
 import androidx.lifecycle.lifecycleScope
 import com.thealgothrim.overworld.AppModule
+import com.thealgothrim.overworld.theme.MapTime
+import com.thealgothrim.overworld.theme.OverworldTheme
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
@@ -48,7 +50,7 @@ internal fun carSettingsTemplate(withBack: Boolean): ListTemplate {
           .addItem(
               Row.Builder()
                   .setTitle("Theme")
-                  .addText("${theme.name}. Tap for the next game's map.")
+                  .addText("${theme.name}${fixedLook(theme)}. Tap for the next game's map.")
                   .setOnClickListener { store.cycleCar() }
                   .build()
           )
@@ -58,7 +60,7 @@ internal fun carSettingsTemplate(withBack: Boolean): ListTemplate {
               addItem(
                   Row.Builder()
                       .setTitle("Time of day")
-                      .addText("${time.label}. Tap to step through Auto, Day, Dusk and Night.")
+                      .addText("${if (time == MapTime.AUTO) "Auto, with the car's day and night" else time.label}. Tap to step through Auto, Day, Dusk and Night.")
                       .setOnClickListener { store.setCarMapTime(time.next()) }
                       .build()
               )
@@ -85,6 +87,14 @@ internal fun carSettingsTemplate(withBack: Boolean): ListTemplate {
       .addSectionedList(SectionedItemList.create(driving, "Driving"))
       .build()
 }
+
+/** A theme with one map whatever the hour says so: GTA V's is always dark, Red Dead's always paper. */
+private fun fixedLook(theme: OverworldTheme): String =
+    when {
+      theme.variants.isNotEmpty() -> ""
+      theme.dark -> ", always dark"
+      else -> ", always light"
+    }
 
 private fun toggle(title: String, text: String?, on: Boolean, set: (Boolean) -> Unit): Row =
     Row.Builder()

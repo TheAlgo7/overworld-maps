@@ -36,7 +36,7 @@ internal fun savedPlacesTemplate(withBack: Boolean, onPick: (Place) -> Unit): Li
           .distinctBy { (_, p) -> p.coordinate }
           .take(MAX_ROWS)
 
-  val list = ItemList.Builder().setNoItemsMessage("Save places on your phone to see them here.")
+  val list = ItemList.Builder().setNoItemsMessage(com.thealgothrim.overworld.ui.NO_SAVED_PLACES)
   entries.forEach { (title, place) ->
     list.addItem(
         Row.Builder()

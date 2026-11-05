@@ -7,5 +7,6 @@
     <string name="nearby">Nearby</string>
     <string name="start">Start</string>
     <string name="cancel">Cancel</string>
-    <string name="car_idle_hint">Tap Search or Nearby, or pick a place on your phone</string>
+    <!-- Never send the driver to the phone from the car screen (Android for Cars rule VI-1). -->
+    <string name="car_idle_hint">Tap Search or Nearby to find a place</string>
 </resources>

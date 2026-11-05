@@ -130,6 +130,16 @@ enum class MapTime(val label: String) {
         NIGHT -> "night"
       }
 
+  /**
+   * The car screen's palette. There Auto follows the car itself, the day and night Android Auto
+   * reports from the car's light sensor or headlights (the same switch that recolours Android Auto's
+   * own cards): the day map when the car says day, the night map when it says night, as Android for
+   * Cars rule MR-1 asks of every map by default. Dusk is mid-grey, neither, so in the car it shows
+   * only when held. [carDark] is null until a car has reported; Auto follows the sun till then.
+   */
+  fun carVariant(carDark: Boolean?, bySun: String?): String? =
+      if (this == AUTO && carDark != null) (if (carDark) "night" else null) else variant(bySun)
+
   fun next() = entries[(ordinal + 1) % entries.size]
 }
 
@@ -153,7 +163,10 @@ class ThemeStore(context: Context) {
     select(THEMES[(i + 1) % THEMES.size].id)
   }
 
-  private val _carTheme = MutableStateFlow(byId(prefs.getString(KEY_CAR_THEME, null) ?: prefs.getString(KEY, null)))
+  // A theme picked on the phone carries over to the car as before. A first install starts the car on
+  // GTA VI, the theme with both a day and a night map, so the car screen follows the car's day and
+  // night from the start (Android for Cars rule MR-1); GTA V's map is always dark, Red Dead's always paper.
+  private val _carTheme = MutableStateFlow(byId(prefs.getString(KEY_CAR_THEME, null) ?: prefs.getString(KEY, null) ?: CAR_FIRST_THEME))
   /** The car screen's theme (and its instrument cluster's). */
   val carTheme: StateFlow<OverworldTheme> = _carTheme.asStateFlow()
 
@@ -287,6 +300,8 @@ class ThemeStore(context: Context) {
     private const val KEY_MAP_TIME = "map_time"
     private const val KEY_CAR_THEME = "car_theme"
     private const val KEY_CAR_MAP_TIME = "car_map_time"
+    /** The car's theme on a first install (see _carTheme). */
+    private const val CAR_FIRST_THEME = "gta6"
 
     /** Ids before the 2026-09-28 rename. */
     private val LEGACY = mapOf("metro" to "gta5", "frontier" to "rdr2", "vice" to "gta6")

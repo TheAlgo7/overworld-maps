@@ -362,7 +362,8 @@ private fun LostCard(spec: SkinSpec, modifier: Modifier) {
 
 /**
  * Parked with no trip: "Where to?" with Home and Work one tap away (pressed through map taps, see
- * CarTapTargets), like Google's suggestions. Without either saved, it says where to set them.
+ * CarTapTargets), like Google's suggestions. Without either saved, it points to Search and Nearby,
+ * never to the phone (Android for Cars rule VI-1).
  */
 @Composable
 private fun ParkedCard(spec: SkinSpec, modifier: Modifier) {
@@ -376,7 +377,7 @@ private fun ParkedCard(spec: SkinSpec, modifier: Modifier) {
   Column(modifier.widthIn(max = 420.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 16.dp)) {
     SkinText(spec.title("Where to?"), spec.title, spec.titleSize(if (spec.vi) 32.sp else 28.sp, 32.sp), spec.fg, spacing = spec.titleSpacing)
     if (saved.home == null && saved.work == null) {
-      SkinText("Tap Search or Nearby, or set Home and Work on your phone.", spec.body, 19.sp, spec.sub, Modifier.padding(top = 4.dp), maxLines = 2)
+      SkinText("Tap Search or Nearby to find a place.", spec.body, 19.sp, spec.sub, Modifier.padding(top = 4.dp), maxLines = 2)
     } else {
       Row(Modifier.padding(top = 12.dp)) {
         if (saved.home != null) {

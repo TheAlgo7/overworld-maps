@@ -40,7 +40,13 @@ class OverworldClusterSession : Session() {
   override fun onCreateScreen(intent: Intent): Screen {
     AppModule.init(carContext)
     AppModule.viewModel.refreshLocationPermission()
+    // The cluster can come up before the main screen: it reports the car's day and night too.
+    AppModule.viewModel.setCarDark(carContext.isDarkMode)
     return CarClusterScreen(carContext)
+  }
+
+  override fun onCarConfigurationChanged(newConfiguration: android.content.res.Configuration) {
+    AppModule.viewModel.setCarDark(carContext.isDarkMode)
   }
 }
 

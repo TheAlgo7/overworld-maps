@@ -162,7 +162,8 @@ class DebugDriveReceiver : BroadcastReceiver() {
                 "${extras.trafficSpans.size} traffic spans, eta=${extras.eta?.travelSeconds} " +
                 "voice=${AppModule.ttsObserver.tts != null} muted=${AppModule.ttsObserver.isMuted} " +
                 "theme=${AppModule.themeStore.theme.value.id} fade=${AppModule.themeStore.theme.value.routeFade} " +
-                "palette=${vm.mapVariant.value ?: "day"} left=${ui.progress?.distanceRemaining?.toInt()} m",
+                "palette=${vm.mapVariant.value ?: "day"} carTheme=${AppModule.themeStore.carTheme.value.id} " +
+                "carPalette=${vm.carMapVariant.value ?: "day"} left=${ui.progress?.distanceRemaining?.toInt()} m",
         )
       }
       "com.thealgothrim.overworld.DEBUG_DRIVE" -> {
@@ -178,6 +179,9 @@ class DebugDriveReceiver : BroadcastReceiver() {
             AppModule.themeStore.setCarMapTime(it)
           }
         }
+        // --es car_dark true|false|none: the car's day or night as Android Auto would report it,
+        // for the car preview on an emulator (Auto in the car follows it; see MapTime.carVariant).
+        intent.getStringExtra("car_dark")?.let { vm.setCarDark(it.toBooleanStrictOrNull()) }
         if (intent.hasExtra("lat") && intent.hasExtra("lng")) {
           val to = GeographicCoordinate(intent.getFloatExtra("lat", 0f).toDouble(), intent.getFloatExtra("lng", 0f).toDouble())
           // --ez test false: a real trip from the phone's GPS position instead of a simulated one.

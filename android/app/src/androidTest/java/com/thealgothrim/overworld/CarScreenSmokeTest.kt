@@ -55,6 +55,8 @@ class CarScreenSmokeTest {
     val idle = main { screen.onGetTemplate() } as NavigationTemplate
     val message = idle.navigationInfo as MessageInfo
     assertEquals("GTA V", message.title.toString())
+    // Nothing on the car screen sends the driver to the phone (Play's Android Auto review, rule VI-1).
+    assertTrue("car idle text mentions the phone: ${message.text}", message.text?.toString()?.contains("phone") != true)
     val titles = idle.actionStrip!!.actions.map { it.title.toString() }
     assertEquals(listOf("Search", "Nearby", "Saved", "Settings"), titles)
     // Settings opens the themed panel over the map by default...
@@ -118,6 +120,22 @@ class CarScreenSmokeTest {
       store.select("gta5")
       store.selectCar("gta5")
     }
+  }
+
+  /**
+   * Opened in the car before location was allowed: the car screen says the next step is on the phone,
+   * only when it's safe, and Allow works only parked (Play's Android Auto review, rule VI-1).
+   */
+  @Test
+  fun locationScreenSendsToThePhoneOnlyWhenSafe() {
+    val appContext = instrumentation.targetContext
+    AppModule.init(appContext)
+    val template = main {
+      com.thealgothrim.overworld.car.CarLocationScreen(TestCarContext.createCarContext(appContext)).onGetTemplate()
+    } as androidx.car.app.model.MessageTemplate
+    assertTrue(template.message.toString().contains("Only look at your phone when it's safe"))
+    assertEquals(listOf("Allow"), template.actions.map { it.title.toString() })
+    assertTrue("Allow must work only while parked", template.actions[0].onClickDelegate!!.isParkedOnly)
   }
 
   private object NoopCallback : androidx.car.app.OnDoneCallback

@@ -183,7 +183,8 @@ private fun Header(spec: SkinSpec, theme: OverworldTheme, onShowMap: () -> Unit)
   Row(Modifier.fillMaxWidth().skinPanel(spec).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
     Column(Modifier.weight(1f)) {
       SkinText(spec.title("Car remote"), spec.title, spec.titleSize(if (spec.vi) 28.sp else 26.sp, 30.sp), spec.fg, spacing = spec.titleSpacing)
-      SkinText("Android Auto is on. ${theme.name} on the car screen.", spec.body, 14.sp, spec.sub, maxLines = 2)
+      // Android for Cars rule VI-1: the phone is looked at only when it's safe.
+      SkinText("Android Auto is on. Only look at your phone when it's safe.", spec.body, 14.sp, spec.sub, maxLines = 2)
     }
     Spacer(Modifier.width(10.dp))
     SkinSecondaryButton(spec, "Phone map", onShowMap, icon = GameIcon.LAYERS)
@@ -266,7 +267,7 @@ private fun CarScreenSettings(spec: SkinSpec, theme: OverworldTheme) {
       }
       if (theme.variants.isNotEmpty()) {
         Spacer(Modifier.height(14.dp))
-        SkinText("Time of day", spec.body, 15.sp, spec.sub)
+        SkinText("Time of day. Auto follows the car's day and night.", spec.body, 15.sp, spec.sub)
         Spacer(Modifier.height(6.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
           MapTime.entries.forEach { t ->

@@ -238,7 +238,7 @@ private fun SavedBody(spec: SkinSpec, actions: CarPanelActions) {
             if (kept.any { metres(it.second.coordinate, next.second.coordinate) < SAME_SPOT_M }) kept else kept + next
           }
           .take(MAX_ROWS)
-  if (entries.isEmpty()) SkinText("Save places on your phone to see them here.", spec.body, 18.sp, spec.sub, maxLines = 2)
+  if (entries.isEmpty()) SkinText(NO_SAVED_PLACES, spec.body, 18.sp, spec.sub, maxLines = 2)
   entries.forEach { (title, place, icon) ->
     PlaceRow(spec, "saved-${place.coordinate.lat},${place.coordinate.lng}", title, if (title != place.name) place.name else place.detail, away(place), icon) { actions.pickSaved(place) }
   }
@@ -450,7 +450,7 @@ fun CarWhereToCard(spec: SkinSpec, actions: CarPanelActions, modifier: Modifier 
       SkinText(spec.title("Where to?"), spec.title, spec.titleSize(if (spec.vi) 30.sp else 28.sp, 32.sp), spec.fg, Modifier.weight(1f), spacing = spec.titleSpacing)
       PanelButton(spec, "card-search", GameIcon.SEARCH, actions::search, CarTapTargets.cardTargets)
     }
-    if (places.isEmpty()) SkinText("Search, or set Home and Work on your phone.", spec.body, 18.sp, spec.sub, maxLines = 2)
+    if (places.isEmpty()) SkinText("Search for a place, or tap Nearby.", spec.body, 18.sp, spec.sub, maxLines = 2)
     places.forEach { (title, place, icon) ->
       // The distance under the name, not beside it: the card stays narrow, like Google's.
       val sub = listOfNotNull((if (title != place.name) place.name else place.detail).takeIf { it.isNotBlank() }, away(place)).joinToString("  ·  ")
@@ -467,6 +467,9 @@ fun CarWhereToCard(spec: SkinSpec, actions: CarPanelActions, modifier: Modifier 
  * frames later, so they fade in and out quicker than its to arrive and leave with it.
  */
 internal const val HOST_FADE_MS = 70
+
+/** The car's empty Saved list: what shows there, never "go to your phone" (Android for Cars rule VI-1). */
+internal const val NO_SAVED_PLACES = "Home, Work and starred places show up here."
 
 private val PANEL_WIDTH = 560.dp
 /** Home, Work and recent places on the "Where to?" card. */

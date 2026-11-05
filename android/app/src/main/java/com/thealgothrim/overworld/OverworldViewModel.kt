@@ -125,6 +125,8 @@ class OverworldViewModel :
   private val locationProvider = AppModule.locationProvider
 
   private val hasLocationPermission = MutableStateFlow(false)
+  /** Whether location is allowed; the car's location screen closes itself when it turns true. */
+  val locationAllowed: StateFlow<Boolean> = hasLocationPermission.asStateFlow()
   private val lastLocation = MutableStateFlow<UserLocation?>(null)
   /** Which way the last fixes moved, for when GPS gives no course of its own. */
   @Volatile private var movementHeading: Double? = null
@@ -496,16 +498,28 @@ class OverworldViewModel :
           .distinctUntilChanged()
           .stateIn(viewModelScope, SharingStarted.Eagerly, variantFor(AppModule.themeStore.theme.value, AppModule.themeStore.mapTime.value))
 
-  /** [mapVariant] for the car screen, which keeps its own theme and time of day. */
-  val carMapVariant: StateFlow<String?> =
-      combine(AppModule.themeStore.carTheme, AppModule.themeStore.carMapTime, everyMinute()) { theme, time, _ -> variantFor(theme, time) }
-          .distinctUntilChanged()
-          .stateIn(viewModelScope, SharingStarted.Eagerly, variantFor(AppModule.themeStore.carTheme.value, AppModule.themeStore.carMapTime.value))
+  private val carDark = MutableStateFlow<Boolean?>(null)
 
-  private fun variantFor(theme: OverworldTheme, time: MapTime): String? {
-    if (theme.variants.isEmpty()) return null
+  /** The car's own day or night, as Android Auto reports it (null: no car connected). See MapTime.carVariant. */
+  fun setCarDark(dark: Boolean?) {
+    carDark.value = dark
+  }
+
+  /** [mapVariant] for the car screen, which keeps its own theme and time of day, and whose Auto follows the car. */
+  val carMapVariant: StateFlow<String?> =
+      combine(AppModule.themeStore.carTheme, AppModule.themeStore.carMapTime, carDark, everyMinute()) { theme, time, dark, _ -> carVariantFor(theme, time, dark) }
+          .distinctUntilChanged()
+          .stateIn(viewModelScope, SharingStarted.Eagerly, carVariantFor(AppModule.themeStore.carTheme.value, AppModule.themeStore.carMapTime.value, carDark.value))
+
+  private fun variantFor(theme: OverworldTheme, time: MapTime): String? =
+      if (theme.variants.isEmpty()) null else time.variant(sunPhase())
+
+  private fun carVariantFor(theme: OverworldTheme, time: MapTime, dark: Boolean?): String? =
+      if (theme.variants.isEmpty()) null else time.carVariant(dark, sunPhase())
+
+  private fun sunPhase(): String? {
     val at = startPoint
-    return time.variant(Daylight.phase(Daylight.sunAltitude(at.lat, at.lng, Instant.now())))
+    return Daylight.phase(Daylight.sunAltitude(at.lat, at.lng, Instant.now()))
   }
 
   private fun everyMinute() = flow {
