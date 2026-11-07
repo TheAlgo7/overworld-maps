@@ -293,7 +293,12 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
     passTapsTo { x, y, shift ->
       val now = System.currentTimeMillis()
       if (panel != null && themedLists) {
-        val parts = CarTapTargets.panelTargets.entries.filter { it.key != "panel" }.map { (key, target) -> Triple(key, target.first, target.second) }
+        // A row scrolled out of the panel's view keeps a sliver of an area at its edge (its bounds
+        // are clipped to the view): only rows still really showing count.
+        val parts =
+            CarTapTargets.panelTargets.entries
+                .filter { it.key != "panel" && it.value.first.height >= MIN_SHOWN_PX && it.value.first.width >= MIN_SHOWN_PX }
+                .map { (key, target) -> Triple(key, target.first, target.second) }
         val inside = CarTapTargets.panelTargets["panel"]?.first
         val hit =
             listOf(Offset(x + shift, y), Offset(x, y)).firstNotNullOfOrNull { tap ->
@@ -647,6 +652,9 @@ private val ZOOM_MS = 200.milliseconds
 
 /** A tap this soon after the map buttons came up brought them up; it presses none. */
 private const val REVEAL_MS = 650L
+
+/** A panel row at least this many pixels of which still show can be tapped. */
+private const val MIN_SHOWN_PX = 12f
 
 /** The car map's following zoom at about 40 km/h, before the theme's own offset (see DriveCamera). */
 private const val CAR_ZOOM = 16.4

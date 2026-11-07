@@ -37,16 +37,25 @@ import com.thealgothrim.overworld.map.rememberOverworldMapState
  * has started, and may open it first, alone, or never.
  */
 class OverworldClusterSession : Session() {
+  init {
+    lifecycle.addObserver(
+        object : DefaultLifecycleObserver {
+          override fun onDestroy(owner: LifecycleOwner) = AppModule.viewModel.setCarDark(null, cluster = true)
+        }
+    )
+  }
+
   override fun onCreateScreen(intent: Intent): Screen {
     AppModule.init(carContext)
     AppModule.viewModel.refreshLocationPermission()
-    // The cluster can come up before the main screen: it reports the car's day and night too.
-    AppModule.viewModel.setCarDark(carContext.isDarkMode)
+    // The cluster can come up before the main screen, or alone: its day and night count only until
+    // the main screen reports (see setCarDark), since a cluster may stay dark all day.
+    AppModule.viewModel.setCarDark(carContext.isDarkMode, cluster = true)
     return CarClusterScreen(carContext)
   }
 
   override fun onCarConfigurationChanged(newConfiguration: android.content.res.Configuration) {
-    AppModule.viewModel.setCarDark(carContext.isDarkMode)
+    AppModule.viewModel.setCarDark(carContext.isDarkMode, cluster = true)
   }
 }
 
@@ -82,6 +91,7 @@ class CarClusterScreen(carContext: CarContext) : ComposableScreen(carContext) {
     // surface stands in then, and the arrow sits low, clear of the odometer strip the car draws
     // along the bottom.
     val surface = LocalWindowInfo.current.containerSize
+    LaunchedEffect(surface) { com.thealgothrim.overworld.report.ProblemReport.clusterScreen = "${surface.width}x${surface.height}" }
     val area = surfaceArea?.stableArea ?: Rect(0, 0, surface.width, surface.height)
     val room = safeStablePadding(area)
     val follow = animatedPadding(safeStablePadding(area, top = FOLLOW_TOP), "cluster-follow")

@@ -16,8 +16,10 @@ import com.stadiamaps.ferrostar.core.CustomRouteProvider
 import com.stadiamaps.ferrostar.core.location.NavigationLocationProvider
 import com.thealgothrim.overworld.location.LocationGate
 import com.thealgothrim.overworld.location.SustainedDeviation
+import com.thealgothrim.overworld.routing.CurrentLevels
 import com.thealgothrim.overworld.routing.GoogleMaps
 import com.thealgothrim.overworld.routing.OverworldRoutes
+import com.thealgothrim.overworld.routing.VectorTiles
 import uniffi.ferrostar.RouteAdapter
 import com.stadiamaps.ferrostar.core.location.SimulatedLocationProvider
 import com.stadiamaps.ferrostar.core.location.toAndroidLocation
@@ -131,8 +133,10 @@ object AppModule {
                     stepAdvanceDistanceEntryAndExit(30u, 5u, 32u),
                     stepAdvanceDistanceToEndOfStep(10u, 32u),
                     // A detour once the car has been off long enough (30 m for 8 s, 60 m for 2 s),
-                    // not one fix past 50 m: that missed a service road 40 m away for good.
-                    RouteDeviationTracking.Custom(SustainedDeviation()),
+                    // not one fix past 50 m: that missed a service road 40 m away for good. And
+                    // within seconds when GPS puts the car on the flyover (or the road under it)
+                    // beside the route, which is nearer than that (see LevelCheck).
+                    RouteDeviationTracking.Custom(SustainedDeviation(levels = { r -> CurrentLevels.value?.takeIf { it.matches(r.geometry) } })),
                     CourseFiltering.SNAP_TO_ROUTE,
                 ),
         )
@@ -198,6 +202,9 @@ object AppModule {
   val saved: SavedPlaces by lazy { SavedPlaces(appContext) }
 
   val traffic: TrafficService by lazy { TrafficService(httpClient).also { t -> t.google = { routes.routeTraffic(it) } } }
+
+  /** The map's own road tiles along a route: flyovers, underpasses and what runs beside them (see RoadLevels). */
+  val tiles: VectorTiles by lazy { VectorTiles(httpClient, appContext.cacheDir) }
 
   val cameras: MyCameras by lazy { MyCameras(appContext) }
 

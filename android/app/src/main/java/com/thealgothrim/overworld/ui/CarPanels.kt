@@ -1,7 +1,20 @@
 package com.thealgothrim.overworld.ui
 
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -71,6 +84,35 @@ sealed interface CarPanel {
 /** The panel open on the car screen, if any (set by CarNavigationScreen). */
 object CarPanels {
   var open by mutableStateOf<CarPanel?>(null)
+
+  /** The open panel's scroll and a scope that can animate it, set while the panel shows. */
+  @Volatile internal var scroll: ScrollState? = null
+  @Volatile internal var scope: CoroutineScope? = null
+  private var glide: Job? = null
+
+  /**
+   * A drag on the car screen while a panel is open: the panel's list moves, the map under it stays
+   * (7 Nov: the Settings list stood still and the map slid about behind it). [distanceY] is Android
+   * Auto's scroll distance in surface pixels, finger travel reversed. Main thread.
+   */
+  fun scrollBy(distanceY: Float) {
+    glide?.cancel()
+    scroll?.dispatchRawDelta(distanceY)
+  }
+
+  /** A flick while a panel is open: the list glides on and slows, like a phone's. [velocityY] is the finger's, px/s. */
+  fun fling(velocityY: Float) {
+    val state = scroll ?: return
+    val scope = scope ?: return
+    glide?.cancel()
+    if (kotlin.math.abs(velocityY) < MIN_FLING) return
+    glide = scope.launch { state.animateScrollBy(-velocityY * FLING_TAU, tween(FLING_MS, easing = LinearOutSlowInEasing)) }
+  }
+
+  private const val MIN_FLING = 250f
+  /** Seconds: a flick carries on for about its speed times this, as on the map (see CarMapGestures). */
+  private const val FLING_TAU = 0.325f
+  private const val FLING_MS = 700
 }
 
 /** What the panel's and the themed strip's taps do, beyond the settings the panel changes itself. */
@@ -107,10 +149,22 @@ interface CarPanelActions {
 @Composable
 fun CarPanelView(panel: CarPanel, theme: OverworldTheme, spec: SkinSpec, actions: CarPanelActions, modifier: Modifier = Modifier) {
   DisposableEffect(Unit) { onDispose { CarTapTargets.panelTargets.clear() } }
+  // Each panel opens at its top; a drag on the screen scrolls it (see CarPanels.scrollBy).
+  val scroll = remember(panel::class) { ScrollState(0) }
+  val scope = rememberCoroutineScope()
+  DisposableEffect(scroll, scope) {
+    CarPanels.scroll = scroll
+    CarPanels.scope = scope
+    onDispose {
+      if (CarPanels.scroll === scroll) CarPanels.scroll = null
+      if (CarPanels.scope === scope) CarPanels.scope = null
+    }
+  }
   Column(
-      // As tall as its rows, from the top: two saved places don't need the screen's height.
+      // As tall as its rows, from the top: two saved places don't need the screen's height. Taller
+      // than the room (Settings on the Curvv: its last row was cut off), the rows under the header
+      // scroll, with a bar down the side to say so.
       modifier.widthUpTo(PANEL_WIDTH, COLUMN_SHARE).skinPanel(spec).carTap("panel") {}.padding(horizontal = 18.dp, vertical = 14.dp),
-      verticalArrangement = Arrangement.spacedBy(10.dp),
   ) {
     val title =
         when (panel) {
@@ -121,6 +175,12 @@ fun CarPanelView(panel: CarPanel, theme: OverworldTheme, spec: SkinSpec, actions
           is CarPanel.Results -> "\u201C${panel.query}\u201D"
         }
     Header(spec, title, back = panel is CarPanel.NearbyList, actions)
+    Spacer(Modifier.height(10.dp))
+    Column(
+        // The drag arrives from Android Auto (see CarPanels.scrollBy), not as touches on this view.
+        Modifier.weight(1f, fill = false).scrollBar(scroll, spec).verticalScroll(scroll, enabled = false),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
     when (panel) {
       CarPanel.Settings -> SettingsBody(spec, theme)
       CarPanel.Saved -> SavedBody(spec, actions)
@@ -128,7 +188,23 @@ fun CarPanelView(panel: CarPanel, theme: OverworldTheme, spec: SkinSpec, actions
       is CarPanel.NearbyList -> PlacesBody(spec, panel.places, panel.kind.icon, "Looking nearby…", "Nothing found within 10 km.", actions)
       is CarPanel.Results -> PlacesBody(spec, panel.places, GameIcon.PIN, "Searching…", "Nothing found. Try another name or a plus code.", actions)
     }
+    }
   }
+}
+
+/**
+ * A thin bar down the right edge while the list runs past the panel, so it's plain there's more
+ * below. Before verticalScroll in the chain, so it's drawn over the visible part.
+ */
+private fun Modifier.scrollBar(state: ScrollState, spec: SkinSpec): Modifier = drawWithContent {
+  drawContent()
+  val max = state.maxValue
+  if (max <= 0 || max == Int.MAX_VALUE) return@drawWithContent
+  val view = size.height
+  val bar = (view * view / (view + max)).coerceAtLeast(24.dp.toPx())
+  val top = (view - bar) * (state.value.toFloat() / max)
+  val w = 3.dp.toPx()
+  drawRoundRect(spec.fg.copy(alpha = 0.35f), topLeft = Offset(size.width - w, top), size = Size(w, bar), cornerRadius = CornerRadius(w / 2))
 }
 
 @Composable
@@ -166,7 +242,7 @@ private fun SettingsBody(spec: SkinSpec, theme: OverworldTheme) {
   Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
     THEMES.forEach { t ->
       Box(Modifier.weight(1f).carTap("theme-${t.id}") { store.selectCar(t.id) }) {
-        ThemeCard(spec, t, selected = t.id == theme.id, modifier = Modifier.fillMaxWidth()) {}
+        ThemeCard(spec, t, selected = t.id == theme.id, modifier = Modifier.fillMaxWidth(), accentName = true) {}
       }
     }
   }
@@ -180,12 +256,13 @@ private fun SettingsBody(spec: SkinSpec, theme: OverworldTheme) {
                 .carTap("time-$t") { store.setCarMapTime(t) },
             contentAlignment = Alignment.Center,
         ) {
-          SkinText(spec.title(t.label), spec.title, 18.sp, if (on && spec.vi) Vi.Ink else spec.fg, spacing = spec.titleSpacing)
+          SkinText(spec.title(t.label), spec.title, 18.sp, if (on) spec.onAccent else spec.fg, spacing = spec.titleSpacing)
         }
       }
     }
   }
-  // Two columns, so every switch fits on the screen at once: nothing to scroll while driving.
+  // Two columns of switches, each lit in the theme's accent while on. On the Curvv they run past the
+  // bottom of the panel, which then scrolls.
   val toggles =
       buildList<Triple<String, Boolean, () -> Unit>> {
         add(Triple("Place icons", details.placeIcons) { store.setCarDetails(details.copy(placeIcons = !details.placeIcons)) })
@@ -203,25 +280,57 @@ private fun SettingsBody(spec: SkinSpec, theme: OverworldTheme) {
       if (pair.size == 1) Spacer(Modifier.weight(1f))
     }
   }
+  MarkTile(spec)
 }
 
+/**
+ * A switch as one tile: the theme's accent while on, dim while off, no tick box (his 7 Nov ask:
+ * the ticks read as clutter and the state should be the colour). Flips the moment Android Auto's
+ * tap arrives; anything slow it sets off (a map style rebuild) happens behind it.
+ */
 @Composable
 private fun ToggleTile(spec: SkinSpec, label: String, on: Boolean, flip: () -> Unit, modifier: Modifier) {
   val key = "toggle-$label"
+  val rest = if (on) spec.accent else spec.fg.copy(alpha = 0.08f)
   Row(
-      modifier.height(46.dp).clip(shape(spec)).background(pressedTint(spec, key, spec.fg.copy(alpha = 0.08f))).carTap(key, onTap = flip).padding(horizontal = 12.dp),
+      modifier.height(46.dp).clip(shape(spec)).background(pressedTint(spec, key, rest)).carTap(key, onTap = flip).padding(horizontal = 14.dp),
       verticalAlignment = Alignment.CenterVertically,
   ) {
-    SkinText(label, spec.body, 17.sp, spec.fg, Modifier.weight(1f))
-    val box = RoundedCornerShape(if (spec.vi) 7.dp else 0.dp)
-    Box(
-        Modifier.size(24.dp).clip(box).border(2.dp, spec.fg, box).then(if (on) Modifier.background(spec.accent) else Modifier),
-        contentAlignment = Alignment.Center,
-    ) {
-      if (on) Tick(if (spec.vi) Vi.Ink else Color.White)
-    }
+    SkinText(label, spec.body, 17.sp, if (on) spec.onAccent else spec.fg, Modifier.weight(1f))
   }
 }
+
+/**
+ * Marks this moment for a problem report (see ProblemReport): where the car is, what the screen
+ * showed, the time. Says "Marked" for a few seconds after.
+ */
+@Composable
+private fun MarkTile(spec: SkinSpec) {
+  val key = "mark"
+  var markedAt by remember { mutableStateOf(0L) }
+  LaunchedEffect(markedAt) {
+    if (markedAt == 0L) return@LaunchedEffect
+    delay(MARKED_MS)
+    markedAt = 0L
+  }
+  val marked = markedAt != 0L
+  Row(
+      Modifier.fillMaxWidth().height(46.dp).clip(shape(spec))
+          .background(pressedTint(spec, key, if (marked) spec.accent else spec.fg.copy(alpha = 0.08f)))
+          .carTap(key) {
+            com.thealgothrim.overworld.report.ProblemReport.mark("car screen")
+            markedAt = System.currentTimeMillis()
+          }
+          .padding(horizontal = 14.dp),
+      verticalAlignment = Alignment.CenterVertically,
+  ) {
+    GameIconView(GameIcon.FLAG, if (marked) spec.onAccent else spec.fg, Modifier.size(22.dp))
+    Spacer(Modifier.width(12.dp))
+    SkinText(if (marked) "Marked. It goes in the next report." else "Something wrong? Mark this moment", spec.body, 17.sp, if (marked) spec.onAccent else spec.fg)
+  }
+}
+
+private const val MARKED_MS = 4_000L
 
 @Composable
 private fun SavedBody(spec: SkinSpec, actions: CarPanelActions) {

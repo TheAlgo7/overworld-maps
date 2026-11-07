@@ -14,6 +14,9 @@ import com.stadiamaps.ferrostar.core.NavigationUiState
 import com.stadiamaps.ferrostar.core.annotation.valhalla.valhallaExtendedOSRMAnnotationPublisher
 import com.stadiamaps.ferrostar.core.isNavigating
 import com.stadiamaps.ferrostar.core.location.toUserLocation
+import com.thealgothrim.overworld.routing.CurrentLevels
+import com.thealgothrim.overworld.routing.LevelCue
+import com.thealgothrim.overworld.routing.RoadLevels
 import com.thealgothrim.overworld.search.Nearby
 import com.thealgothrim.overworld.search.Place
 import com.thealgothrim.overworld.theme.Daylight
@@ -73,6 +76,8 @@ data class RouteExtras(
     val trafficSpans: List<TrafficSpan> = emptyList(),
     /** Stretches of the route on a flyover (metres along it): drawn over the bridge, the rest under. */
     val bridges: List<ClosedFloatingPointRange<Double>> = emptyList(),
+    /** The route's flyover and underpass choices and the roads beside it (see RoadLevels). */
+    val levels: RoadLevels? = null,
 ) {
   val lightsOnRoute: Int
     get() = signals.count { it.kind == RoadFeatureKind.TRAFFIC_LIGHT && it.along != null }
@@ -91,6 +96,12 @@ data class RouteExtras(
 
 /** The next incident or camera ahead on the route, for the "Accident ahead" alert. */
 data class HazardAhead(val feature: RoadFeature, val distance: Double)
+
+/**
+ * The next flyover or underpass choice ahead ([cue]), [distance] metres away. [withTurn]: it's at
+ * the route's next turn, so the card shows both ("Bear left" and "Don't take the flyover").
+ */
+data class CueAhead(val cue: LevelCue, val distance: Double, val withTurn: Boolean)
 
 /** A route shown before driving, like Google Maps' directions preview. */
 data class RoutePreview(
@@ -285,7 +296,33 @@ class OverworldViewModel :
           }
     }
     viewModelScope.launch {
+      // Each second of a trip as the app showed it, for a problem report (see Trace).
+      var seen: UserLocation? = null
+      navigationUiState.collect { state ->
+        if (!state.isNavigating()) return@collect
+        val location = state.location ?: return@collect
+        if (location === seen) return@collect
+        seen = location
+        val extras = _extras.value
+        val along = state.progress?.let { p -> (extras.levels?.length ?: state.routeGeometry?.let { routeLine(it).length })?.minus(p.distanceRemaining) }
+        val cue = levelCueAhead(state, extras)
+        com.thealgothrim.overworld.report.Trace.trip(
+            location.coordinates,
+            along,
+            state.routeDeviation !is uniffi.ferrostar.RouteDeviation.NoDeviation,
+            state.progress?.distanceToNextManeuver,
+            state.visualInstruction?.primaryContent?.text,
+            cue?.let { "${it.cue.kind.text} in ${it.distance.toInt()} m" },
+        )
+      }
+    }
+    viewModelScope.launch {
+      var traced: List<GeographicCoordinate>? = null
       navigationUiState.map { it.routeGeometry }.collect { geometry ->
+        if (geometry != null && geometry.size >= 2 && geometry != traced && navigationUiState.value.isNavigating()) {
+          traced = geometry
+          com.thealgothrim.overworld.report.Trace.route(com.thealgothrim.overworld.traffic.encodePolyline6(geometry))
+        }
         if (geometry != null && geometry.size >= 2 && (geometry != extrasRoute || !extrasLive)) loadExtras(geometry, live = true)
         // Ferrostar reports no route as an empty list, not null. Without this the last trip's
         // lights and incidents stayed on the map, and its live traffic was re-fetched every
@@ -295,6 +332,7 @@ class OverworldViewModel :
           extrasRoute = null
           extrasLive = false
           _extras.value = RouteExtras()
+          CurrentLevels.value = null
         }
       }
     }
@@ -498,12 +536,34 @@ class OverworldViewModel :
           .distinctUntilChanged()
           .stateIn(viewModelScope, SharingStarted.Eagerly, variantFor(AppModule.themeStore.theme.value, AppModule.themeStore.mapTime.value))
 
-  private val carDark = MutableStateFlow<Boolean?>(null)
+  private val carDarkScreen = MutableStateFlow<Boolean?>(null)
+  private val carDarkCluster = MutableStateFlow<Boolean?>(null)
 
-  /** The car's own day or night, as Android Auto reports it (null: no car connected). See MapTime.carVariant. */
-  fun setCarDark(dark: Boolean?) {
-    carDark.value = dark
+  /**
+   * The car's day or night: what the main screen reports, the instrument cluster's only while there
+   * is no main screen. Both used to write one value, and the cluster won: it opens after the main
+   * screen and a cluster can say "night" all day, so on the 7 Nov drive (2:45 PM, sunny) Auto held
+   * the night map for the whole trip.
+   */
+  private val carDark: StateFlow<Boolean?> =
+      combine(carDarkScreen, carDarkCluster) { screen, cluster -> screen ?: cluster }
+          .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+  /**
+   * The car's own day or night, as Android Auto reports it to the main screen or, with [cluster],
+   * to the instrument cluster's (null: that screen is gone). See MapTime.carVariant.
+   */
+  fun setCarDark(dark: Boolean?, cluster: Boolean = false) {
+    val target = if (cluster) carDarkCluster else carDarkScreen
+    if (target.value == dark) return
+    target.value = dark
+    // In the drive log, so a report says what the car told the app and when.
+    DriveLog.note("car: ${if (cluster) "cluster" else "screen"} reports ${when (dark) { true -> "night"; false -> "day"; null -> "nothing (closed)" }}")
   }
+
+  /** The car's day or night as the map uses it (see [setCarDark]), for the report. */
+  val carDarkNow: Boolean?
+    get() = carDark.value
 
   /** [mapVariant] for the car screen, which keeps its own theme and time of day, and whose Auto follows the car. */
   val carMapVariant: StateFlow<String?> =
@@ -617,11 +677,22 @@ class OverworldViewModel :
               _extras.update { e -> e.copy(signals = (e.signals.filter { it.kind != kind } + found).sortedBy { it.along ?: Double.MAX_VALUE }) }
             }
           }
+          // Flyovers and underpasses from the map's own tiles (see RoadLevels). The preview already
+          // found them for this route when it was previewed first; a trip then only hands them on.
+          val known = _extras.value.levels?.takeIf { it.matches(route) }
+          if (known != null) {
+            if (live) CurrentLevels.value = known
+          } else {
+            if (live) CurrentLevels.value = null
+            launch { refreshLevels(route, live, from = 0.0) }
+          }
           val line = RouteLine(route)
           while (true) {
             // While driving, ask about the road still ahead so the time counts from here.
             val left = navigationUiState.value.progress?.distanceRemaining?.takeIf { live } ?: line.length
             val done = (line.length - left).coerceAtLeast(0.0)
+            // A long trip is looked at 30 km at a time; the next stretch comes before the car needs it.
+            _extras.value.levels?.let { lv -> if (live && lv.to < lv.length - 1.0 && lv.to - done < LEVELS_AHEAD_M) launch { refreshLevels(route, live, from = done) } }
             val ahead = if (done > 50.0) line.slice(done, line.length) else route
             val incidents = runCatching { traffic.incidents(route, from = done) }.getOrDefault(emptyList())
             val fresh = runCatching { traffic.routeTraffic(ahead) }.getOrNull()
@@ -649,6 +720,72 @@ class OverworldViewModel :
   }
 
   private fun routeLength(route: List<GeographicCoordinate>) = RouteLine(route).length
+
+  /** Works out [route]'s flyover and underpass choices from [from] metres along it, and hands them on. */
+  private suspend fun refreshLevels(route: List<GeographicCoordinate>, live: Boolean, from: Double) {
+    val started = System.currentTimeMillis()
+    val found =
+        runCatching { buildLevels(route, from) }
+            .onFailure { if (it is CancellationException) throw it; Log.w(TAG, "road levels failed", it) }
+            .getOrNull() ?: return
+    // Swapped for another route meanwhile (a reroute, a cancelled preview): not this one's.
+    if (extrasRoute != route) return
+    _extras.update { it.copy(levels = found) }
+    if (live) CurrentLevels.value = found
+    DriveLog.note(
+        "levels: ${found.cues.size} flyover or underpass choices in ${"%.1f".format((found.to - found.from) / 1000)} km " +
+            "(${found.structures.size} on the route, ${found.parallels.size} beside it, ${System.currentTimeMillis() - started} ms)" +
+            found.cues.take(8).joinToString("") { c -> "; ${c.kind.text} at ${"%.2f".format(c.at / 1000)} km" }
+    )
+  }
+
+  private suspend fun buildLevels(route: List<GeographicCoordinate>, from: Double): RoadLevels =
+      withContext(Dispatchers.Default) {
+        val line = RouteLine(route)
+        // A little behind the start too: a split can be up to a kilometre before its flyover.
+        val start = (from - LEVELS_BEHIND_M).coerceAtLeast(0.0)
+        val end = minOf(line.length, from + LEVELS_WINDOW_M)
+        val roads = AppModule.tiles.roadsAlong(line.slice(start, end))
+        RoadLevels.analyse(route, roads, maneuverAlongs(route), start, end)
+      }
+
+  /**
+   * Where [route]'s turns are, metres along it. Each step's turn is at its end, so they're the step
+   * ends counted back from the route's end (on a trip only the steps still ahead are known).
+   */
+  private fun maneuverAlongs(route: List<GeographicCoordinate>): List<Double> {
+    val state = navigationUiState.value
+    val steps =
+        state.remainingSteps?.takeIf { state.isNavigating() && state.routeGeometry == route }
+            ?: _planner.value.preview?.route?.takeIf { it.geometry == route }?.steps
+            ?: return emptyList()
+    var end = RouteLine(route).length
+    val out = ArrayList<Double>()
+    for (step in steps.reversed()) {
+      out += end
+      end -= RouteLine(step.geometry).length
+    }
+    // The last step's end is the destination, not a turn.
+    return out.drop(1)
+  }
+
+  /**
+   * The next flyover or underpass choice to show on the turn card: within [CUE_SHOW_M], and not past
+   * the route's next turn (that turn's card comes first, the choice after it), unless it's at that
+   * very turn, when the card shows both.
+   */
+  fun levelCueAhead(state: NavigationUiState, extras: RouteExtras): CueAhead? {
+    if (!state.isNavigating()) return null
+    val levels = extras.levels ?: return null
+    val progress = state.progress ?: return null
+    val along = levels.length - progress.distanceRemaining
+    val cue = levels.cues.firstOrNull { it.at >= along - CUE_PASSED_M } ?: return null
+    val distance = cue.at - along
+    if (distance > CUE_SHOW_M) return null
+    val withTurn = kotlin.math.abs(distance - progress.distanceToNextManeuver) <= CUE_ON_TURN_M
+    if (!withTurn && distance > progress.distanceToNextManeuver + CUE_ON_TURN_M) return null
+    return CueAhead(cue, distance.coerceAtLeast(0.0), withTurn)
+  }
 
   /**
    * Time to go: TomTom's live-traffic time when there is one (scaled down as distance is covered),
@@ -793,6 +930,15 @@ class OverworldViewModel :
   // main thread runs its first round at once.
   init {
     viewModelScope.launch {
+      // A line a minute on how smoothly each map drew (see FrameStats), while driving or with the
+      // car connected: a drive that felt laggy then shows which screen dropped frames.
+      while (true) {
+        delay(60_000)
+        val line = com.thealgothrim.overworld.map.FrameStats.summary() ?: continue
+        if (navigationUiState.value.isNavigating() || carDark.value != null) DriveLog.note("frames: $line")
+      }
+    }
+    viewModelScope.launch {
       // One chime per camera as it comes within 500 m, when the chime is on. A camera left more
       // than a kilometre behind can chime again (the drive back, a second lap).
       val chimed = ArrayDeque<GeographicCoordinate>()
@@ -834,11 +980,15 @@ class OverworldViewModel :
    * Straight to driving, without a preview (used by the car and by saved-place shortcuts there).
    * [from] replaces the phone's position as the start (debug test drives).
    */
-  fun startNavigation(destination: GeographicCoordinate, name: String?, from: GeographicCoordinate? = null) {
+  fun startNavigation(destination: GeographicCoordinate, name: String?, from: GeographicCoordinate? = null, fromHeading: Double? = null) {
     _planner.value = _planner.value.copy(routing = true, error = null)
     viewModelScope.launch(Dispatchers.IO) {
       try {
-        val start = from?.let { UserLocation(it, 6.0, null, Instant.now(), null) } ?: freshOrigin()
+        // A debug start with a heading starts as a moving car would, on its own carriageway.
+        val start =
+            from?.let {
+              UserLocation(it, 6.0, fromHeading?.let { h -> uniffi.ferrostar.CourseOverGround(h.toInt().toUShort(), null) }, Instant.now(), fromHeading?.let { uniffi.ferrostar.Speed(10.0, null) })
+            } ?: freshOrigin()
         val route = core.getRoutes(start, listOf(Waypoint(coordinate = destination, kind = WaypointKind.BREAK))).first()
         noteStart("trip to ${name ?: "a point"}", start, route)
         withContext(Dispatchers.Main) {
@@ -944,5 +1094,15 @@ class OverworldViewModel :
     private const val SHARP_FIX_METRES = 25.0
     /** 250 km/h, in m/s. */
     private const val MAX_CAR_SPEED = 70.0
+    /** Flyovers are worked out this far ahead at a time, and the next stretch when this little is left. */
+    private const val LEVELS_WINDOW_M = 30_000.0
+    private const val LEVELS_AHEAD_M = 10_000.0
+    private const val LEVELS_BEHIND_M = 1_300.0
+    /** A flyover choice shows on the card from this far out... */
+    private const val CUE_SHOW_M = 900.0
+    /** ...counts as at the route's turn within this of it... */
+    private const val CUE_ON_TURN_M = 80.0
+    /** ...and goes once the car is this far past it. */
+    private const val CUE_PASSED_M = 15.0
   }
 }

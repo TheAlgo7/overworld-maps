@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -313,6 +314,12 @@ internal fun TurnBanner(spec: SkinSpec, uiState: NavigationUiState, hazard: Haza
           if (road.isNotEmpty()) SkinText(road, spec.body, 19.sp, spec.fg, maxLines = 2)
         }
       }
+    }
+    // The flyover or underpass choice, as on the car's card.
+    val extras by com.thealgothrim.overworld.AppModule.viewModel.extras.collectAsState()
+    com.thealgothrim.overworld.AppModule.viewModel.levelCueAhead(uiState, extras)?.takeIf { uiState.isCalculatingNewRoute != true }?.let {
+      CardDivider(spec)
+      LevelCueRow(spec, it, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), textSize = 18.sp, glyph = 28.dp)
     }
     then?.let {
       CardDivider(spec)

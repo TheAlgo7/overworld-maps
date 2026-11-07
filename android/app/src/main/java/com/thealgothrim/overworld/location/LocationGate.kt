@@ -3,7 +3,9 @@ package com.thealgothrim.overworld.location
 import android.location.Location
 import android.os.SystemClock
 import com.stadiamaps.ferrostar.core.location.NavigationLocationProviding
+import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.DriveLog
+import com.thealgothrim.overworld.report.Trace
 import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -37,19 +39,27 @@ class LocationGate(private val inner: NavigationLocationProviding) : NavigationL
   override fun locationUpdates(intervalMillis: Long): Flow<Location> = flow {
     val rules = GateRules()
     var lastNote = 0L
-    inner.locationUpdates(intervalMillis).collect { raw ->
-      val verdict = rules.next(raw.toGateFix())
-      val out =
-          when (verdict) {
-            is GateVerdict.Pass -> raw
-            is GateVerdict.Replace -> raw.replacedBy(verdict)
-          }
-      if (verdict.note != null && raw.elapsedRealtimeNanos - lastNote > NOTE_NANOS) {
-        lastNote = raw.elapsedRealtimeNanos
-        DriveLog.note("gps: ${verdict.note}")
+    // The barometer runs while GPS does: heights for the flyover check (LevelCheck) and the track.
+    Barometer.acquire(AppModule.context)
+    try {
+      inner.locationUpdates(intervalMillis).collect { raw ->
+        val verdict = rules.next(raw.toGateFix())
+        val out =
+            when (verdict) {
+              is GateVerdict.Pass -> raw
+              is GateVerdict.Replace -> raw.replacedBy(verdict)
+            }
+        if (verdict.note != null && raw.elapsedRealtimeNanos - lastNote > NOTE_NANOS) {
+          lastNote = raw.elapsedRealtimeNanos
+          DriveLog.note("gps: ${verdict.note}")
+        }
+        // Every fix as it came, for a problem report (see Trace).
+        Trace.fix(raw, verdict.note ?: if (verdict is GateVerdict.Replace) "held" else null)
+        lastShown = out
+        emit(out)
       }
-      lastShown = out
-      emit(out)
+    } finally {
+      Barometer.release()
     }
   }
 

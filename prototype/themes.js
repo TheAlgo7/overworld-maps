@@ -627,7 +627,10 @@
           "fill-extrusion-color": B.color,
           "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 14.5, 0, 16, height],
           "fill-extrusion-base": ["interpolate", ["linear"], ["zoom"], 14.5, 0, 16, ["*", B.heightScale, ["coalesce", ["get", "render_min_height"], 0]]],
-          "fill-extrusion-opacity": B.opacity,
+          // Solid in the car: under full opacity MapLibre draws every building twice a frame (a depth
+          // pass, then the colour), and among Cyber City's towers at the car's tilt that was a large
+          // share of each frame (7 Nov drive, "so laggy"). Too little shows through at 0.94 to miss.
+          "fill-extrusion-opacity": car ? 1 : B.opacity,
           // Walls darken toward the ground, so the blocks sit on the map instead of floating on it.
           "fill-extrusion-vertical-gradient": true,
         },

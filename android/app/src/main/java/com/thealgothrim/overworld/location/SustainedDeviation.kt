@@ -1,5 +1,7 @@
 package com.thealgothrim.overworld.location
 
+import com.thealgothrim.overworld.DriveLog
+import com.thealgothrim.overworld.routing.RoadLevels
 import java.time.Duration
 import java.time.Instant
 import kotlin.math.abs
@@ -36,12 +38,17 @@ class SustainedDeviation(
     /** Vaguer fixes than this can't start or settle a detour. */
     private val maxAccuracyMetres: Double = 20.0,
     private val wrongWaySeconds: Long = 5,
+    /** The route's flyovers and what runs beside them (see RoadLevels), when known. */
+    private val levels: (Route) -> RoadLevels? = { null },
+    private val levelCheck: LevelCheck = LevelCheck(),
 ) : RouteDeviationDetector {
   /** Seconds driven off the route so far; null while on it. */
   @Volatile private var offFor: Double? = null
   /** Seconds driven against every nearby piece of the route; null while going its way. */
   @Volatile private var wrongFor: Double? = null
   @Volatile private var lastAt: Instant? = null
+  /** After the level check calls it, the route stays "left" until a new one comes (or this time passes). */
+  @Volatile private var leftRoute: Pair<RoadLevels, Instant>? = null
 
   override fun checkRouteDeviation(route: Route, tripState: TripState): RouteDeviation {
     val trip = tripState as? TripState.Navigating
@@ -49,12 +56,34 @@ class SustainedDeviation(
       offFor = null
       wrongFor = null
       lastAt = null
+      leftRoute = null
       return RouteDeviation.NoDeviation
     }
     // The raw fix: the snapped one always sits on the route, facing its way.
     val fix = trip.userLocation
     val lines = trip.remainingSteps.take(3).map { it.geometry }
     val off = metresFromSteps(fix.coordinates, lines)
+    val known = levels(route)
+    // Called by the level check moments ago and the new route isn't here yet: still off this one,
+    // or the arrow would snap back down to the service road until it comes.
+    leftRoute?.let { (lv, at) ->
+      if (lv.matches(route.geometry) && Duration.between(at, fix.timestamp).seconds < HOLD_LEFT_SECONDS) return RouteDeviation.Deviation(DeviationKind.CompletelyOffRoute(off ?: 0.0))
+      leftRoute = null
+    }
+    if (known != null) {
+      val along = known.length - trip.progress.distanceRemaining
+      levelCheck.judge(fix, along, off, known)?.let { hint ->
+        RerouteHints.offer(hint)
+        DriveLog.note(
+            "trip: GPS puts the car on the ${hint.level.name.lowercase().replace("surface", "road")} beside the route " +
+                "(route ${off?.toInt()} m away), rerouting from it at ${DriveLog.at(hint.at)}"
+        )
+        offFor = null
+        wrongFor = null
+        leftRoute = known to fix.timestamp
+        return RouteDeviation.Deviation(DeviationKind.CompletelyOffRoute(off ?: 0.0))
+      }
+    }
     val course = fix.courseOverGround?.degrees?.toDouble()
     val against = course?.let { !runsAlong(fix.coordinates, it, lines, maxOf(WRONG_WAY_NEAR_METRES, fix.horizontalAccuracy * 1.5)) }
     return judge(off, fix.horizontalAccuracy, fix.timestamp, fix.speed?.value, against)
@@ -96,6 +125,8 @@ class SustainedDeviation(
     const val WRONG_WAY_MS = 4.0
     /** A route line this near that runs the car's way means it's on it (a U-turn's two legs both count). */
     const val WRONG_WAY_NEAR_METRES = 35.0
+    /** How long a level-check detour holds while the new route is fetched. */
+    const val HOLD_LEFT_SECONDS = 15L
   }
 }
 

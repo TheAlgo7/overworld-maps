@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.stadiamaps.ferrostar.core.NavigationUiState
+import com.thealgothrim.overworld.CueAhead
 import com.thealgothrim.overworld.HazardAhead
 import com.thealgothrim.overworld.RouteExtras
 import com.thealgothrim.overworld.RoutePreview
@@ -124,7 +125,8 @@ fun BoxScope.CarGameHud(
   // Nearby, Settings and End come up under the turn card at a touch. Over the speedometer they
   // widened the time card's column and pushed the limit sign aside.
   Column(Modifier.align(Alignment.TopStart), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-    Appear(Modifier) { TurnCard(spec, uiState, hazard, Modifier) }
+    val cue = AppModule.viewModel.levelCueAhead(uiState, extras)
+    Appear(Modifier) { TurnCard(spec, uiState, hazard, cue, Modifier) }
     actions?.let { CarMenuReveal(spec, trip = true, actions = it) }
   }
 
@@ -160,7 +162,7 @@ fun BoxScope.CarGameHud(
 }
 
 @Composable
-private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardAhead?, modifier: Modifier) {
+private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardAhead?, cue: CueAhead?, modifier: Modifier) {
   val content = uiState.visualInstruction?.primaryContent
   val distance = uiState.progress?.distanceToNextManeuver?.let(::formatDistance).orEmpty()
   val road = content?.text?.trim().orEmpty()
@@ -192,6 +194,11 @@ private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardA
           if (road.isNotEmpty()) SkinText(road, spec.body, 22.sp, spec.fg, maxLines = 2)
         }
       }
+    }
+    // The flyover or underpass choice: under its turn, or before the next turn with how far.
+    cue?.takeIf { uiState.isCalculatingNewRoute != true }?.let {
+      CardDivider(spec)
+      LevelCueRow(spec, it, Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp))
     }
     then?.let {
       CardDivider(spec)

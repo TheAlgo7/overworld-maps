@@ -19,6 +19,8 @@
                 <action android:name="com.thealgothrim.overworld.DEBUG_REMOTE" />
                 <action android:name="com.thealgothrim.overworld.DEBUG_SAVE" />
                 <action android:name="com.thealgothrim.overworld.DEBUG_PANEL" />
+                <action android:name="com.thealgothrim.overworld.DEBUG_REPORT" />
+                <action android:name="com.thealgothrim.overworld.DEBUG_LEVELS" />
             </intent-filter>
         </receiver>
         <!-- The car screen's map and HUD in a plain activity, for the emulator (see the class). -->

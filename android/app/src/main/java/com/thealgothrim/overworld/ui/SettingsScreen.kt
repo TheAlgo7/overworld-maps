@@ -65,6 +65,8 @@ private data class Setting(
     val checked: Boolean? = null,
     /** It forgets something: the first tap only picks the row and says so, the second does it. */
     val clears: Boolean = false,
+    /** Like [clears] (two taps, the first explains) but nothing is lost, so the row doesn't turn red. */
+    val confirm: Boolean = false,
     val onClick: () -> Unit,
 )
 
@@ -98,6 +100,7 @@ fun SettingsScreen(
   val update by AppModule.updates.available.collectAsState()
   val (lockedReady, setUpLocked) = rememberLockedPhoneSetup()
   var selected by remember { mutableStateOf<String?>(null) }
+  val context = androidx.compose.ui.platform.LocalContext.current
 
   val detailsOn =
       listOf(details.traffic && live, details.signals, details.incidents && live, theme.buildings3d && details.buildings3d).count { it }
@@ -200,6 +203,12 @@ fun SettingsScreen(
               "About",
               listOf(
                   Setting(
+                      "Report a problem",
+                      "Tap again to email the developer what the app saw: your settings, its drive diary and where you drove in the last few hours, " +
+                          "with moments you marked on the car screen. Your email app opens with the files attached; take the track file off if you'd rather not share where you went. Nothing is sent until you press Send.",
+                      confirm = true,
+                  ) { com.thealgothrim.overworld.report.ProblemReport.send(context) },
+                  Setting(
                       "Overworld",
                       "Map data © OpenStreetMap contributors (ODbL), tiles by OpenFreeMap, routing by Valhalla (FOSSGIS), search by TomTom and Photon (komoot), traffic lights from Valhalla and speed cameras from Overpass, navigation by Ferrostar (Stadia Maps)." +
                           if (live) " Live traffic by TomTom." else " Live traffic is off: add a free TomTom key (tomtomKey in local.properties) for traffic, incidents and live travel times.",
@@ -211,7 +220,7 @@ fun SettingsScreen(
 
   fun tap(r: Setting) {
     // Forgetting something takes two taps: the first picks the row and says what a second will do.
-    if (r.clears && selected != r.label) {
+    if ((r.clears || r.confirm) && selected != r.label) {
       selected = r.label
       return
     }

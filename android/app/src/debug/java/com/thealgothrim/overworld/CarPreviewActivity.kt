@@ -78,9 +78,37 @@ class CarPreviewActivity : ComponentActivity() {
         }
       }
       if (cluster) OverworldClusterMap(theme, viewModel, state, cameraOptions, safeStablePadding(area))
-      else OverworldCarMap(theme, viewModel, state, cameraOptions, tracker)
+      else OverworldCarMap(theme, viewModel, state, cameraOptions, tracker, panelActions)
     }
   }
+
+  /** Enough for the themed panels to show here (DEBUG_PANEL); picks and searches do nothing. */
+  private val panelActions =
+      object : com.thealgothrim.overworld.ui.CarPanelActions {
+        private fun open(p: com.thealgothrim.overworld.ui.CarPanel?) {
+          com.thealgothrim.overworld.ui.CarPanels.open = p
+        }
+
+        override fun showNearby() = open(com.thealgothrim.overworld.ui.CarPanel.NearbyKinds)
+
+        override fun showSaved() = open(com.thealgothrim.overworld.ui.CarPanel.Saved)
+
+        override fun showSettings() = open(com.thealgothrim.overworld.ui.CarPanel.Settings)
+
+        override fun search() = Unit
+
+        override fun endTrip() = AppModule.viewModel.stopNavigation()
+
+        override fun close() = open(null)
+
+        override fun back() = open(com.thealgothrim.overworld.ui.CarPanel.NearbyKinds)
+
+        override fun nearby(kind: com.thealgothrim.overworld.search.Nearby) = Unit
+
+        override fun pickNearby(place: com.thealgothrim.overworld.search.Place) = Unit
+
+        override fun pickSaved(place: com.thealgothrim.overworld.search.Place) = Unit
+      }
 
   override fun onStart() {
     super.onStart()

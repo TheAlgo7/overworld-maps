@@ -5,7 +5,10 @@ import com.stadiamaps.ferrostar.core.CustomRouteProvider
 import com.stadiamaps.ferrostar.core.InvalidStatusCodeException
 import com.stadiamaps.ferrostar.core.NoResponseBodyException
 import com.thealgothrim.overworld.DriveLog
+import com.thealgothrim.overworld.location.RerouteHint
+import com.thealgothrim.overworld.location.RerouteHints
 import com.thealgothrim.overworld.traffic.RouteLine
+import uniffi.ferrostar.CourseOverGround
 import com.thealgothrim.overworld.traffic.RouteTraffic
 import com.thealgothrim.overworld.traffic.TrafficEta
 import com.thealgothrim.overworld.traffic.TrafficSpan
@@ -57,11 +60,18 @@ class OverworldRoutes(
   @Volatile var lastSource: String = "none"
     private set
 
-  override suspend fun getRoutes(userLocation: UserLocation, waypoints: List<Waypoint>): List<Route> {
+  override suspend fun getRoutes(given: UserLocation, waypoints: List<Waypoint>): List<Route> {
+    // A reroute because GPS put the car on the flyover beside the route (or the road under it):
+    // start on that road, facing its way. From the raw fix a router could pick the road the route
+    // already took, and the car would be sent straight back to it.
+    val hint = RerouteHints.take(given.coordinates)
+    val userLocation =
+        hint?.let { given.copy(coordinates = it.at, courseOverGround = CourseOverGround(it.heading.toInt().coerceIn(0, 359).toUShort(), null)) } ?: given
+    hint?.let { DriveLog.note("route: starting on the ${it.level.name.lowercase().replace("surface", "road")} the car is on, at ${DriveLog.at(it.at)}") }
     // Valhalla is asked at once, beside Google, not after it: Google may need its route for a
     // start, and when Google can't help the fallback is already in hand (a preview took 3 s when
     // they ran one after the other, 30 Oct). Left to finish on its own when Google wins.
-    val own = background.async { valhallaRoute(userLocation, waypoints) }
+    val own = background.async { valhallaRoute(userLocation, waypoints, hint) }
     if (waypoints.size == 1 && googleOn()) {
       val viaGoogle =
           try {
@@ -86,13 +96,17 @@ class OverworldRoutes(
 
   private val background = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-  /** Ferrostar's own request to Valhalla, as it would have sent it, plus the way the car faces. */
-  private suspend fun valhallaRoute(userLocation: UserLocation, waypoints: List<Waypoint>): List<Route> {
+  /**
+   * Ferrostar's own request to Valhalla, as it would have sent it, plus the way the car faces. With
+   * a [hint] that the car is on the ground beside the route's flyover, flyovers and underpasses are
+   * kept out of the start, so it can't snap back up onto the deck.
+   */
+  private suspend fun valhallaRoute(userLocation: UserLocation, waypoints: List<Waypoint>, hint: RerouteHint? = null): List<Route> {
     val request = valhalla.generateRequest(userLocation, waypoints) as RouteRequest.HttpPost
     val body = JSONObject(String(request.body))
-    movingCourse(userLocation)?.let { course ->
-      body.optJSONArray("locations")?.optJSONObject(0)?.put("heading", course.toInt())?.put("heading_tolerance", HEADING_TOLERANCE)
-    }
+    val start = body.optJSONArray("locations")?.optJSONObject(0)
+    (hint?.heading ?: movingCourse(userLocation))?.let { course -> start?.put("heading", course.toInt())?.put("heading_tolerance", HEADING_TOLERANCE) }
+    if (hint?.level == Level.SURFACE) start?.put("search_filter", JSONObject().put("exclude_bridge", true).put("exclude_tunnel", true))
     val (code, bytes) = post(request.url, request.headers, body.toString().toByteArray())
     if (code !in 200..299) throw InvalidStatusCodeException(code)
     return valhalla.parseResponse(bytes ?: throw NoResponseBodyException())

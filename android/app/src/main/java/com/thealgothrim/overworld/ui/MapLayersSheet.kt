@@ -135,20 +135,42 @@ fun BoxScope.MapLayersSheet(theme: OverworldTheme, onClose: () -> Unit) {
 }
 
 @Composable
-internal fun ThemeCard(spec: SkinSpec, t: OverworldTheme, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+internal fun ThemeCard(
+    spec: SkinSpec,
+    t: OverworldTheme,
+    selected: Boolean,
+    modifier: Modifier,
+    /** The car's way: no tick, the picked card's name on the theme's accent instead (his 7 Nov ask). */
+    accentName: Boolean = false,
+    onClick: () -> Unit,
+) {
   val frame = if (selected) spec.accent else spec.fg.copy(alpha = 0.25f)
   // GTA VI's cards are rounded like the rest of its glass.
   val shape = RoundedCornerShape(if (spec.vi) 10.dp else 0.dp)
+  if (accentName) {
+    Column(modifier.clickable(onClick = onClick)) {
+      Box(Modifier.fillMaxWidth().aspectRatio(400f / 230f).clip(shape).border(if (selected) 3.dp else 1.dp, frame, shape)) {
+        Image(
+            painterResource(themeArt(t)),
+            contentDescription = t.name,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().padding(if (selected) 3.dp else 1.dp),
+        )
+      }
+      Spacer(Modifier.height(6.dp))
+      Box(
+          Modifier.fillMaxWidth().clip(shape).background(if (selected) spec.accent else spec.fg.copy(alpha = 0.08f)).padding(vertical = 5.dp),
+          contentAlignment = Alignment.Center,
+      ) {
+        SkinText(t.name, spec.title, spec.titleSize(if (spec.vi) 18.sp else 16.sp, 19.sp), if (selected) spec.onAccent else spec.sub, spacing = spec.titleSpacing)
+      }
+    }
+    return
+  }
   Column(modifier.clickable(onClick = onClick)) {
     Box(Modifier.fillMaxWidth().aspectRatio(400f / 260f).clip(shape).border(if (selected) 3.dp else 1.dp, frame, shape)) {
       Image(
-          painterResource(
-              when (t.skin) {
-                Skin.RDR -> R.drawable.theme_rdr2
-                Skin.GTA6 -> R.drawable.theme_gta6
-                Skin.GTA -> R.drawable.theme_gta5
-              }
-          ),
+          painterResource(themeArt(t)),
           contentDescription = t.name,
           contentScale = ContentScale.Crop,
           modifier = Modifier.fillMaxSize().padding(if (selected) 3.dp else 1.dp),
@@ -163,6 +185,14 @@ internal fun ThemeCard(spec: SkinSpec, t: OverworldTheme, selected: Boolean, mod
     SkinText(t.name, spec.title, spec.titleSize(if (spec.vi) 18.sp else 16.sp, 19.sp), if (selected) spec.fg else spec.sub, spacing = spec.titleSpacing)
   }
 }
+
+/** The theme's preview picture on its card. */
+private fun themeArt(t: OverworldTheme): Int =
+    when (t.skin) {
+      Skin.RDR -> R.drawable.theme_rdr2
+      Skin.GTA6 -> R.drawable.theme_gta6
+      Skin.GTA -> R.drawable.theme_gta5
+    }
 
 @Composable
 internal fun ToggleRow(spec: SkinSpec, title: String, subtitle: String, checked: Boolean, enabled: Boolean = true, onClick: () -> Unit) {

@@ -36,15 +36,22 @@ class DebugDriveReceiver : BroadcastReceiver() {
     val vm = AppModule.viewModel
     when (intent.action) {
       "com.thealgothrim.overworld.DEBUG_STOP" -> vm.stopNavigation()
-      // --es open settings|saved|nearby|none: the car's themed panel, for screenshots.
-      "com.thealgothrim.overworld.DEBUG_PANEL" ->
+      // --es open settings|saved|nearby|none: the car's themed panel, for screenshots. --ef scroll
+      // 300: a drag on the car screen of that many pixels while it's open (--ef fling for a flick).
+      "com.thealgothrim.overworld.DEBUG_PANEL" -> {
+        intent.getStringExtra("open")?.let { open ->
           com.thealgothrim.overworld.ui.CarPanels.open =
-              when (intent.getStringExtra("open")) {
+              when (open) {
                 "settings" -> com.thealgothrim.overworld.ui.CarPanel.Settings
                 "saved" -> com.thealgothrim.overworld.ui.CarPanel.Saved
                 "nearby" -> com.thealgothrim.overworld.ui.CarPanel.NearbyKinds
                 else -> null
               }
+        }
+        if (intent.hasExtra("scroll")) com.thealgothrim.overworld.ui.CarPanels.scrollBy(intent.getFloatExtra("scroll", 0f))
+        if (intent.hasExtra("fling")) com.thealgothrim.overworld.ui.CarPanels.fling(intent.getFloatExtra("fling", 0f))
+        Log.i("DebugDrive", "panel ${com.thealgothrim.overworld.ui.CarPanels.open}, scrolled to ${com.thealgothrim.overworld.ui.CarPanels.scroll?.value} of ${com.thealgothrim.overworld.ui.CarPanels.scroll?.maxValue}")
+      }
       // --es as home|work --es name X --ef lat --ef lng: set Home or Work without tapping through the phone.
       "com.thealgothrim.overworld.DEBUG_SAVE" -> {
         val place =
@@ -58,6 +65,26 @@ class DebugDriveReceiver : BroadcastReceiver() {
       // --ez on true|false: the phone's car remote without a car (RemoteScreen).
       "com.thealgothrim.overworld.DEBUG_REMOTE" -> com.thealgothrim.overworld.ui.CarRemote.forced = intent.getBooleanExtra("on", true)
       "com.thealgothrim.overworld.DEBUG_CHIME" -> com.thealgothrim.overworld.traffic.CameraChime.play(context)
+      // A problem report's files, written but not sent (logcat under DebugDrive lists them); with
+      // --ez send true, the email app opens as from Settings.
+      "com.thealgothrim.overworld.DEBUG_REPORT" -> {
+        if (intent.getBooleanExtra("mark", false)) com.thealgothrim.overworld.report.ProblemReport.mark("debug")
+        if (intent.getBooleanExtra("send", false)) com.thealgothrim.overworld.report.ProblemReport.send(context.applicationContext, "Debug report.")
+        else com.thealgothrim.overworld.report.ProblemReport.write(context).forEach { Log.i("DebugDrive", "report file ${it.name}: ${it.length()} bytes at ${it.absolutePath}") }
+      }
+      // The route's flyover and underpass choices as worked out (see RoadLevels).
+      "com.thealgothrim.overworld.DEBUG_LEVELS" -> {
+        val lv = vm.extras.value.levels
+        if (lv == null) Log.i("DebugDrive", "levels: none for this route (yet)")
+        else {
+          Log.i("DebugDrive", "levels: ${lv.cues.size} choices, ${lv.structures.size} structures, ${lv.parallels.size} parallel roads over ${lv.from.toInt()}-${lv.to.toInt()} m of ${lv.length.toInt()} m")
+          lv.structures.forEach { (span, level) -> Log.i("DebugDrive", "  route $level ${span.start.toInt()}-${span.endInclusive.toInt()} m") }
+          lv.cues.forEach { c -> Log.i("DebugDrive", "  ${c.kind} split at ${c.at.toInt()} m, structure at ${c.structureAt.toInt()} m, other side ${c.otherSide}") }
+          lv.parallels.forEach { p -> Log.i("DebugDrive", "  beside: ${p.level} ${p.from.toInt()}-${p.to.toInt()} m, ${p.lines.size} lines") }
+        }
+        val ui = vm.navigationUiState.value
+        Log.i("DebugDrive", "cue now: ${vm.levelCueAhead(ui, vm.extras.value)}")
+      }
       // How fast a virtual display like the car's runs, with and without asking for 60 Hz (logcat
       // under DebugDrive). Works with the phone locked: nothing shows on its screen.
       "com.thealgothrim.overworld.DEBUG_VDFPS" -> {
@@ -192,7 +219,9 @@ class DebugDriveReceiver : BroadcastReceiver() {
               if (intent.hasExtra("from_lat") && intent.hasExtra("from_lng"))
                   GeographicCoordinate(intent.getFloatExtra("from_lat", 0f).toDouble(), intent.getFloatExtra("from_lng", 0f).toDouble())
               else null
-          vm.startNavigation(to, intent.getStringExtra("name")?.replace("%s", " "), from)
+          // --ef from_heading: the way the car faces at the start, so the route starts on its carriageway.
+          val heading = if (intent.hasExtra("from_heading")) intent.getFloatExtra("from_heading", 0f).toDouble() else null
+          vm.startNavigation(to, intent.getStringExtra("name")?.replace("%s", " "), from, heading)
           Log.i("DebugDrive", "test drive to $to")
         }
         intent.getStringExtra("query")?.replace("%s", " ")?.let { query ->

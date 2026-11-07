@@ -1,8 +1,8 @@
 # Overworld Maps privacy policy
 
-Last updated 16 October 2026.
+Last updated 7 November 2026.
 
-Overworld Maps is a navigation app for Android phones and Android Auto, made by Gaurav Kumar (The Algothrim). This page says what the app does with your information. In short: it has no account, no ads and no analytics, and nothing about you is sent to the developer.
+Overworld Maps is a navigation app for Android phones and Android Auto, made by Gaurav Kumar (The Algothrim). This page says what the app does with your information. In short: it has no account, no ads and no analytics, and nothing about you is sent to the developer unless you send a problem report yourself.
 
 ## Location
 
@@ -19,13 +19,17 @@ To draw the map and plan routes, the app asks these services over encrypted conn
 | Photon by komoot | The words you search for, with roughly where you are | Place search |
 | Overpass API (overpass-api.de, overpass.kumi.systems) | Small map areas along your route | Speed cameras from OpenStreetMap |
 | TomTom | The route, or the area around it | Traffic, incidents and travel times |
-| OpenFreeMap | The map tiles for the area on screen | Drawing the map |
+| OpenFreeMap | The map tiles for the area on screen, and along a planned route | Drawing the map, and finding the flyovers and underpasses on and beside the route |
 
 These services handle requests under their own privacy policies. The developer has no access to what they log.
 
 ## What stays on your phone
 
-Saved places (Home, Work and the places you save), speed cameras you mark, your settings, and a short drive log used for fixing problems (points in it are rounded to about 100 metres) are kept only on your phone. They are never uploaded. Uninstalling the app, or clearing its data in Android's settings, deletes them. Settings can also forget Home, Work, recent places and marked cameras.
+Saved places (Home, Work and the places you save), speed cameras you mark, your settings, a short drive log used for fixing problems (points in it are rounded to about 100 metres), and a track of the last few hours of driving (each GPS fix as it came, with its speed, heading and height, and the height from the phone's air-pressure sensor where it has one) are kept only on your phone. The app never uploads them. Uninstalling the app, or clearing its data in Android's settings, deletes them. Settings can also forget Home, Work, recent places and marked cameras.
+
+## Reporting a problem
+
+Settings, About, Report a problem opens your own email app with a message to gaurav@thealgothrim.com and three files attached: a summary of your settings and phone model, the drive log, and the track of the last few hours. Nothing is sent unless you press Send, and you can remove the track (where you drove) from the email first. Reports are used only to find and fix problems in the app.
 
 ## Children
 

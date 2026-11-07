@@ -69,6 +69,17 @@
             android:name="com.stadiamaps.ferrostar.core.service.FerrostarForegroundService"
             android:foregroundServiceType="location" />
 
+        <!-- Report a problem: the report's files, readable by the email app the tester picks. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.reports"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/report_paths" />
+        </provider>
+
         <service
             android:name=".car.OverworldCarAppService"
             android:exported="true">

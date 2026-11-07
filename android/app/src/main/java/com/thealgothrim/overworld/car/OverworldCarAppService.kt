@@ -42,6 +42,9 @@ class OverworldCarSession : Session() {
     AppModule.ferrostarCore.spokenInstructionObserver = AppModule.spokenInstructions
     AppModule.viewModel.refreshLocationPermission()
     AppModule.viewModel.setCarDark(carContext.isDarkMode)
+    // For a problem report: what the car's Android Auto is.
+    com.thealgothrim.overworld.report.ProblemReport.carApi =
+        listOfNotNull(runCatching { "${carContext.carAppApiLevel}" }.getOrNull(), carContext.hostInfo?.packageName).joinToString(", ")
     navigateTo(intent)
     val map = CarNavigationScreen(carContext)
     if (AppModule.viewModel.locationAllowed.value) return map

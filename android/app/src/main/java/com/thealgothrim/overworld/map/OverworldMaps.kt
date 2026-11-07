@@ -46,6 +46,7 @@ import com.thealgothrim.overworld.theme.OverworldTheme
 import com.thealgothrim.overworld.traffic.RoadFeature
 import com.thealgothrim.overworld.traffic.RoadFeatureKind
 import com.thealgothrim.overworld.ui.CarGameHud
+import com.thealgothrim.overworld.ui.LevelCallout
 import com.thealgothrim.overworld.ui.CarTapTargets
 import com.thealgothrim.overworld.ui.CarPanelActions
 import com.thealgothrim.overworld.ui.CarPanelView
@@ -62,6 +63,11 @@ import com.thealgothrim.overworld.theme.style
 import com.thealgothrim.overworld.theme.weight
 import org.maplibre.compose.map.MapOptions
 import org.maplibre.compose.map.OrnamentOptions
+import org.maplibre.compose.map.RenderOptions
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.maplibre.compose.style.BaseStyle
 import org.maplibre.compose.util.MaplibreComposable
 import uniffi.ferrostar.GeographicCoordinate
@@ -95,9 +101,11 @@ fun OverworldPhoneMap(
   val variant by AppModule.viewModel.mapVariant.collectAsState()
   val flat = !details.buildings3d
   val places = details.placeIcons
-  val baseStyle =
-      remember(theme.id, trafficTiles, variant, flat, places) { BaseStyle.Json(StyleCache.json(context, theme, car = false, trafficTiles, variant, flat, places)) }
+  val baseStyle = rememberMapStyle(StyleKey(theme, car = false, trafficTiles, variant, flat, places)) { k ->
+    BaseStyle.Json(StyleCache.json(context, k.theme, k.car, k.trafficTiles, k.variant, k.flat, k.places))
+  }
   Box(Modifier.fillMaxSize().tiltGesture(mapState)) {
+    FrameStatsProbe("phone")
     NavigationMapView(
         baseStyle = baseStyle,
         navigationMapState = mapState,
@@ -127,6 +135,11 @@ fun OverworldPhoneMap(
         },
     ) { state ->
       OverworldLayers(state, theme, car = false, extras, details, previewRoute, pickedDestination, style = baseStyle, headingUp = mapState.headingUp, glide = mapState.glide)
+    }
+    // "Take flyover" on the map at the split, clear of the turn banner and the trip sheet.
+    val levels = extras.levels
+    AppModule.viewModel.levelCueAhead(uiState, extras)?.takeIf { levels != null && uiState.isCalculatingNewRoute != true }?.let { cue ->
+      LevelCallout(mapState.cameraState, levels!!.pointAt(cue.cue.at), cue, theme.spec, PaddingValues(top = 170.dp, bottom = 230.dp))
     }
   }
   RecenterGlideEffect(mapState)
@@ -166,6 +179,7 @@ fun OverworldCarMap(
   val planner by AppModule.viewModel.planner.collectAsState()
 
   Box(Modifier.fillMaxSize()) {
+    FrameStatsProbe("car")
     CarMapView(theme, uiState, mapState, cameraOptions, trafficTiles, extras, details, planner.preview?.route?.geometry)
 
     // Same paper as the phone, a little lighter so the roads stay crisp at a glance.
@@ -176,6 +190,11 @@ fun OverworldCarMap(
       // The minimap's "N" and, when the destination is off the map, its pink dot on the edge.
       val destination = (uiState.routeGeometry?.takeIf { uiState.isNavigating() } ?: planner.preview?.route?.geometry)?.lastOrNull()
       ViEdgeMarkers(mapState.cameraState, destination, stable)
+    }
+    // "Take flyover" on the map at the split, like Google Maps' callout (the turn card says it too).
+    val levels = extras.levels
+    AppModule.viewModel.levelCueAhead(uiState, extras)?.takeIf { levels != null && uiState.isCalculatingNewRoute != true }?.let { cue ->
+      LevelCallout(mapState.cameraState, levels!!.pointAt(cue.cue.at), cue, theme.spec, stable)
     }
 
     // The HUD was drawn for the Curvv's wide screen. Smaller head units, and the map's half of a
@@ -258,8 +277,15 @@ fun OverworldClusterMap(
   val trafficTiles = AppModule.traffic.flowTilesUrl?.takeIf { details.traffic }
   val planner by AppModule.viewModel.planner.collectAsState()
   Box(Modifier.fillMaxSize()) {
-    // Roads and the route only: place icons are clutter at the cluster's size and distance.
-    CarMapView(theme, uiState, mapState, cameraOptions, trafficTiles, extras, details.copy(placeIcons = false), planner.preview?.route?.geometry)
+    FrameStatsProbe("cluster")
+    // Roads and the route only: place icons are clutter at the cluster's size and distance. Flat
+    // buildings and at most 30 frames a second: the cluster draws all drive long beside the main
+    // screen, often unseen (the car shows it only in its map view), and two full 3D maps at once
+    // were more than the phone needed to spend in a hot car.
+    CarMapView(
+        theme, uiState, mapState, cameraOptions, trafficTiles, extras, details.copy(placeIcons = false, buildings3d = false), planner.preview?.route?.geometry,
+        maximumFps = CLUSTER_MAX_FPS,
+    )
     if (theme.paperOverlay) PaperOverlay(strength = 0.75f)
     if (theme.skin == Skin.GTA6) {
       val variant by AppModule.viewModel.carMapVariant.collectAsState()
@@ -334,18 +360,22 @@ private fun CarMapView(
     extras: RouteExtras,
     details: MapDetails,
     previewRoute: List<GeographicCoordinate>?,
+    /** A cap on frames a second (the cluster's); none for the main car screen. */
+    maximumFps: Int? = null,
 ) {
   val context = LocalContext.current
   val variant by AppModule.viewModel.carMapVariant.collectAsState()
   val flat = !details.buildings3d
   val places = details.placeIcons
-  val baseStyle =
-      remember(theme.id, trafficTiles, variant, flat, places) { BaseStyle.Json(StyleCache.json(context, theme, car = true, trafficTiles, variant, flat, places)) }
+  val baseStyle = rememberMapStyle(StyleKey(theme, car = true, trafficTiles, variant, flat, places)) { k ->
+    BaseStyle.Json(StyleCache.json(context, k.theme, k.car, k.trafficTiles, k.variant, k.flat, k.places))
+  }
+  val mapOptions = remember(maximumFps) { MapOptions(renderOptions = RenderOptions(maximumFps = maximumFps), ornamentOptions = OrnamentOptions.AllDisabled) }
   NavigationMapView(
       baseStyle = baseStyle,
       navigationMapState = mapState,
       uiState = rememberSmoothedUiState(uiState),
-      mapOptions = MapOptions(ornamentOptions = OrnamentOptions.AllDisabled),
+      mapOptions = mapOptions,
       navigationCameraOptions = cameraOptions,
       routeOverlayBuilder = null,
       showDefaultPuck = false,
@@ -448,4 +478,35 @@ private val PHONE_GESTURES = GestureOptions(isTiltEnabled = false)
 private fun themedListsOn(): Boolean {
   val on by AppModule.themeStore.carThemedLists.collectAsState()
   return on
+}
+
+/** At most this many frames a second on the instrument cluster (see OverworldClusterMap). */
+private const val CLUSTER_MAX_FPS = 30
+
+/** What a map style is built from; a different one means a rebuilt style. */
+data class StyleKey(
+    val theme: OverworldTheme,
+    val car: Boolean,
+    val trafficTiles: String?,
+    val variant: String?,
+    val flat: Boolean,
+    val places: Boolean,
+)
+
+/**
+ * The map style for [key]. The first is built at once, since the map needs one to start; after that
+ * a change (a switch in the car's Settings, dusk coming) is built off the main thread while the old
+ * style stays up. Built in the middle of drawing, it held up the frame the switch itself lit up in,
+ * so the switches felt slow (7 Nov).
+ */
+@Composable
+fun rememberMapStyle(key: StyleKey, build: (StyleKey) -> BaseStyle): BaseStyle {
+  val built = remember { mutableStateOf(key to build(key)) }
+  val latest by rememberUpdatedState(build)
+  LaunchedEffect(key) {
+    if (built.value.first == key) return@LaunchedEffect
+    val style = withContext(Dispatchers.Default) { latest(key) }
+    built.value = key to style
+  }
+  return built.value.second
 }

@@ -94,6 +94,10 @@ data class SkinSpec(
   fun titleSize(gta: TextUnit, rdr: TextUnit): TextUnit = if (this.rdr) rdr else gta
 
   fun title(text: String) = if (upperTitles) text.uppercase() else text
+
+  /** Text on the accent colour: GTA VI's dark ink on its pink, white on the others' purple and red. */
+  val onAccent: Color
+    get() = if (vi) Vi.Ink else Color.White
 }
 
 val OverworldTheme.spec: SkinSpec
@@ -417,6 +421,8 @@ enum class GameIcon {
   SEARCH, SETTINGS, LOCATE, CLOSE, BACK, STAR, STAR_FILLED, HOME, WORK, RECENT, PIN, SOUND_ON, SOUND_OFF,
   ROUTE, OVERVIEW, CHEVRON_UP, CHEVRON_DOWN, NORTH, NAVIGATE, CAR, LAYERS,
   FUEL, FOOD, PARKING, TOILET, HOSPITAL, HOTEL, CAMERA, ZOOM_IN, ZOOM_OUT,
+  /** "Mark this moment" for a problem report; drawn in code in every theme. */
+  FLAG,
 }
 
 /** The icon for a kind of nearby place. */
@@ -604,6 +610,11 @@ fun DrawScope.drawGameIcon(icon: GameIcon, color: Color) {
       drawPath(path(3f to 14f, 21f to 14f, 21f to 19f), color, style = line)
       drawPath(path(3f to 11f, 21f to 11f, 21f to 14f), color, style = line)
       drawCircle(color, 1.8f * u, p(7f, 8.5f))
+    }
+    GameIcon.FLAG -> {
+      // A pennant on its pole.
+      drawLine(color, p(6f, 3f), p(6f, 21f), strokeWidth = w, cap = StrokeCap.Round)
+      drawPath(path(6f to 4f, 19f to 8f, 6f to 12.5f, close = true), color)
     }
     GameIcon.CAMERA -> {
       // A speed camera on its post.

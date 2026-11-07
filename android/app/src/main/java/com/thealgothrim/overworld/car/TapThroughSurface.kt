@@ -8,6 +8,8 @@ import androidx.car.app.SurfaceContainer
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.rallista.car.app.compose.ComposableScreen
+import com.thealgothrim.overworld.AppModule
+import com.thealgothrim.overworld.ui.CarPanels
 import com.thealgothrim.overworld.ui.CarTapTargets
 
 /**
@@ -37,6 +39,7 @@ fun ComposableScreen.passTapsTo(onTap: (x: Float, y: Float, shift: Float) -> Uni
             return
           }
           width = c.width
+          com.thealgothrim.overworld.report.ProblemReport.carScreen = "${c.width}x${c.height} at ${c.dpi} dpi"
           try {
             inner.onSurfaceAvailable(c)
           } catch (e: RuntimeException) {
@@ -74,11 +77,19 @@ fun ComposableScreen.passTapsTo(onTap: (x: Float, y: Float, shift: Float) -> Uni
         fun touched(now: Long) {
           if (now - CarTapTargets.touchedAt.longValue > TOUCH_NOTE_MS) CarTapTargets.touchedAt.longValue = now
         }
+        // With Overworld's own Settings, Saved or Nearby panel open, a drag scrolls the panel and the
+        // map under it stays put. Android Auto doesn't say where a drag is, only how far, so while
+        // a panel is up every drag is the panel's (pinches still zoom the map).
+        private val panelUp: Boolean
+          get() = CarPanels.open != null && AppModule.themeStore.carThemedLists.value
+
         override fun onScroll(distanceX: Float, distanceY: Float) {
           touched(System.currentTimeMillis())
+          if (panelUp) return CarPanels.scrollBy(distanceY)
           CarMapGestures.active?.scroll(distanceX, distanceY) ?: inner.onScroll(distanceX, distanceY)
         }
         override fun onFling(velocityX: Float, velocityY: Float) {
+          if (panelUp) return CarPanels.fling(velocityY)
           CarMapGestures.active?.fling(velocityX, velocityY) ?: inner.onFling(velocityX, velocityY)
         }
         override fun onScale(focusX: Float, focusY: Float, scaleFactor: Float) {

@@ -25,3 +25,6 @@ tools/fonts/
 
 # Python caches (tools/make_sprite.py imports tools/make_icons.py)
 __pycache__/
+
+# Kotlin 2 build cache
+android/.kotlin/
