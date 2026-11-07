@@ -1,0 +1,21 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: "Barlow Condensed"; font-weight: 700; src: url(../../android/app/src/main/res/font/barlow_condensed_bold.ttf); }
+@font-face { font-family: "Inter"; font-weight: 500; src: url(../../android/app/src/main/res/font/inter_medium.ttf); }
+@font-face { font-family: "Inter"; font-weight: 600; src: url(../../android/app/src/main/res/font/inter_semibold.ttf); }
+html, body { margin: 0; padding: 0; background: #000; }
+#c { position: relative; overflow: hidden; }
+.bg { position: absolute; inset: 0; }
+.grain { position: absolute; inset: 0; z-index: 40; pointer-events: none; opacity: .07; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+.head { position: absolute; z-index: 30; margin: 0; font-family: "Barlow Condensed"; font-weight: 700; line-height: .9;
+  letter-spacing: .004em; text-transform: uppercase; }
+.sub { position: absolute; z-index: 30; margin: 0; font-family: "Inter"; font-weight: 500; line-height: 1.35; opacity: .8; }
+.brand { position: absolute; z-index: 30; display: flex; align-items: center; font-family: "Inter"; font-weight: 600; }
+.brand img { box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+.sticker { position: absolute; filter: drop-shadow(0 14px 22px rgba(0,0,0,.45)); }
+.pop { position: absolute; filter: drop-shadow(0 26px 44px rgba(0,0,0,.55)); }
+</style></head>
+<body><div id="c"></div>
+<script src="layouts.js"></script><script src="draw.js"></script></body></html>

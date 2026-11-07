@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/readme/hero.png" alt="Overworld Maps: real roads drawn like an open-world game map, on an Android Auto screen" width="100%">
+  <picture>
+    <source media="(max-width: 600px)" srcset="docs/readme/hero-mobile.webp">
+    <img src="docs/readme/hero.webp" alt="Overworld Maps: real roads, game map. A car screen in the GTA V world with two phones in the GTA VI and Red Dead 2 worlds" width="100%">
+  </picture>
 </p>
 
 <p align="center">
@@ -8,101 +11,123 @@
 </p>
 
 <p align="center">
-  <a href="https://overworld.thealgothrim.com"><strong>Website</strong></a>
-  &nbsp;·&nbsp;
-  <a href="#get-it">Get it</a>
-  &nbsp;·&nbsp;
-  <a href="#screenshots">Screenshots</a>
-  &nbsp;·&nbsp;
-  <a href="#features">Features</a>
-  &nbsp;·&nbsp;
-  <a href="#how-it-works">How it works</a>
-  &nbsp;·&nbsp;
-  <a href="#build-it">Build it</a>
-  &nbsp;·&nbsp;
-  <a href="#put-it-in-the-car">Put it in the car</a>
+  <a href="#get-it"><img alt="In the car: join Play testing" src="https://img.shields.io/badge/In%20the%20car-Join%20Play%20testing-fb74a5?style=for-the-badge&logo=googleplay&logoColor=white"></a>
+  <a href="https://github.com/TheAlgo7/overworld-maps/releases/latest"><img alt="On the phone: download the APK" src="https://img.shields.io/badge/On%20the%20phone-Download%20APK-2a2230?style=for-the-badge&logo=android&logoColor=white"></a>
+  <a href="https://overworld.thealgothrim.com"><img alt="Website: overworld.thealgothrim.com" src="https://img.shields.io/badge/Website-overworld.thealgothrim.com-2a2230?style=for-the-badge"></a>
 </p>
 
 <p align="center">
-  <img alt="Android Auto" src="https://img.shields.io/badge/Android%20Auto-navigation-3ddc84?style=flat-square">
-  <img alt="Kotlin and Compose" src="https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7f52ff?style=flat-square">
-  <img alt="MapLibre and Ferrostar" src="https://img.shields.io/badge/MapLibre-Ferrostar-396cb2?style=flat-square">
-  <img alt="Running cost" src="https://img.shields.io/badge/running%20cost-%E2%82%B90-70d79a?style=flat-square">
+  <a href="#get-it">Get it</a> ·
+  <a href="#three-worlds">Three worlds</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#build-it">Build it</a> ·
+  <a href="#known-limits">Known limits</a>
+</p>
+
+<p align="center">
+  <img src="docs/readme/drive.webp" alt="The car screen on one drive round Connaught Place, New Delhi, switching from the GTA V world to Red Dead 2 to GTA VI" width="100%">
+  <br>
+  <sub>One drive round Connaught Place, New Delhi, in all three worlds, on the car's 1920x720 screen.</sub>
 </p>
 
 ## Why Overworld Maps
 
-Games have spent twenty years making maps people want to look at. Car navigation still draws grey lines on beige. Overworld Maps draws the real roads under your car in the style of a game's map and HUD: GTA V's near-black pause map with its purple waypoint route, Red Dead's parchment and ink with a red trail, or GTA VI's pale sat-nav minimap with raised buildings and a pink route.
+Games have spent twenty years making maps people want to look at. Car navigation still draws grey lines on beige. Overworld Maps draws the real roads under the car in the style of a game's map and HUD, and drives you there turn by turn, with Google's routes and live traffic underneath.
 
-It is a personal project, built first for one car: a Tata Curvv with a 10.25-inch 1920x720 HARMAN screen and wireless Android Auto. It has since been driven in a Tata Nexon and a Volkswagen Virtus GT too. The phone app covers everything else, down to a ride on the bike.
+<img src="docs/readme/real.webp" align="right" width="30%" alt="Overworld in the GTA V world on the screen of a Tata Curvv, on a real Delhi road">
 
-| World | Look | Status |
-|---|---|---|
-| **GTA V** | The pause map: near-black land, flat grey roads, ice-pale water, no labels, the game's shop blips, a flat waypoint-purple route, a scale bar and area name in the corner. The radar's gentle tilt while driving. GTA menus and HUD. | Ready |
-| **Red Dead 2** | Parchment and ink: ink roads, dotted railways, pencil place names, hatched forest, paper grain, a red route. Seen from straight above, like the game's minimap. Red Dead menus and HUD. | Ready |
-| **GTA VI** | The minimap from Rockstar's 2026 Extended Look: a steep 3D view close in, pale warm-grey ground, broad roads with lane dashes, raised and shaded buildings, flyovers standing over the roads below, grey-teal water, no names, and a pink route that fades in just ahead of the marker. It follows the sun: dim and warm at golden hour, violet slate at night. Rounded dark-glass HUD. | Ready |
-| **Next** | Minecraft, Genshin Impact, Fortnite OG, Zelda: Breath of the Wild, Cyberpunk 2077. | Planned |
+It was built first for one car: a Tata Curvv with a 10.25-inch 1920x720 HARMAN screen and wireless Android Auto. It has since been driven in a Tata Nexon and a Volkswagen Virtus GT too, and tested at the screen sizes of India's popular cars, down to a 7-inch 800x480 head unit. The phone app covers everything else, down to a ride on the bike.
+
+No account, no ads, and nothing to pay: the maps, routing and search are free services, and live traffic comes from Google.
+
+<br clear="right">
 
 ## Get it
 
+**In the car:** Android Auto only lists navigation apps installed from Google Play, so the car needs the Play copy. Overworld is in closed testing on Google Play (India for now):
+
+1. Join the [Algothrim testers group](https://groups.google.com/g/algothrim-testers) with the Gmail account on your phone.
+2. Open the [Play testing page](https://play.google.com/apps/testing/com.thealgothrim.overworld), tap **Become a tester** and install.
+
+Updates then arrive as ordinary Play Store updates.
+
 **On the phone:** download the APK from the [latest release](https://github.com/TheAlgo7/overworld-maps/releases/latest) and open it (Android 10 or newer; allow installs from your browser or files app when asked). **The APK is for the phone only: it doesn't show up in Android Auto.** It uses free stand-in fonts in place of the games' own (see [Game fonts and art](#game-fonts-and-art)) and takes live traffic from Google alone.
 
-**In the car:** Android Auto only shows navigation apps installed from Google Play, so the car needs the Play copy. Testers on the APK found it missing from their car's screen, and the Play copy works there. Overworld is in closed testing on Google Play (India for now): join the [Algothrim testers group](https://groups.google.com/g/algothrim-testers) with the Gmail account on your phone, open the [Play testing page](https://play.google.com/apps/testing/com.thealgothrim.overworld), tap **Become a tester** and install. Updates arrive as ordinary Play Store updates. The APK and the Play copy are signed differently, so uninstall one before installing the other.
+The APK and the Play copy are signed differently, so uninstall one before installing the other.
 
-## Screenshots
+## Three worlds
 
-**In the car** (the Curvv's 1920x720 screen; Android Auto adds its own buttons at the right):
+<picture>
+  <source media="(max-width: 600px)" srcset="docs/readme/world-gta5-mobile.webp">
+  <img src="docs/readme/world-gta5.webp" alt="Drive the dark city: the GTA V world on the car screen and the phone" width="100%">
+</picture>
 
-<table>
-  <tr>
-    <td align="center"><img src="docs/readme/car-gta-limit.png" width="420" alt="GTA V world on the car screen, over the speed limit"><br><sub>GTA V: over the limit, the speed and the sign turn red</sub></td>
-    <td align="center"><img src="docs/readme/car-rdr.png" width="420" alt="Red Dead world on the car screen"><br><sub>Red Dead 2: the same drive in ink</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/readme/car-gta6.png" width="420" alt="GTA VI world on the car screen, with raised buildings"><br><sub>GTA VI: raised buildings, a pink route</sub></td>
-    <td align="center"><img src="docs/readme/car-gta6-night.png" width="420" alt="GTA VI world on the car screen at night"><br><sub>GTA VI after dark: the map follows the sun</sub></td>
-  </tr>
-</table>
+**GTA V.** The pause map: near-black land, flat grey roads, ice-pale water, no labels, the game's shop blips, a flat waypoint-purple route, a scale bar and the area name in the corner. The radar's gentle tilt while driving. GTA menus and HUD.
 
-**On the phone:**
+<picture>
+  <source media="(max-width: 600px)" srcset="docs/readme/world-rdr2-mobile.webp">
+  <img src="docs/readme/world-rdr2.webp" alt="Ride the frontier: the Red Dead 2 world on the car screen and the phone" width="100%">
+</picture>
 
-<table>
-  <tr>
-    <td align="center"><img src="docs/readme/phone-rdr-map.png" width="160" alt="The Red Dead map with its blips"><br><sub>The map, with blips</sub></td>
-    <td align="center"><img src="docs/readme/phone-gta-preview.png" width="160" alt="Route preview with live traffic"><br><sub>Route preview, live traffic</sub></td>
-    <td align="center"><img src="docs/readme/phone-gta-drive.png" width="160" alt="Driving in the GTA V world"><br><sub>Driving: GTA V</sub></td>
-    <td align="center"><img src="docs/readme/phone-rdr-drive.png" width="160" alt="Driving in the Red Dead world"><br><sub>Driving: Red Dead 2</sub></td>
-    <td align="center"><img src="docs/readme/phone-gta6-drive.png" width="160" alt="Driving in the GTA VI world"><br><sub>Driving: GTA VI</sub></td>
-    <td align="center"><img src="docs/readme/phone-gta6-settings.png" width="160" alt="Settings as the game's pause menu"><br><sub>Settings is the pause menu</sub></td>
-  </tr>
-</table>
+**Red Dead 2.** Parchment and ink: ink roads, dotted railways, pencil place names, hatched forest, paper grain and a red route. Seen from straight above, like the game's minimap. Red Dead menus and HUD.
+
+<picture>
+  <source media="(max-width: 600px)" srcset="docs/readme/world-gta6-mobile.webp">
+  <img src="docs/readme/world-gta6.webp" alt="It follows the sun: the GTA VI world at night on the car screen and by day on the phone" width="100%">
+</picture>
+
+**GTA VI.** The minimap from Rockstar's 2026 Extended Look: a steep 3D view close in, pale warm-grey ground, broad roads with lane dashes, raised and shaded buildings, flyovers standing over the roads below, grey-teal water, no names, and a pink route that fades in just ahead of the marker. It follows the sun: pale by day, warm at golden hour, violet slate at night. Rounded dark-glass HUD.
+
+<picture>
+  <source media="(max-width: 600px)" srcset="docs/readme/phone-mobile.webp">
+  <img src="docs/readme/phone.webp" alt="Your phone, same worlds: the map with its blips, Settings as Red Dead's pause menu, and a GTA VI drive" width="100%">
+</picture>
+
+**On the phone,** the same three worlds with Google Maps' layout: search, Home, Work and Saved, a place sheet, a route preview with live traffic, and Settings drawn as the game's pause menu.
 
 ## Features
 
-- **The car screen comes first.** Our HUD owns the left of the Android Auto screen and Android Auto keeps the right: the turn card with "Then" and road alerts top-left, the time card bottom-left with the speedometer standing on it and the speed-limit sign beside it, the street name along the bottom. The route preview is a themed card with Start and Cancel drawn in the game's style.
-- **Any car screen.** The HUD is drawn for the Curvv's wide screen and scales down to fit smaller head units and the map's half of a split screen (Spotify beside it), so nothing overlaps. Switching between full screen and split screen glides instead of jumping.
-- **Map buttons in the game's style.** Sound, zoom and the route overview are round buttons drawn in each world's look, in place of Android Auto's grey ones. They appear with a touch and leave with Android Auto's own buttons, so the map stays clear while driving. Dragging follows the finger, a flick glides on and a pinch zooms where your fingers are. Drag, pinch or zoom the map and a **re-centre** button stays until you tap it: your own marker in the route's colour, and the camera glides back onto the car in under half a second. Buttons show the moment a finger touches the screen.
+- **The car screen comes first.** The HUD owns the left of the Android Auto screen and Android Auto keeps the right: the turn card with "Then" and road alerts, the time card with the speedometer and the speed-limit sign, the street name along the bottom. It scales to every head unit and to split screen beside Spotify.
+- **Google's routes, the game's look.** Trips follow Google Maps' own route, with its traffic, closures and time to go, laid onto the game map. One switch turns Google off and uses only open data.
+- **Every light, every camera.** Traffic lights on the route, speed cameras ahead, accidents, road works and closures along the way, and speed-limit signs for each world that turn red at 5 km/h over.
+- **Flyovers you drive under.** Bridges stand over the roads they cross, and the route runs under a flyover you pass beneath and over one you drive on.
+- **The phone is a remote for the car.** With Android Auto on, the phone shows the trip, the route preview, search and every car-screen setting instead of a second map.
+- **Made for Indian roads.** Metric, a 12-hour clock, and turn arrows for left-hand traffic: roundabouts circle clockwise and U-turns curl right.
+
+<details>
+<summary><strong>Everything else it does</strong></summary>
+
+### On the car screen
+
+- **Any car screen.** The HUD is drawn for the Curvv's wide screen and scales down to fit smaller head units and the map's half of a split screen, so nothing overlaps. Switching between full screen and split screen glides instead of jumping.
+- **Map buttons in the game's style.** Sound, zoom and the route overview are round buttons drawn in each world's look, in place of Android Auto's grey ones. They appear with a touch and leave with Android Auto's own buttons, so the map stays clear while driving. Dragging follows the finger, a flick glides on and a pinch zooms where your fingers are. Drag, pinch or zoom the map and a **re-centre** button stays until you tap it: your own marker in the route's colour, and the camera glides back onto the car in under half a second.
 - **A camera like each game's, zoomed like Google's.** Each world has its own tilt (steep 3D for GTA VI, gentle for GTA V, flat for Red Dead). The map pulls back on a fast straight road and comes in before a turn. Your marker sits low and right of centre, pointing straight up the road, and is drawn where the car is now, not a GPS fix behind.
-- **Flyovers you drive under.** Bridges stand over the roads they cross with an edge and a shadow on the ground. The route runs under a flyover you pass beneath and over one you drive on, like the games' minimaps.
-- **Menus in the game's look on the car screen.** Everything of Overworld's sits in one column on the left, like Google's one card. Settings, Saved, Nearby and search results open as panels in the world's own style over the live map, not as Android Auto's plain full-screen lists (those are one switch away). While driving, Nearby, Settings and End come up with a touch and leave with Android Auto's own buttons.
+- **Menus in the game's look.** Everything of Overworld's sits in one column on the left, like Google's one card. Settings, Saved, Nearby and search results open as panels in the world's own style over the live map, not as Android Auto's plain full-screen lists (those are one switch away). While driving, Nearby, Settings and End come up with a touch and leave with Android Auto's own buttons.
 - **Settings in the car, kept apart from the phone's.** The theme, GTA VI's time of day, place icons, traffic, 3D buildings, the game HUD, the camera beep and + Cam all switch from the car screen, and the car remembers its own: GTA VI in the car while the phone stays on GTA V.
-- **The phone is a remote for the car.** With Android Auto on, the phone shows the trip (turn, time left, End, voice), the route preview with Start, search and shortcuts, and every car-screen setting, in the car's theme, instead of a second map. "Phone map" brings the map back for a passenger.
 - **The map between the dials.** In cars with an instrument cluster display (the Curvv's "map view"), the route and the arrow show there too, low on the screen so most of it is road ahead.
-- **Your places on the map.** Home, Work and starred places stand on the map the way each game marks what's yours (a safehouse, a briefcase, a star), and a tap on one opens it.
 - **Free drive.** With no trip the car map still follows you heading-up and glides between GPS fixes, with your speed, the area name and camera alerts, like Google Maps' free drive. Parked for a few minutes, a compact "Where to?" card comes back with search, Home, Work and your last places, each one tap away.
-- **Steady GPS.** Fixes that jump further than the car could have driven are held back, so at a red light the marker stays put instead of wandering onto the crossing road, and under a flyover it carries on along the road for a few seconds instead of freezing. A real wrong turn still reroutes within seconds; a single stray fix never does. Driving the wrong way along the route (the other carriageway of a divided road, a few metres away) counts as a wrong turn too.
-- **Says when GPS is gone.** No fix for a while shows "Location not found" instead of a frozen marker, and the speed hides rather than showing an old one.
 - **Find places on the car screen.** Search (Android Auto's keyboard while parked; the results then open over the map) and **Nearby**: petrol and CNG, food, parking, toilets, hospitals and hotels, closest first. On a trip, a pick becomes a stop on the way.
-- **Google's routes and places, the game's look.** Trips follow Google Maps' own route, with its traffic, closures and one-ways and its time to go, laid onto the game map. Where Google's line takes a U-turn gap the map data draws differently, the gap is bridged instead of the route being dropped, and a reroute never starts by turning the car around. The open routing service is asked at the same time, so a route shows in under two seconds even when Google is slow. Search asks Google alongside TomTom and OpenStreetMap, so small places only Google lists (a house, a small church) turn up. It also reads plus codes like `F5QR+3F New Delhi` and takes a place shared from Google Maps (Share > Overworld). One switch in Settings turns Google off and uses only open data.
+- **Navigation requests in the car.** When Android Auto hands Overworld a destination ("navigate to India Gate", or an address from a message), it drives there, by place name or by coordinates, even with a trip already running.
+
+### Routes, traffic and GPS
+
+- **Google's routes and places.** Where Google's line takes a U-turn gap the map data draws differently, the gap is bridged instead of the route being dropped, and a reroute never starts by turning the car around. The open routing service is asked at the same time, so a route shows in under two seconds even when Google is slow. Search asks Google alongside TomTom and OpenStreetMap, so small places only Google lists (a house, a small church) turn up. It also reads plus codes like `F5QR+3F New Delhi` and takes a place shared from Google Maps (Share > Overworld).
 - **The route behaves like the games'.** The road already driven disappears behind the marker, as on GTA V's radar and Red Dead's minimap; GTA VI's fades in just ahead of it. The markers are drawn small, the way the games draw their blips.
 - **Traffic only where it matters.** Like Google's route line: amber where slow, red for jams, darkest where closed, and only on your route. Traffic on every road is one switch away in Layers, off by default.
-- **Road alerts.** Traffic lights on the route, speed cameras ahead (every kind OpenStreetMap has, plus the ones you mark with **+ Cam** while driving, a car-screen button you turn on in Settings, and an optional beep), and accidents, road works and closures that run along the route (not side streets it crosses), with how much time the traffic adds.
-- **Speed-limit signs for each world**, turning red at 5 km/h over, along with the speed.
-- **GTA VI follows the sun.** Its map is pale by day, warm at golden hour and violet at night, worked out from where you are, or held at one in Settings. Its buildings stand up in 3D; a Layers switch lays them flat.
-- **Google Maps layout, game look.** Search, Home, Work and Saved, a place sheet, a route preview, a Layers sheet with theme cards. Tap a shop, temple or petrol pump on the map and the camera flies to it with Directions and Save; tilt with two fingers; tap locate twice and the map turns with the phone. GTA's pause-map corner shows the area and the scale beside the locate button. Settings is the game's pause menu, in four groups (map, driving, places, about); anything that forgets a place asks for a second tap.
-- **Navigation requests in the car.** When Android Auto hands Overworld a destination ("navigate to India Gate", or an address from a message), it drives there, by place name or by coordinates, even with a trip already running.
-- **Made for Indian roads.** Metric, a 12-hour clock, and turn arrows for left-hand traffic: roundabouts circle clockwise and U-turns curl right.
+- **Road alerts.** Speed cameras include every kind OpenStreetMap has, plus the ones you mark with **+ Cam** while driving (a car-screen button you turn on in Settings, with an optional beep). Accidents, road works and closures count only when they run along the route (not side streets it crosses), with how much time the traffic adds.
+- **Steady GPS.** Fixes that jump further than the car could have driven are held back, so at a red light the marker stays put instead of wandering onto the crossing road, and under a flyover it carries on along the road for a few seconds instead of freezing. A real wrong turn still reroutes within seconds; a single stray fix never does. Driving the wrong way along the route (the other carriageway of a divided road, a few metres away) counts as a wrong turn too.
+- **Says when GPS is gone.** No fix for a while shows "Location not found" instead of a frozen marker, and the speed hides rather than showing an old one.
+
+### On the phone
+
+- **Google Maps layout, game look.** Tap a shop, temple or petrol pump on the map and the camera flies to it with Directions and Save; tilt with two fingers; tap locate twice and the map turns with the phone. GTA's pause-map corner shows the area and the scale beside the locate button. Settings is the game's pause menu, in four groups (map, driving, places, about); anything that forgets a place asks for a second tap.
+- **Your places on the map.** Home, Work and starred places stand on the map the way each game marks what's yours (a safehouse, a briefcase, a star), and a tap on one opens it.
+- **The phone as the car's remote.** The trip (turn, time left, End, voice), the route preview with Start, search and shortcuts, and every car-screen setting, in the car's theme. "Phone map" brings the map back for a passenger.
+- **GTA VI follows the sun.** Its map is worked out from where you are, or held at one time of day in Settings. Its buildings stand up in 3D; a Layers switch lays them flat.
 - **Costs nothing to run.** OpenFreeMap tiles, public routing and search, Google's public web endpoints, and an optional free TomTom key for traffic.
+
+</details>
 
 ## How it works
 
@@ -124,7 +149,8 @@ flowchart LR
 - **Traffic on our own line:** Google's jams come measured along its route, which is the route we drive. Without Google, TomTom rebuilds our route from supporting points and returns its traffic sections, so the colours sit on the line we draw either way.
 - **Flyovers:** the styles draw bridges above other roads by OpenStreetMap's level with a shadow below, and mark where they start (`bridges-start`). The app draws the route under that mark, and draws again on top the stretches Valhalla's `trace_attributes` says are on a bridge.
 
-### Road info
+<details>
+<summary><strong>Where each piece of road info comes from</strong></summary>
 
 | What | Where it comes from | Needs |
 |---|---|---|
@@ -137,9 +163,11 @@ flowchart LR
 
 **TomTom key (free, no card):** sign up at developer.tomtom.com, copy the default API key, add `tomtomKey=<key>` to `android/local.properties` (gitignored), rebuild. The free tier gives 2,500 non-tile and 50,000 tile requests a day, far more than one driver uses. Without a key the app works as before and Layers shows those rows as off.
 
+</details>
+
 ## Game fonts and art
 
-The games' own fonts (Pricedown, Chalet, RDR Lino, RDR Catalogue, Hapna Slab Serif) and Rockstar's map blips are commercial or Rockstar Games property, so they are **not in this repository**. The app loads them from `android/app/src/local/` when that folder exists (it's gitignored) and otherwise uses free stand-ins with similar shapes: Barlow, Barlow Condensed, Passion One and IM FELL English, with redrawn vector icons. A clone builds and runs; it just looks a little less like the games. The screenshots above come from the author's build, which has them. GTA VI's interface is set in Inter and Barlow Condensed, both open fonts, so it looks the same in every build.
+The games' own fonts (Pricedown, Chalet, RDR Lino, RDR Catalogue, Hapna Slab Serif) and Rockstar's map blips are commercial or Rockstar Games property, so they are **not in this repository**. The app loads them from `android/app/src/local/` when that folder exists (it's gitignored) and otherwise uses free stand-ins with similar shapes: Barlow, Barlow Condensed, Passion One and IM FELL English, with redrawn vector icons. A clone builds and runs; it just looks a little less like the games. The pictures on this page come from the author's build, which has them. GTA VI's interface is set in Inter and Barlow Condensed, both open fonts, so it looks the same in every build.
 
 The speed-limit signs, the player markers and the app icon are the author's own artwork.
 
@@ -155,8 +183,8 @@ Or by hand from PowerShell: `cd android; .\gradlew.bat :app:assembleDebug`. Add 
 
 After changing a theme in `prototype/themes.js`, run `node tools/export-android.mjs`, then rebuild.
 
-
-### On the phone
+<details>
+<summary><strong>On the phone</strong></summary>
 
 1. Settings > About phone > Software information > tap **Build number** 7 times, then turn on Developer options > **USB debugging**.
 2. Plug into the computer and accept the prompt.
@@ -164,7 +192,10 @@ After changing a theme in `prototype/themes.js`, run `node tools/export-android.
 
 The phone app works fully like this. Turn on **Test drive** in Settings to simulate a trip without driving.
 
-### Android Auto on a laptop (no car needed)
+</details>
+
+<details>
+<summary><strong>Android Auto on a laptop (no car needed)</strong></summary>
 
 1. Phone: Settings > Connected devices > **Android Auto** > tap **Version** 10 times to unlock developer mode.
 2. Android Auto's ⋮ menu > **Developer settings** > turn on **Unknown sources**.
@@ -178,6 +209,11 @@ The phone app works fully like this. Turn on **Test drive** in Settings to simul
 5. Overworld is in the Android Auto app drawer. Pick a destination on the phone.
 
 If the head unit sits on "Waiting for phone", stop and start the head unit server, then relaunch it.
+
+</details>
+
+<details>
+<summary><strong>Test drives and tests</strong></summary>
 
 **Test drives from the laptop** (debug builds, works with the phone locked):
 
@@ -194,21 +230,27 @@ Map icons and labels don't draw on the emulator's default software GPU. Start it
 
 To check a world's car screen without a head unit, debug builds have `CarPreviewActivity`: the car map and HUD in a plain window. Set an emulator to the Curvv's screen (`adb shell wm size 1920x720` and `adb shell wm density 200`), open it with `adb shell am start -n com.thealgothrim.overworld.debug/com.thealgothrim.overworld.CarPreviewActivity`, and start a test drive as above (`--es time night` holds GTA VI at night).
 
-## Put it in the car
+</details>
+
+<details>
+<summary><strong>Put your own build in a car (Google Play)</strong></summary>
 
 Whether a sideloaded build shows up in a real car depends on the phone and Android Auto version: it works in some cars with **Unknown sources** turned on in Android Auto's developer settings, and not in others. Installing from Google Play is the dependable route ([Google's testing docs](https://developer.android.com/training/cars/testing)). Play's **internal testing** track skips the review and reaches up to 100 testers within minutes, which is the quickest way into your own car:
 
-1. Create a Google Play Console developer account (USD 25 once, plus an identity check), then **Create app** with the package name `com.thealgothrim.overworld`.
+1. Create a Google Play Console developer account (USD 25 once, plus an identity check), then **Create app** with your own package name.
 2. Make an upload key (`keytool -genkeypair -keystore overworld-upload.jks -alias upload -keyalg RSA -keysize 4096 -validity 12000`) and put `uploadStoreFile`, `uploadStorePassword`, `uploadKeyAlias` and `uploadKeyPassword` in `android/local.properties`. Keep the key out of the repo. Play re-signs the app with its own key, and a lost upload key can be reset in Play Console.
 3. Build the release bundle: `.\gradlew.bat :app:bundleRelease` (`android/app/build/outputs/bundle/release/app-release.aab`). Play's tracks refuse debug builds, and a bundle rather than an APK because the APK carries the map engine for four kinds of phone chip; from the bundle, Play sends each phone only its own.
 4. Play Console > Test and release > Testing > **Internal testing**: under Testers, make an email list with your Google account. Under Releases, **Create new release**, let Google manage the app signing key, upload the bundle and roll it out.
-5. Open the testers' opt-in link on the phone, accept, and install from Play. Overworld then appears in the car's Android Auto launcher. Later versions arrive as ordinary Play Store updates.
+5. Open the testers' opt-in link on the phone, accept, and install from Play. The app then appears in the car's Android Auto launcher. Later versions arrive as ordinary Play Store updates.
 
 Internal app sharing (a link per upload, debug builds allowed) only works once the app has been published on a track, so it can't be the first step.
 
 To reach more people, **closed testing** takes a Google Group as its tester list, so anyone who joins the group can install. It needs the store listing, content rating, data safety form and privacy policy filled in, and goes through Play's review (for Android Auto, the car-quality part of the review only warns on this track). A personal developer account then needs 12 testers opted in for 14 days in a row before it can apply for production; open testing unlocks with production ([Play's rules](https://support.google.com/googleplay/android-developer/answer/14151465), [car app distribution](https://developer.android.com/training/cars/distribute)).
 
-## Project structure
+</details>
+
+<details>
+<summary><strong>Project structure</strong></summary>
 
 ```text
 android/              the app (Kotlin, Jetpack Compose, Android Auto)
@@ -216,7 +258,8 @@ android/              the app (Kotlin, Jetpack Compose, Android Auto)
   app/src/local/      game fonts and blips for personal builds (gitignored, optional)
 prototype/            web preview of the themes on a recorded Delhi drive; themes.js is the theme source
 tools/                style export, sprite, glyph, icon, sign and marker builders, build script, DHU preset
-docs/readme/          the images on this page (tools/readme_hero.py draws the banner)
+tools/readme/         the layouts and real captures behind the pictures on this page
+docs/readme/          the pictures on this page (tools/readme_images.py draws them)
 licenses/             licence texts for the bundled fonts
 ```
 
@@ -230,6 +273,9 @@ licenses/             licence texts for the bundled fonts
 | `tools/make_pucks.py` | Builds the player markers from the drawings in `tools/blips/`, centred and never stretched |
 | `tools/build-install.ps1` | Builds the debug APK and installs it |
 | `tools/make_route.py` | Re-records the prototype's demo route |
+| `tools/readme_images.py` | Draws this page's pictures, wide for desktop and tall for phones, and the two clips |
+
+</details>
 
 ## Known limits
 
