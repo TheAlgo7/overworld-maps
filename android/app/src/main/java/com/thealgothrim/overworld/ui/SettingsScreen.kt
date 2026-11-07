@@ -1,10 +1,13 @@
 package com.thealgothrim.overworld.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +18,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,9 +26,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,6 +42,7 @@ import com.thealgothrim.overworld.search.SavedState
 import com.thealgothrim.overworld.theme.MapTime
 import com.thealgothrim.overworld.theme.OverworldTheme
 import com.thealgothrim.overworld.theme.Skin
+import com.thealgothrim.overworld.theme.THEMES
 import com.thealgothrim.overworld.ui.gta.Gta
 import com.thealgothrim.overworld.ui.gta.GtaDescription
 import com.thealgothrim.overworld.ui.gta.GtaInstructionalButtons
@@ -51,6 +58,10 @@ import com.thealgothrim.overworld.ui.rdr.RdrMenuTitle
 import com.thealgothrim.overworld.ui.rdr.RdrPrompt
 import com.thealgothrim.overworld.ui.rdr.RdrPrompts
 import com.thealgothrim.overworld.ui.rdr.RdrText
+import com.thealgothrim.overworld.ui.rdr.roughBox
+import com.thealgothrim.overworld.ui.skin.SkinSpec
+import com.thealgothrim.overworld.ui.skin.SkinText
+import com.thealgothrim.overworld.ui.skin.spec
 import com.thealgothrim.overworld.ui.vi.Vi
 import com.thealgothrim.overworld.ui.vi.ViDescription
 import com.thealgothrim.overworld.ui.vi.ViMenuHeader
@@ -62,7 +73,6 @@ private data class Setting(
     val label: String,
     val description: String,
     val value: String? = null,
-    val checked: Boolean? = null,
     /** It forgets something: the first tap only picks the row and says so, the second does it. */
     val clears: Boolean = false,
     /** Like [clears] (two taps, the first explains) but nothing is lost, so the row doesn't turn red. */
@@ -70,11 +80,23 @@ private data class Setting(
     val onClick: () -> Unit,
 )
 
-private data class Section(val title: String, val rows: List<Setting>)
+/** The pause menu's tabs, like GTA V's across the top. */
+private enum class SettingsTab(val label: String) {
+  MAP("Map"),
+  DRIVING("Driving"),
+  PLACES("Places"),
+  MORE("More"),
+}
+
+/** A switch's state in words: the games' menus say On and Off, no tick boxes (his 7 Nov ask). */
+private fun onOff(on: Boolean) = if (on) "On" else "Off"
 
 /**
- * Settings, drawn as the game's pause menu, in four groups: the map, driving, saved places and
- * about. A tap explains the row right under it; rows that forget something ask for a second tap.
+ * Settings, drawn as the game's pause menu with its tabs across the top: Map, Driving, Places,
+ * More. It was one list of about 17 rows, and the theme a row tapped over and over to cycle,
+ * re-skinning the whole page under the finger at each tap (7 Nov: "overwhelming", "a big task").
+ * Now each tab fits on one screen, and Map opens first with the three worlds as pictures: one tap.
+ * A tap on a row explains it right under the row; rows that forget something ask for a second tap.
  */
 @Composable
 fun SettingsScreen(
@@ -84,10 +106,10 @@ fun SettingsScreen(
     saved: SavedState,
     onTestDrive: (Boolean) -> Unit,
     onMute: () -> Unit,
-    onLayers: () -> Unit,
     onClose: () -> Unit,
 ) {
   val store = AppModule.themeStore
+  val spec = theme.spec
   val carGameHud by store.carGameHud.collectAsState()
   val carCamButton by store.carCamButton.collectAsState()
   val useGoogle by store.useGoogle.collectAsState()
@@ -99,123 +121,105 @@ fun SettingsScreen(
   val live = AppModule.traffic.hasLiveTraffic
   val update by AppModule.updates.available.collectAsState()
   val (lockedReady, setUpLocked) = rememberLockedPhoneSetup()
+  var tab by rememberSaveable { mutableStateOf(SettingsTab.MAP) }
   var selected by remember { mutableStateOf<String?>(null) }
   val context = androidx.compose.ui.platform.LocalContext.current
 
-  val detailsOn =
-      listOf(details.traffic && live, details.signals, details.incidents && live, theme.buildings3d && details.buildings3d).count { it }
-  val sections =
+  val mapRows =
       listOfNotNull(
-          // A newer Overworld is out: first, so it's seen.
-          update?.let { u ->
-            Section(
-                "Update",
-                listOf(Setting("Update available", "A newer Overworld is out. Tap to get it.", value = u.label) { AppModule.updates.open(u) }),
-            )
+          Setting("Place icons", "The game's shop, food and petrol icons on the map. Tap one there to go to it.", onOff(details.placeIcons)) {
+            store.setDetails(details.copy(placeIcons = !details.placeIcons))
           },
-          Section(
-              "Map",
-              listOfNotNull(
-                  Setting("Theme", "${theme.blurb} Tap for the next game's map.", value = theme.name) { store.cycle() },
-                  // Themes lit by the time of day (GTA VI): by the sun, or held at one.
-                  if (theme.variants.isEmpty()) null
-                  else
-                      Setting(
-                          "Time of day",
-                          if (mapTime == MapTime.AUTO)
-                              "Follows the sun, like the game's minimap: pale by day, warm at golden hour, violet at night. It's ${(variant ?: "day").replaceFirstChar { it.uppercase() }} now. Tap to hold one."
-                          else "Held at ${mapTime.label.lowercase()} whatever the hour. Tap to step through Auto, Day, Dusk and Night.",
-                          value = mapTime.label,
-                      ) { store.setMapTime(mapTime.next()) },
-                  Setting(
-                      "Map details",
-                      "Traffic on every road, traffic lights and incidents${if (theme.buildings3d) ", and 3D buildings" else ""}. Tap to switch them in Layers.",
-                      value = "$detailsOn on",
-                  ) { onLayers() },
-              ),
-          ),
-          Section(
-              "Driving",
-              listOf(
-                  Setting(
-                      "Phone locked",
-                      if (lockedReady) "Keeps navigating with the phone locked in your pocket: the battery saver leaves the app alone. Tap to change it in Android's settings."
-                      else "Tap to keep it navigating with the phone locked: say yes when Android asks to let it run in the background.",
-                      value = if (lockedReady) "Works" else "Set up",
-                  ) { setUpLocked() },
-                  Setting(
-                      "Car screen",
-                      if (carGameHud) "Android Auto shows the game HUD: turn, time and street drawn in the theme."
-                      else "Android Auto shows its own turn and ETA cards, in the theme's colour.",
-                      value = if (carGameHud) "Game HUD" else "Android Auto",
-                  ) { store.setCarGameHud(!carGameHud) },
-                  Setting(
-                      "+ Cam on the car screen",
-                      "A button on the car's map for marking a speed camera as you pass it. It shows for a few seconds after you touch the screen, then hides again.",
-                      checked = carCamButton,
-                  ) { store.setCarCamButton(!carCamButton) },
-                  Setting(
-                      "Google routes and search",
-                      if (useGoogle) "Routes, traffic times and place search come from Google Maps, laid onto the game map. Off uses only open map data."
-                      else "Only open map data: OpenStreetMap routes and search, TomTom traffic.",
-                      checked = useGoogle,
-                  ) { store.setUseGoogle(!useGoogle) },
-                  Setting("Voice guidance", "Spoken turn instructions while driving. Off unless you turn it on.", checked = !(uiState.isMuted ?: AppModule.ttsObserver.isMuted)) { onMute() },
-                  Setting("Camera beep", "Two quick notes as a speed camera comes within 500 m, with a trip or without. Plays through the car like a turn prompt.", checked = cameraBeep) {
-                    AppModule.viewModel.setCameraBeep(!cameraBeep)
-                  },
-                  Setting("Test drive", "Simulates the trip along the route instead of using GPS. For trying things out without driving.", checked = testDrive) {
-                    onTestDrive(!testDrive)
-                  },
-              ),
-          ),
-          Section(
-              "Places",
-              listOf(
-                  Setting(
-                      "Home",
-                      if (saved.home != null) "Tap again to forget it. Set a new one from a place's Save button." else "Search for your home, tap Save, then Home.",
-                      value = saved.home?.name ?: "Not set",
-                      clears = saved.home != null,
-                  ) { AppModule.saved.setHome(null) },
-                  Setting(
-                      "Work",
-                      if (saved.work != null) "Tap again to forget it. Set a new one from a place's Save button." else "Search for your work place, tap Save, then Work.",
-                      value = saved.work?.name ?: "Not set",
-                      clears = saved.work != null,
-                  ) { AppModule.saved.setWork(null) },
-                  Setting(
-                      "Recent places",
-                      if (saved.recents.isNotEmpty()) "The places you've driven to, listed in Search. Tap again to clear them; starred places stay." else "Places you drive to show up in Search.",
-                      value = saved.recents.size.toString(),
-                      clears = saved.recents.isNotEmpty(),
-                  ) { AppModule.saved.clearRecents() },
-                  Setting(
-                      "Marked cameras",
-                      if (marked.isNotEmpty()) "Speed cameras you added with + Cam in the car, or Mark a camera here on the phone. Tap again to remove them all."
-                      else "None yet. Turn on + Cam on the car screen above and tap it as you pass one, or use Mark a camera here on the phone; it beeps there from then on.",
-                      value = marked.size.toString(),
-                      clears = marked.isNotEmpty(),
-                  ) { AppModule.cameras.clear() },
-              ),
-          ),
-          Section(
-              "About",
-              listOf(
-                  Setting(
-                      "Report a problem",
-                      "Tap again to email the developer what the app saw: your settings, its drive diary and where you drove in the last few hours, " +
-                          "with moments you marked on the car screen. Your email app opens with the files attached; take the track file off if you'd rather not share where you went. Nothing is sent until you press Send.",
-                      confirm = true,
-                  ) { com.thealgothrim.overworld.report.ProblemReport.send(context) },
-                  Setting(
-                      "Overworld",
-                      "Map data © OpenStreetMap contributors (ODbL), tiles by OpenFreeMap, routing by Valhalla (FOSSGIS), search by TomTom and Photon (komoot), traffic lights from Valhalla and speed cameras from Overpass, navigation by Ferrostar (Stadia Maps)." +
-                          if (live) " Live traffic by TomTom." else " Live traffic is off: add a free TomTom key (tomtomKey in local.properties) for traffic, incidents and live travel times.",
-                      value = BuildConfig.VERSION_NAME,
-                  ) {},
-              ),
-          ),
+          if (theme.buildings3d)
+              Setting("3D buildings", "Buildings stand up like on the GTA VI minimap. Off lays them flat, which is lighter work for the phone.", onOff(details.buildings3d)) {
+                store.setDetails(details.copy(buildings3d = !details.buildings3d))
+              }
+          else null,
+          Setting("Traffic lights", "Signals along your route, from OpenStreetMap.", onOff(details.signals)) { store.setDetails(details.copy(signals = !details.signals)) },
+          if (live) Setting("Incidents", "Accidents, road works, closures and jams, with alerts ahead.", onOff(details.incidents)) { store.setDetails(details.copy(incidents = !details.incidents)) }
+          else null,
+          if (live)
+              Setting("Traffic on every road", "Your route always shows its own traffic. This colours all roads: amber slow, red jammed.", onOff(details.traffic)) {
+                store.setDetails(details.copy(traffic = !details.traffic))
+              }
+          else null,
+      )
+  val drivingRows =
+      listOf(
+          Setting("Voice guidance", "Spoken turn instructions while driving. Off unless you turn it on.", onOff(!(uiState.isMuted ?: AppModule.ttsObserver.isMuted))) { onMute() },
+          Setting("Camera beep", "Two quick notes as a speed camera comes within 500 m, with a trip or without. Plays through the car like a turn prompt.", onOff(cameraBeep)) {
+            AppModule.viewModel.setCameraBeep(!cameraBeep)
+          },
+          Setting(
+              "Google routes and search",
+              if (useGoogle) "Routes, traffic times and place search come from Google Maps, laid onto the game map. Off uses only open map data."
+              else "Only open map data: OpenStreetMap routes and search, TomTom traffic.",
+              onOff(useGoogle),
+          ) { store.setUseGoogle(!useGoogle) },
+          Setting(
+              "Phone locked",
+              if (lockedReady) "Keeps navigating with the phone locked in your pocket: the battery saver leaves the app alone. Tap to change it in Android's settings."
+              else "Tap to keep it navigating with the phone locked: say yes when Android asks to let it run in the background.",
+              if (lockedReady) "Works" else "Set up",
+          ) { setUpLocked() },
+          Setting("Test drive", "Simulates the trip along the route instead of using GPS. For trying things out without driving.", onOff(testDrive)) { onTestDrive(!testDrive) },
+      )
+  val carRows =
+      listOf(
+          Setting(
+              "Car screen",
+              if (carGameHud) "Android Auto shows the game HUD: turn, time and street drawn in the theme."
+              else "Android Auto shows its own turn and ETA cards, in the theme's colour.",
+              if (carGameHud) "Game HUD" else "Android Auto",
+          ) { store.setCarGameHud(!carGameHud) },
+          Setting(
+              "+ Cam on the car screen",
+              "A button on the car's map for marking a speed camera as you pass it. It shows for a few seconds after you touch the screen, then hides again.",
+              onOff(carCamButton),
+          ) { store.setCarCamButton(!carCamButton) },
+      )
+  val placeRows =
+      listOf(
+          Setting(
+              "Home",
+              if (saved.home != null) "Tap again to forget it. Set a new one from a place's Save button." else "Search for your home, tap Save, then Home.",
+              saved.home?.name ?: "Not set",
+              clears = saved.home != null,
+          ) { AppModule.saved.setHome(null) },
+          Setting(
+              "Work",
+              if (saved.work != null) "Tap again to forget it. Set a new one from a place's Save button." else "Search for your work place, tap Save, then Work.",
+              saved.work?.name ?: "Not set",
+              clears = saved.work != null,
+          ) { AppModule.saved.setWork(null) },
+          Setting(
+              "Recent places",
+              if (saved.recents.isNotEmpty()) "The places you've driven to, listed in Search. Tap again to clear them; starred places stay." else "Places you drive to show up in Search.",
+              saved.recents.size.toString(),
+              clears = saved.recents.isNotEmpty(),
+          ) { AppModule.saved.clearRecents() },
+          Setting(
+              "Marked cameras",
+              if (marked.isNotEmpty()) "Speed cameras you added with + Cam in the car, or Mark a camera here on the phone. Tap again to remove them all."
+              else "None yet. Turn on + Cam on the car screen (Driving) and tap it as you pass one, or use Mark a camera here on the phone; it beeps there from then on.",
+              marked.size.toString(),
+              clears = marked.isNotEmpty(),
+          ) { AppModule.cameras.clear() },
+      )
+  val moreRows =
+      listOf(
+          Setting(
+              "Report a problem",
+              "Tap again to email the developer what the app saw: your settings, its drive diary and where you drove in the last few hours, " +
+                  "with moments you marked on the car screen. Your email app opens with the files attached; take the track file off if you'd rather not share where you went. Nothing is sent until you press Send.",
+              confirm = true,
+          ) { com.thealgothrim.overworld.report.ProblemReport.send(context) },
+          Setting(
+              "Overworld",
+              "Map data © OpenStreetMap contributors (ODbL), tiles by OpenFreeMap, routing by Valhalla (FOSSGIS), search by TomTom and Photon (komoot), traffic lights from Valhalla and speed cameras from Overpass, navigation by Ferrostar (Stadia Maps)." +
+                  if (live) " Live traffic by TomTom." else " Live traffic is off: add a free TomTom key (tomtomKey in local.properties) for traffic, incidents and live travel times.",
+              BuildConfig.VERSION_NAME,
+          ) {},
       )
 
   fun tap(r: Setting) {
@@ -248,27 +252,36 @@ fun SettingsScreen(
         Skin.GTA6 -> ViMenuHeader("Settings", "Overworld", "")
         Skin.RDR -> RdrMenuTitle("SETTINGS", "Overworld", "")
       }
-      sections.forEach { section ->
-        SectionTitle(theme.skin, section.title)
-        section.rows.forEach { r ->
-          val isSelected = selected == r.label
-          // A row that will forget something on the next tap turns red.
-          val armed = isSelected && r.clears
-          when (theme.skin) {
-            Skin.GTA -> {
-              GtaMenuRow(r.label, isSelected, { tap(r) }, value = r.value, checked = r.checked, labelColor = if (armed) Gta.Red else null)
-              if (isSelected) GtaDescription(r.description, color = if (armed) Gta.Red else Gta.White)
-            }
-            Skin.GTA6 -> {
-              ViMenuRow(r.label, isSelected, { tap(r) }, value = r.value, checked = r.checked, labelColor = if (armed) Vi.Red else null)
-              if (isSelected) ViDescription(r.description, color = if (armed) Vi.Red else Vi.White)
-            }
-            Skin.RDR -> {
-              RdrMenuRow(r.label, isSelected, { tap(r) }, value = r.value, checked = r.checked, labelColor = if (armed) Rdr.Red else null)
-              if (isSelected) RdrDescription(r.description, color = if (armed) Rdr.Red else Rdr.GreyLight)
-            }
+      // A newer Overworld is out: above the tabs, so it's seen whichever tab is open.
+      update?.let { u ->
+        Rows(theme.skin, listOf(Setting("Update available", "A newer Overworld is out. Tap to get it.", u.label) { AppModule.updates.open(u) }), selected, ::tap)
+        Spacer(Modifier.height(10.dp))
+      }
+      SettingsTabs(spec, tab) {
+        tab = it
+        selected = null
+      }
+      Spacer(Modifier.height(12.dp))
+      when (tab) {
+        SettingsTab.MAP -> {
+          // The worlds as pictures: one tap switches (it was a row tapped over and over to cycle).
+          Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            THEMES.forEach { t -> ThemeCard(spec, t, selected = t.id == theme.id, modifier = Modifier.weight(1f), accentName = true) { store.select(t.id) } }
           }
+          if (theme.variants.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            TimeOfDay(spec, mapTime, variant) { store.setMapTime(it) }
+          }
+          Spacer(Modifier.height(12.dp))
+          Rows(theme.skin, mapRows, selected, ::tap)
         }
+        SettingsTab.DRIVING -> {
+          Rows(theme.skin, drivingRows, selected, ::tap)
+          SectionTitle(theme.skin, "On the car screen")
+          Rows(theme.skin, carRows, selected, ::tap)
+        }
+        SettingsTab.PLACES -> Rows(theme.skin, placeRows, selected, ::tap)
+        SettingsTab.MORE -> Rows(theme.skin, moreRows, selected, ::tap)
       }
       // Room for the Back prompt below the last row.
       Spacer(Modifier.height(72.dp))
@@ -277,6 +290,92 @@ fun SettingsScreen(
       Skin.GTA -> GtaInstructionalButtons(listOf(GtaPrompt("B", "Back", onClose)), Modifier.align(Alignment.BottomEnd).padding(16.dp))
       Skin.GTA6 -> ViPrompts(listOf(ViPrompt("B", "Back", onClose)), Modifier.align(Alignment.BottomEnd).padding(16.dp))
       Skin.RDR -> RdrPrompts(listOf(RdrPrompt("B", "Back", onClose)), Modifier.align(Alignment.BottomEnd).padding(bottom = 16.dp))
+    }
+  }
+}
+
+/** A tab's rows in the game's menu style, each explained under it when tapped. */
+@Composable
+private fun Rows(skin: Skin, rows: List<Setting>, selected: String?, tap: (Setting) -> Unit) {
+  rows.forEach { r ->
+    val isSelected = selected == r.label
+    // A row that will forget something on the next tap turns red.
+    val armed = isSelected && r.clears
+    when (skin) {
+      Skin.GTA -> {
+        GtaMenuRow(r.label, isSelected, { tap(r) }, value = r.value, labelColor = if (armed) Gta.Red else null)
+        if (isSelected) GtaDescription(r.description, color = if (armed) Gta.Red else Gta.White)
+      }
+      Skin.GTA6 -> {
+        ViMenuRow(r.label, isSelected, { tap(r) }, value = r.value, labelColor = if (armed) Vi.Red else null)
+        if (isSelected) ViDescription(r.description, color = if (armed) Vi.Red else Vi.White)
+      }
+      Skin.RDR -> {
+        RdrMenuRow(r.label, isSelected, { tap(r) }, value = r.value, labelColor = if (armed) Rdr.Red else null)
+        if (isSelected) RdrDescription(r.description, color = if (armed) Rdr.Red else Rdr.GreyLight)
+      }
+    }
+  }
+}
+
+/**
+ * The tabs across the top of the pause menu: GTA V's white tab with black letters on a row of dark
+ * ones, GTA VI's pink-filled pill among glass ones, Red Dead's rough frame round the open one.
+ */
+@Composable
+private fun SettingsTabs(spec: SkinSpec, open: SettingsTab, onOpen: (SettingsTab) -> Unit) {
+  Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(if (spec.gta) 2.dp else 6.dp)) {
+    SettingsTab.entries.forEach { t ->
+      val on = t == open
+      val tabModifier = Modifier.weight(1f).height(40.dp)
+      when {
+        spec.gta ->
+            Box(
+                tabModifier.background(if (on) Gta.RowSelected else Gta.Panel).clickable { onOpen(t) },
+                contentAlignment = Alignment.Center,
+            ) {
+              Text(t.label.uppercase(), color = if (on) Color.Black else Gta.White, fontFamily = spec.title, fontSize = 14.sp, maxLines = 1)
+            }
+        spec.vi -> {
+          val shape = RoundedCornerShape(10.dp)
+          Box(
+              tabModifier.clip(shape).background(if (on) Vi.Pink else Vi.Glass).border(1.dp, if (on) Vi.Pink else Vi.Hairline, shape).clickable { onOpen(t) },
+              contentAlignment = Alignment.Center,
+          ) {
+            Text(t.label.uppercase(), color = if (on) Vi.Ink else Vi.White, fontFamily = Vi.condensed, fontSize = 16.sp, letterSpacing = 0.8.sp, maxLines = 1)
+          }
+        }
+        else ->
+            Box(
+                tabModifier.then(if (on) Modifier.roughBox() else Modifier).clickable { onOpen(t) },
+                contentAlignment = Alignment.Center,
+            ) {
+              RdrText(t.label.uppercase(), 16.sp, color = if (on) Color.White else Rdr.Grey, spacing = 1.sp)
+            }
+      }
+    }
+  }
+}
+
+/** GTA VI's time of day as four chips, the one in use lit in the theme's colour. */
+@Composable
+private fun TimeOfDay(spec: SkinSpec, time: MapTime, variant: String?, onPick: (MapTime) -> Unit) {
+  val shape = RoundedCornerShape(if (spec.vi) 10.dp else 0.dp)
+  Column {
+    // Auto says what the sun makes it now.
+    val now = (variant ?: "day").replaceFirstChar { it.uppercase() }
+    SkinText(spec.title(if (time == MapTime.AUTO) "Time of day: by the sun, $now now" else "Time of day"), spec.body, 14.sp, spec.sub)
+    Spacer(Modifier.height(6.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      MapTime.entries.forEach { t ->
+        val on = t == time
+        Box(
+            Modifier.weight(1f).height(40.dp).clip(shape).background(if (on) spec.accent else spec.fg.copy(alpha = 0.1f)).clickable { onPick(t) },
+            contentAlignment = Alignment.Center,
+        ) {
+          SkinText(spec.title(t.label), spec.title, 16.sp, if (on) spec.onAccent else spec.fg, spacing = spec.titleSpacing)
+        }
+      }
     }
   }
 }

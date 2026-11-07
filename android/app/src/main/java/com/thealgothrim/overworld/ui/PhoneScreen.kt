@@ -363,7 +363,6 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
           saved = saved,
           onTestDrive = viewModel::setTestDrive,
           onMute = viewModel::toggleMute,
-          onLayers = { layersOpen = true },
           onClose = { settingsOpen = false },
       )
     }

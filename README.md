@@ -124,7 +124,7 @@ The APK and the Play copy are signed differently, so uninstall one before instal
 
 ### On the phone
 
-- **Google Maps layout, game look.** Tap a shop, temple or petrol pump on the map and the camera flies to it with Directions and Save; tilt with two fingers; tap locate twice and the map turns with the phone. GTA's pause-map corner shows the area and the scale beside the locate button. Settings is the game's pause menu, in four groups (map, driving, places, about); anything that forgets a place asks for a second tap.
+- **Google Maps layout, game look.** Tap a shop, temple or petrol pump on the map and the camera flies to it with Directions and Save; tilt with two fingers; tap locate twice and the map turns with the phone. GTA's pause-map corner shows the area and the scale beside the locate button. Settings is the game's pause menu with tabs across the top (Map, Driving, Places, More), each on one screen: Map opens first with the three worlds as pictures, one tap to switch, and every switch reads On or Off. Anything that forgets a place asks for a second tap.
 - **Your places on the map.** Home, Work and starred places stand on the map the way each game marks what's yours (a safehouse, a briefcase, a star), and a tap on one opens it.
 - **The phone as the car's remote.** The trip (turn, time left, End, voice), the route preview with Start, search and shortcuts, and every car-screen setting, in the car's theme. "Phone map" brings the map back for a passenger.
 - **GTA VI follows the sun.** Its map is worked out from where you are, or held at one time of day in Settings. Its buildings stand up in 3D; a Layers switch lays them flat.
