@@ -198,7 +198,7 @@ private fun DisplayTab(theme: OverworldTheme, spec: SkinSpec, selected: String?,
   val live = AppModule.traffic.hasLiveTraffic
   // The worlds as pictures: one tap switches (it was a row tapped over and over to cycle).
   Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-    THEMES.forEach { t -> ThemeCard(spec, t, selected = t.id == theme.id, modifier = Modifier.weight(1f), accentName = true) { store.select(t.id) } }
+    THEMES.forEach { t -> ThemeCard(spec, t, selected = t.id == theme.id, modifier = Modifier.weight(1f)) { store.select(t.id) } }
   }
   if (theme.variants.isNotEmpty()) {
     Gap(10)

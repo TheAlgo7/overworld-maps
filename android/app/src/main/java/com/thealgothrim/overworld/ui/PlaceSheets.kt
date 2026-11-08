@@ -40,6 +40,7 @@ import com.thealgothrim.overworld.search.samePlace
 import com.thealgothrim.overworld.search.samePoint
 import com.thealgothrim.overworld.ui.skin.GameIcon
 import com.thealgothrim.overworld.ui.skin.GameIconView
+import com.thealgothrim.overworld.ui.skin.LIST_ICONS
 import com.thealgothrim.overworld.ui.skin.SkinPanel
 import com.thealgothrim.overworld.ui.skin.SkinPrimaryButton
 import com.thealgothrim.overworld.ui.skin.SkinSecondaryButton
@@ -110,8 +111,9 @@ internal fun PlaceSheet(
   }
 }
 
-/** A list's name with its emoji in front, if it has one. */
-fun listTitle(name: String, emoji: String?) = if (emoji.isNullOrBlank()) name else "$emoji $name"
+/** A list's name. Emoji no longer go in front: lists show the world's icons. */
+@Suppress("UNUSED_PARAMETER")
+fun listTitle(name: String, emoji: String? = null) = name
 
 /**
  * Save to: your own name for the place, Home or Work, each list lit in the accent when the place
@@ -129,7 +131,7 @@ private fun SavePanel(spec: SkinSpec, place: Place, saved: SavedState, onDone: (
   var note by remember(place) { mutableStateOf(mine?.note ?: "") }
   var newList by remember { mutableStateOf(false) }
   var listName by remember { mutableStateOf("") }
-  var listEmoji by remember { mutableStateOf("") }
+  var listIcon by remember { mutableStateOf(GameIcon.LIST) }
   var removing by remember { mutableStateOf(false) }
   val labelFocus = remember { FocusRequester() }
   // A dropped pin has no name of its own: the name box is where saving starts.
@@ -159,24 +161,23 @@ private fun SavePanel(spec: SkinSpec, place: Place, saved: SavedState, onDone: (
     val inLists = mine?.lists.orEmpty()
     saved.lists.forEach { list ->
       val on = list.id in inLists
-      ListToggleRow(spec, list.name, list.emoji, list.icon, saved.inList(list.id).size, on) { store.setInList(found, list.id, !on) }
+      ListToggleRow(spec, list.name, list.icon, saved.inList(list.id).size, on) { store.setInList(found, list.id, !on) }
       Gap(6)
     }
     if (newList) {
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        SkinField(spec, listEmoji, { listEmoji = it.take(2) }, "🙂", Modifier.width(64.dp))
-        SkinField(spec, listName, { listName = it }, "List name, e.g. Food", Modifier.weight(1f))
-      }
+      SkinField(spec, listName, { listName = it }, "List name, e.g. Food")
+      Gap(8)
+      IconPicker(spec, LIST_ICONS, listIcon) { listIcon = it }
       Gap(8)
       SkinSecondaryButton(
           spec,
           "Create and add",
           {
             if (listName.isNotBlank()) {
-              val id = store.createList(listName, listEmoji)
+              val id = store.createList(listName, listIcon.name)
               store.setInList(found, id, true)
               listName = ""
-              listEmoji = ""
+              listIcon = GameIcon.LIST
               newList = false
             }
           },
@@ -210,14 +211,14 @@ private fun SavePanel(spec: SkinSpec, place: Place, saved: SavedState, onDone: (
 
 /** A list in the save panel: lit in the accent when the place is in it. */
 @Composable
-private fun ListToggleRow(spec: SkinSpec, name: String, emoji: String?, icon: GameIcon, places: Int, on: Boolean, onClick: () -> Unit) {
+private fun ListToggleRow(spec: SkinSpec, name: String, icon: GameIcon, places: Int, on: Boolean, onClick: () -> Unit) {
   val shape = RoundedCornerShape(if (spec.vi) 10.dp else 0.dp)
   val ink = if (on) spec.onAccent else spec.fg
   Row(
       Modifier.fillMaxWidth().heightIn(min = 50.dp).clip(shape).background(if (on) spec.accent else spec.fg.copy(alpha = 0.08f)).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp),
       verticalAlignment = Alignment.CenterVertically,
   ) {
-    if (!emoji.isNullOrBlank()) SkinText(emoji, spec.body, 18.sp, ink) else GameIconView(icon, ink, Modifier.size(20.dp))
+    GameIconView(icon, ink, Modifier.size(20.dp))
     Spacer(Modifier.width(12.dp))
     SkinText(name, spec.body, 17.sp, ink, Modifier.weight(1f))
     SkinText(if (on) "In list" else count(places, "place"), spec.body, 14.sp, if (on) ink else spec.sub)

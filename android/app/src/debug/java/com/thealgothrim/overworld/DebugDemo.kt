@@ -42,7 +42,7 @@ object DebugDemo {
     saved.setInList(lodhi, SavedPlaces.FAVOURITES, true)
     saved.setInList(humayun, SavedPlaces.WANT_TO_GO, true)
     saved.setNote(humayun, "Go early, before the tour buses.")
-    val food = saved.state.value.lists.firstOrNull { it.name == "Food" }?.id ?: saved.createList("Food", "🍜")
+    val food = saved.state.value.lists.firstOrNull { it.name == "Food" }?.id ?: saved.createList("Food", "FOOD")
     saved.setInList(karims, food, true)
     saved.setInList(cp, food, true)
     saved.setLabel(pin, "Demo spot by Gole Market")

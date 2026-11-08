@@ -51,6 +51,7 @@ import com.thealgothrim.overworld.ui.skin.SkinPanel
 import com.thealgothrim.overworld.ui.skin.SkinPrimaryButton
 import com.thealgothrim.overworld.ui.skin.SkinSecondaryButton
 import com.thealgothrim.overworld.ui.skin.SkinSpec
+import com.thealgothrim.overworld.ui.skin.SkinFitText
 import com.thealgothrim.overworld.ui.skin.SkinText
 import com.thealgothrim.overworld.ui.skin.icon
 import com.thealgothrim.overworld.ui.skin.skinPanel
@@ -181,14 +182,16 @@ fun RemoteScreen(viewModel: OverworldViewModel, onShowMap: () -> Unit) {
 @Composable
 private fun Header(spec: SkinSpec, theme: OverworldTheme, onShowMap: () -> Unit) {
   // In a panel: the page is the map's ground colour, pale in GTA VI's day and Red Dead's paper.
-  Row(Modifier.fillMaxWidth().skinPanel(spec).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-    Column(Modifier.weight(1f)) {
-      SkinText(spec.title("Car remote"), spec.title, spec.titleSize(if (spec.vi) 28.sp else 26.sp, 30.sp), spec.fg, spacing = spec.titleSpacing)
-      // Android for Cars rule VI-1: the phone is looked at only when it's safe.
-      SkinText("Android Auto is on. Only look at your phone when it's safe.", spec.body, 14.sp, spec.sub, maxLines = 2)
+  Column(Modifier.fillMaxWidth().skinPanel(spec).padding(horizontal = 16.dp, vertical = 12.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+      // Red Dead's wide type cut it to "CAR REM…" beside the button (8 Nov sweep): it steps down instead.
+      SkinFitText(spec.title("Car remote"), spec.title, spec.titleSize(if (spec.vi) 28.sp else 26.sp, 30.sp), spec.fg, Modifier.weight(1f), spacing = spec.titleSpacing, minSize = 18.sp)
+      Spacer(Modifier.width(10.dp))
+      SkinSecondaryButton(spec, "Phone map", onShowMap, icon = GameIcon.LAYERS)
     }
-    Spacer(Modifier.width(10.dp))
-    SkinSecondaryButton(spec, "Phone map", onShowMap, icon = GameIcon.LAYERS)
+    // Android for Cars rule VI-1: the phone is looked at only when it's safe. Its own full-width
+    // line, so it's never cut short.
+    SkinText("Android Auto is on. Only look at your phone when it's safe.", spec.body, 14.sp, spec.sub, Modifier.padding(top = 4.dp), maxLines = 3)
   }
 }
 
@@ -268,7 +271,7 @@ private fun CarScreenSettings(spec: SkinSpec, theme: OverworldTheme) {
       }
       if (theme.variants.isNotEmpty()) {
         Spacer(Modifier.height(14.dp))
-        SkinText("Time of day. Auto follows the car's day and night.", spec.body, 15.sp, spec.sub)
+        SkinText("Time of day. Auto follows the car's day and night.", spec.body, 15.sp, spec.sub, maxLines = 2)
         Spacer(Modifier.height(6.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
           MapTime.entries.forEach { t ->

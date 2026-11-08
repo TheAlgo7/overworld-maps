@@ -242,7 +242,7 @@ private fun SettingsBody(spec: SkinSpec, theme: OverworldTheme) {
   Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
     THEMES.forEach { t ->
       Box(Modifier.weight(1f).carTap("theme-${t.id}") { store.selectCar(t.id) }) {
-        ThemeCard(spec, t, selected = t.id == theme.id, modifier = Modifier.fillMaxWidth(), accentName = true) {}
+        ThemeCard(spec, t, selected = t.id == theme.id, modifier = Modifier.fillMaxWidth()) {}
       }
     }
   }

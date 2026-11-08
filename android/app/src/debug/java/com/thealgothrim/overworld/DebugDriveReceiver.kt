@@ -48,6 +48,25 @@ class DebugDriveReceiver : BroadcastReceiver() {
                 else -> null
               }
         }
+        // --es list FUEL (a Nearby kind): that kind's closest places as the car's list panel, as a
+        // tap on it in Nearby would; --es results "chai%snear%sme": the search results panel.
+        intent.getStringExtra("list")?.let { k ->
+          val kind = com.thealgothrim.overworld.search.Nearby.valueOf(k.uppercase())
+          com.thealgothrim.overworld.ui.CarPanels.open = com.thealgothrim.overworld.ui.CarPanel.NearbyList(kind, null)
+          kotlinx.coroutines.MainScope().launch {
+            val found = runCatching { vm.findNearby(kind) }.getOrDefault(emptyList())
+            com.thealgothrim.overworld.ui.CarPanels.open = com.thealgothrim.overworld.ui.CarPanel.NearbyList(kind, found)
+          }
+        }
+        intent.getStringExtra("results")?.let { q ->
+          val query = q.replace("%s", " ")
+          com.thealgothrim.overworld.ui.CarPanels.open = com.thealgothrim.overworld.ui.CarPanel.Results(query, null)
+          kotlinx.coroutines.MainScope().launch {
+            val at = vm.navigationUiState.value.location?.coordinates ?: GeographicCoordinate(28.6315, 77.2167)
+            val found = runCatching { AppModule.search.search(query, at) }.getOrDefault(emptyList())
+            com.thealgothrim.overworld.ui.CarPanels.open = com.thealgothrim.overworld.ui.CarPanel.Results(query, found)
+          }
+        }
         if (intent.hasExtra("scroll")) com.thealgothrim.overworld.ui.CarPanels.scrollBy(intent.getFloatExtra("scroll", 0f))
         if (intent.hasExtra("fling")) com.thealgothrim.overworld.ui.CarPanels.fling(intent.getFloatExtra("fling", 0f))
         Log.i("DebugDrive", "panel ${com.thealgothrim.overworld.ui.CarPanels.open}, scrolled to ${com.thealgothrim.overworld.ui.CarPanels.scroll?.value} of ${com.thealgothrim.overworld.ui.CarPanels.scroll?.maxValue}")
@@ -244,11 +263,23 @@ class DebugDriveReceiver : BroadcastReceiver() {
         Log.i("DebugDrive", "traffic level $level from ${from.toInt()} to ${to.toInt()} m along the route")
       }
       // A camera at --ef lat/lng (and --ef heading), as if marked with + Cam there.
+      // Or --ef ahead 400: on the trip's route, that many metres past the car.
       "com.thealgothrim.overworld.DEBUG_CAMERA" ->
-          AppModule.cameras.mark(
-              GeographicCoordinate(intent.getFloatExtra("lat", 0f).toDouble(), intent.getFloatExtra("lng", 0f).toDouble()),
-              if (intent.hasExtra("heading")) intent.getFloatExtra("heading", 0f).toDouble() else null,
-          )
+          if (intent.hasExtra("ahead")) {
+            val ui = vm.navigationUiState.value
+            val line = ui.routeGeometry?.takeIf { it.size >= 2 }?.let { com.thealgothrim.overworld.map.RoutePolyline(it) }
+            val here = ui.location?.coordinates
+            if (line != null && here != null) {
+              val at = line.project(org.maplibre.spatialk.geojson.Position(here.lng, here.lat)).progressMeters + intent.getFloatExtra("ahead", 400f)
+              val p = line.positionAt(at.coerceAtMost(line.length))
+              AppModule.cameras.mark(GeographicCoordinate(p.latitude, p.longitude), null)
+              Log.i("DebugDrive", "camera marked ${at.toInt()} m along the route")
+            }
+          } else
+            AppModule.cameras.mark(
+                GeographicCoordinate(intent.getFloatExtra("lat", 0f).toDouble(), intent.getFloatExtra("lng", 0f).toDouble()),
+                if (intent.hasExtra("heading")) intent.getFloatExtra("heading", 0f).toDouble() else null,
+            )
       "com.thealgothrim.overworld.DEBUG_STATE" -> {
         val ui = vm.navigationUiState.value
         val extras = vm.extras.value

@@ -46,7 +46,9 @@ NAMES = {
 # Buttons in the app are drawn at up to 32 dp: 144 px covers that on a 4.5x screen.
 SIZE = 144
 # Places the app also shows on its own panels (the Nearby chips, GameIcon's FUEL, FOOD...).
-PANEL_PLACES = {"fuel", "food", "parking", "toilet", "hospital", "hotel"}
+# CNG and charging too since 0.6: they sit beside Petrol on the engine chips (Settings, Vehicle) and
+# stand in for fuel in Nearby, where a tile or a disc looked like a map blip pasted into a button.
+PANEL_PLACES = {"fuel", "food", "parking", "toilet", "hospital", "hotel", "cng", "charging"}
 # Red Dead's buttons are ivory and its places ivory on a black disc; GTA VI's places are dark on a
 # pale tile. The app tints what it draws on a panel, so those are written as plain white pictograms:
 # a disc would vanish on the black panel, a tile would leave a pictogram half the size. Their map

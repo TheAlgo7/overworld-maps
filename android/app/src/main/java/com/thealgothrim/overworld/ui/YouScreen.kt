@@ -34,6 +34,7 @@ import com.thealgothrim.overworld.search.SavedState
 import com.thealgothrim.overworld.theme.OverworldTheme
 import com.thealgothrim.overworld.ui.skin.GameIcon
 import com.thealgothrim.overworld.ui.skin.GameIconView
+import com.thealgothrim.overworld.ui.skin.LIST_ICONS
 import com.thealgothrim.overworld.ui.skin.SkinDivider
 import com.thealgothrim.overworld.ui.skin.SkinPanel
 import com.thealgothrim.overworld.ui.skin.SkinPrimaryButton
@@ -215,22 +216,10 @@ private fun SavedTab(spec: SkinSpec, saved: SavedState, here: GeographicCoordina
   }
 }
 
-/** A list in Saved: its picture (or emoji), name and how many places. */
+/** A list in Saved: its picture, name and how many places. */
 @Composable
 private fun ListRow(spec: SkinSpec, list: SavedList, places: Int, onClick: () -> Unit) {
-  if (!list.emoji.isNullOrBlank()) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-      // Plain text, no ellipsis: an emoji is wider than the icons beside it.
-      androidx.compose.material3.Text(list.emoji, fontSize = 19.sp, maxLines = 1, softWrap = false, modifier = Modifier.width(30.dp))
-      Spacer(Modifier.width(6.dp))
-      Column(Modifier.weight(1f)) {
-        SkinText(list.name, spec.body, 17.sp, spec.fg)
-        SkinText("Private · ${count(places, "place")}", spec.body, 14.sp, spec.sub)
-      }
-    }
-  } else {
-    SkinRow(spec, list.name, onClick, subtitle = "Private · ${count(places, "place")}", icon = list.icon)
-  }
+  SkinRow(spec, list.name, onClick, subtitle = "Private · ${count(places, "place")}", icon = list.icon)
 }
 
 @Composable
@@ -256,12 +245,12 @@ private fun PageHeader(spec: SkinSpec, title: String, onBack: () -> Unit) {
   }
 }
 
-/** New list: an emoji (optional) and a name, like Google's. */
+/** New list: a name and one of the world's icons for it. */
 @Composable
 private fun NewListForm(spec: SkinSpec) {
   var open by remember { mutableStateOf(false) }
   var name by remember { mutableStateOf("") }
-  var emoji by remember { mutableStateOf("") }
+  var icon by remember { mutableStateOf(GameIcon.LIST) }
   if (!open) {
     SkinSecondaryButton(spec, "New list", { open = true }, Modifier.fillMaxWidth(), GameIcon.LIST)
     return
@@ -270,10 +259,9 @@ private fun NewListForm(spec: SkinSpec) {
     Column(Modifier.padding(14.dp)) {
       SkinText(spec.title("New list"), spec.title, spec.titleSize(18.sp, 20.sp), spec.fg, spacing = spec.titleSpacing)
       Gap(8)
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        SkinField(spec, emoji, { emoji = it.take(2) }, "🙂", Modifier.width(64.dp))
-        SkinField(spec, name, { name = it }, "Name, e.g. Food or Parking", Modifier.weight(1f))
-      }
+      SkinField(spec, name, { name = it }, "Name, e.g. Food or Parking")
+      Gap(8)
+      IconPicker(spec, LIST_ICONS, icon) { icon = it }
       Gap(10)
       Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         SkinSecondaryButton(spec, "Cancel", { open = false })
@@ -282,9 +270,9 @@ private fun NewListForm(spec: SkinSpec) {
             "Create",
             {
               if (name.isNotBlank()) {
-                AppModule.saved.createList(name, emoji)
+                AppModule.saved.createList(name, icon.name)
                 name = ""
-                emoji = ""
+                icon = GameIcon.LIST
                 open = false
               }
             },
@@ -295,18 +283,17 @@ private fun NewListForm(spec: SkinSpec) {
   }
 }
 
-/** Rename one of your lists, change its emoji, or delete it (two taps). */
+/** Rename one of your lists, change its icon, or delete it (two taps). */
 @Composable
 private fun EditListForm(spec: SkinSpec, list: SavedList, onDeleted: () -> Unit) {
   var name by remember(list.id) { mutableStateOf(list.name) }
-  var emoji by remember(list.id) { mutableStateOf(list.emoji ?: "") }
+  var icon by remember(list.id) { mutableStateOf(list.icon) }
   var deleting by remember { mutableStateOf(false) }
   SkinPanel(spec, Modifier.fillMaxWidth()) {
     Column(Modifier.padding(14.dp)) {
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        SkinField(spec, emoji, { emoji = it.take(2) }, "🙂", Modifier.width(64.dp))
-        SkinField(spec, name, { name = it }, "List name", Modifier.weight(1f))
-      }
+      SkinField(spec, name, { name = it }, "List name")
+      Gap(8)
+      IconPicker(spec, LIST_ICONS, icon) { icon = it }
       Gap(10)
       Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         SkinSecondaryButton(
@@ -320,7 +307,7 @@ private fun EditListForm(spec: SkinSpec, list: SavedList, onDeleted: () -> Unit)
             },
             icon = GameIcon.DELETE,
         )
-        SkinPrimaryButton(spec, "Save", { if (name.isNotBlank()) AppModule.saved.editList(list.id, name, emoji) }, Modifier.weight(1f), GameIcon.EDIT)
+        SkinPrimaryButton(spec, "Save", { if (name.isNotBlank()) AppModule.saved.editList(list.id, name, icon.name) }, Modifier.weight(1f), GameIcon.EDIT)
       }
     }
   }

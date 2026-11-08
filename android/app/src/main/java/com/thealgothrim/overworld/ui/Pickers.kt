@@ -3,6 +3,7 @@ package com.thealgothrim.overworld.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -83,6 +84,9 @@ fun ChoiceChip(spec: SkinSpec, label: String, on: Boolean, onClick: () -> Unit, 
     val size = spec.titleSize(if (spec.vi) 15.sp else 14.sp, 15.sp)
     androidx.compose.foundation.text.BasicText(
         spec.title(label),
+        // One unbroken line: wrapping let a word too wide for the chip break onto a hidden second
+        // line, so Red Dead's lit "PETROL" lost its L at 384 dp instead of stepping down a size.
+        softWrap = false,
         maxLines = 1,
         style = androidx.compose.ui.text.TextStyle(fontFamily = spec.title, color = ink, letterSpacing = spec.titleSpacing, textAlign = androidx.compose.ui.text.style.TextAlign.Center),
         autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = size, stepSize = 0.5.sp),
@@ -212,3 +216,23 @@ fun Gap(h: Int = 12) = Spacer(Modifier.height(h.dp))
 /** A fixed-width gap. */
 @Composable
 fun HGap(w: Int = 10) = Spacer(Modifier.width(w.dp))
+
+/**
+ * A row of the world's icons to pick one for a list, the picked one lit in the accent. Slides
+ * sideways when they don't all fit.
+ */
+@Composable
+fun IconPicker(spec: SkinSpec, icons: List<GameIcon>, selected: GameIcon, onPick: (GameIcon) -> Unit) {
+  val shape = RoundedCornerShape(if (spec.vi) 10.dp else 0.dp)
+  Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    icons.forEach { icon ->
+      val on = icon == selected
+      Box(
+          Modifier.size(46.dp).clip(shape).background(if (on) spec.accent else spec.fg.copy(alpha = 0.1f))
+              .then(if (spec.rdr && on) Modifier.border(1.5.dp, Rdr.White.copy(alpha = 0.8f)) else Modifier)
+              .clickable { onPick(icon) },
+          contentAlignment = Alignment.Center,
+      ) { GameIconView(icon, if (on) spec.onAccent else spec.fg, Modifier.size(24.dp)) }
+    }
+  }
+}

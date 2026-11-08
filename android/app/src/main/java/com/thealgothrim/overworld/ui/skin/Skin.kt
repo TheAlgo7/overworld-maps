@@ -292,7 +292,7 @@ fun SkinPrimaryButton(spec: SkinSpec, label: String, onClick: () -> Unit, modifi
       GameIconView(it, ink, Modifier.size(22.dp))
       Spacer(Modifier.width(8.dp))
     }
-    SkinText(spec.title(label), spec.title, spec.titleSize(if (spec.vi) 20.sp else 18.sp, 21.sp), ink, spacing = spec.titleSpacing)
+    ButtonLabel(spec, label, spec.titleSize(if (spec.vi) 20.sp else 18.sp, 21.sp), ink)
   }
 }
 
@@ -317,8 +317,37 @@ fun SkinSecondaryButton(spec: SkinSpec, label: String, onClick: () -> Unit, modi
       GameIconView(it, spec.fg, Modifier.size(22.dp))
       Spacer(Modifier.width(8.dp))
     }
-    SkinText(spec.title(label), spec.title, spec.titleSize(if (spec.vi) 19.sp else 17.sp, 20.sp), spec.fg, spacing = spec.titleSpacing)
+    ButtonLabel(spec, label, spec.titleSize(if (spec.vi) 19.sp else 17.sp, 20.sp), spec.fg)
   }
+}
+
+/**
+ * A button's label, a size smaller rather than cut short when the button is narrow: Red Dead's wide
+ * type left "SHOW ON …" on Timeline's half-width button (8 Nov sweep).
+ */
+@Composable
+private fun ButtonLabel(spec: SkinSpec, label: String, size: TextUnit, color: Color) =
+    SkinFitText(spec.title(label), spec.title, size, color, spacing = spec.titleSpacing)
+
+/** One line that steps down in size to fit its width (to [minSize]) instead of ending in "…". */
+@Composable
+fun SkinFitText(
+    text: String,
+    font: FontFamily,
+    size: TextUnit,
+    color: Color,
+    modifier: Modifier = Modifier,
+    spacing: TextUnit = TextUnit.Unspecified,
+    minSize: TextUnit = 11.sp,
+) {
+  androidx.compose.foundation.text.BasicText(
+      text,
+      modifier,
+      softWrap = false,
+      maxLines = 1,
+      style = TextStyle(fontFamily = font, color = color, letterSpacing = spacing),
+      autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = minSize, maxFontSize = size, stepSize = 0.5.sp),
+  )
 }
 
 /**
@@ -430,7 +459,11 @@ enum class GameIcon {
   HEART, SUITCASE, LABEL, LIST, NOTE, TIMELINE, CALENDAR, BIKE, WALK, OFFLINE, DOWNLOAD, BELL, SHIELD, INFO, STATS,
 }
 
-/** The icon for a saved list: Google's four defaults have their own, yours show their emoji or a list. */
+/**
+ * The icon for a saved list: Google's four defaults have their own; yours show the game icon you
+ * picked (stored by name in the list's `emoji` field, kept for old saves), else a list. Emoji
+ * looked pasted onto the game menus (his call, 9 Nov), so an old emoji also shows as a list.
+ */
 val com.thealgothrim.overworld.search.SavedList.icon: GameIcon
   get() =
       when (kind) {
@@ -438,8 +471,15 @@ val com.thealgothrim.overworld.search.SavedList.icon: GameIcon
         com.thealgothrim.overworld.search.ListKind.WANT_TO_GO -> GameIcon.FLAG
         com.thealgothrim.overworld.search.ListKind.TRAVEL_PLANS -> GameIcon.SUITCASE
         com.thealgothrim.overworld.search.ListKind.STARRED -> GameIcon.STAR_FILLED
-        com.thealgothrim.overworld.search.ListKind.CUSTOM -> GameIcon.LIST
+        com.thealgothrim.overworld.search.ListKind.CUSTOM -> emoji?.let { e -> GameIcon.entries.firstOrNull { it.name == e } } ?: GameIcon.LIST
       }
+
+/** The pictures your own lists can take, all from the world's icon set. */
+val LIST_ICONS =
+    listOf(
+        GameIcon.LIST, GameIcon.FOOD, GameIcon.HOTEL, GameIcon.FUEL, GameIcon.PARKING, GameIcon.HOSPITAL,
+        GameIcon.HOME, GameIcon.WORK, GameIcon.CAR, GameIcon.BIKE, GameIcon.WALK, GameIcon.NOTE, GameIcon.CALENDAR, GameIcon.LABEL,
+    )
 
 /** The icon for a travel mode. */
 val com.thealgothrim.overworld.routing.TravelMode.icon: GameIcon

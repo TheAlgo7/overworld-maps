@@ -53,6 +53,7 @@ import com.thealgothrim.overworld.ui.skin.GameIconView
 import com.thealgothrim.overworld.ui.skin.SkinDivider
 import com.thealgothrim.overworld.ui.skin.SkinPanel
 import com.thealgothrim.overworld.ui.skin.SkinSpec
+import com.thealgothrim.overworld.ui.skin.SkinFitText
 import com.thealgothrim.overworld.ui.skin.SkinText
 import com.thealgothrim.overworld.ui.skin.sheetFloat
 import com.thealgothrim.overworld.ui.skin.spec
@@ -140,49 +141,30 @@ internal fun ThemeCard(
     t: OverworldTheme,
     selected: Boolean,
     modifier: Modifier,
-    /** The car's way: no tick, the picked card's name on the theme's accent instead (his 7 Nov ask). */
-    accentName: Boolean = false,
     onClick: () -> Unit,
 ) {
+  // No tick: the picked card's name sits on the theme's accent instead (his 7 Nov ask, everywhere
+  // since the 8 Nov sweep found the Layers sheet and the car remote still ticking).
   val frame = if (selected) spec.accent else spec.fg.copy(alpha = 0.25f)
   // GTA VI's cards are rounded like the rest of its glass.
   val shape = RoundedCornerShape(if (spec.vi) 10.dp else 0.dp)
-  if (accentName) {
-    Column(modifier.clickable(onClick = onClick)) {
-      Box(Modifier.fillMaxWidth().aspectRatio(400f / 230f).clip(shape).border(if (selected) 3.dp else 1.dp, frame, shape)) {
-        Image(
-            painterResource(themeArt(t)),
-            contentDescription = t.name,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize().padding(if (selected) 3.dp else 1.dp),
-        )
-      }
-      Spacer(Modifier.height(6.dp))
-      Box(
-          Modifier.fillMaxWidth().clip(shape).background(if (selected) spec.accent else spec.fg.copy(alpha = 0.08f)).padding(vertical = 5.dp),
-          contentAlignment = Alignment.Center,
-      ) {
-        SkinText(t.name, spec.title, spec.titleSize(if (spec.vi) 18.sp else 16.sp, 19.sp), if (selected) spec.onAccent else spec.sub, spacing = spec.titleSpacing)
-      }
-    }
-    return
-  }
   Column(modifier.clickable(onClick = onClick)) {
-    Box(Modifier.fillMaxWidth().aspectRatio(400f / 260f).clip(shape).border(if (selected) 3.dp else 1.dp, frame, shape)) {
+    Box(Modifier.fillMaxWidth().aspectRatio(400f / 230f).clip(shape).border(if (selected) 3.dp else 1.dp, frame, shape)) {
       Image(
           painterResource(themeArt(t)),
           contentDescription = t.name,
           contentScale = ContentScale.Crop,
           modifier = Modifier.fillMaxSize().padding(if (selected) 3.dp else 1.dp),
       )
-      if (selected) {
-        Box(Modifier.align(Alignment.TopEnd).padding(8.dp).size(26.dp).clip(RoundedCornerShape(if (spec.vi) 8.dp else 0.dp)).background(spec.accent), contentAlignment = Alignment.Center) {
-          Tick(if (spec.vi) Vi.Ink else Color.White)
-        }
-      }
     }
     Spacer(Modifier.height(6.dp))
-    SkinText(t.name, spec.title, spec.titleSize(if (spec.vi) 18.sp else 16.sp, 19.sp), if (selected) spec.fg else spec.sub, spacing = spec.titleSpacing)
+    Box(
+        Modifier.fillMaxWidth().clip(shape).background(if (selected) spec.accent else spec.fg.copy(alpha = 0.08f)).padding(vertical = 5.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+      // Steps down rather than "RED DEA…" on a narrow phone (his is 384 dp wide).
+      SkinFitText(t.name, spec.title, spec.titleSize(if (spec.vi) 18.sp else 16.sp, 19.sp), if (selected) spec.onAccent else spec.sub, spacing = spec.titleSpacing)
+    }
   }
 }
 
@@ -205,22 +187,9 @@ internal fun ToggleRow(spec: SkinSpec, title: String, subtitle: String, checked:
       SkinText(subtitle, spec.body, 13.sp, spec.sub, maxLines = 2)
     }
     Spacer(Modifier.width(12.dp))
-    val box = RoundedCornerShape(if (spec.vi) 7.dp else 0.dp)
-    Box(
-        Modifier.size(26.dp).clip(box).border(2.dp, if (enabled) spec.fg else spec.sub, box).then(if (checked) Modifier.background(spec.accent) else Modifier),
-        contentAlignment = Alignment.Center,
-    ) {
-      if (checked) Tick(if (spec.vi) Vi.Ink else Color.White)
-    }
-  }
-}
-
-@Composable
-internal fun Tick(color: Color) {
-  Canvas(Modifier.size(16.dp)) {
-    val s = size.width
-    val tick = Path().apply { moveTo(s * 0.15f, s * 0.55f); lineTo(s * 0.42f, s * 0.8f); lineTo(s * 0.88f, s * 0.22f) }
-    drawPath(tick, color, style = Stroke(width = s * 0.16f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+    // On or Off in words, like every Settings row: never a tick box (his rule since 0.5.12; the
+    // Layers sheet and the car remote still had them until the 8 Nov sweep).
+    SkinText(spec.title(if (checked) "On" else "Off"), spec.title, spec.titleSize(if (spec.vi) 16.sp else 15.sp, 17.sp), if (checked && enabled) spec.fg else spec.sub, spacing = spec.titleSpacing)
   }
 }
 
