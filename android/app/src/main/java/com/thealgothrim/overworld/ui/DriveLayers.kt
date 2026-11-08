@@ -80,43 +80,85 @@ fun BoxScope.PreviewLayer(
     testDrive: Boolean,
     onBack: () -> Unit,
     onStart: () -> Unit,
+    /** The mode on screen, and each mode's time for the tabs (Google's Car / Bike / Walk tabs). */
+    mode: com.thealgothrim.overworld.routing.TravelMode = preview.mode,
+    modeTimes: Map<com.thealgothrim.overworld.routing.TravelMode, Double> = emptyMap(),
+    routing: Boolean = false,
+    onMode: ((com.thealgothrim.overworld.routing.TravelMode) -> Unit)? = null,
+    /** This route is already a saved trip: its star is lit. */
+    saved: Boolean = false,
+    onSaveTrip: (() -> Unit)? = null,
 ) {
-  Row(
-      Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(12.dp).skinPanel(spec).padding(horizontal = 14.dp, vertical = 12.dp),
-      verticalAlignment = Alignment.CenterVertically,
-  ) {
-    Box(Modifier.size(28.dp).clickable(onClick = onBack)) { GameIconView(GameIcon.BACK, spec.fg, Modifier.size(26.dp)) }
-    Spacer(Modifier.width(14.dp))
-    Column(Modifier.weight(1f)) {
-      SkinText("Your location", spec.body, 14.sp, spec.sub)
-      SkinText(preview.place.name, spec.body, 18.sp, spec.fg)
+  Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(12.dp).skinPanel(spec).padding(horizontal = 14.dp, vertical = 12.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+      Box(Modifier.size(28.dp).clickable(onClick = onBack)) { GameIconView(GameIcon.BACK, spec.fg, Modifier.size(26.dp)) }
+      Spacer(Modifier.width(14.dp))
+      Column(Modifier.weight(1f)) {
+        SkinText("Your location", spec.body, 14.sp, spec.sub)
+        SkinText(preview.place.name, spec.body, 18.sp, spec.fg)
+      }
+    }
+    if (onMode != null) {
+      Spacer(Modifier.height(10.dp))
+      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        com.thealgothrim.overworld.routing.TravelMode.entries.forEach { m ->
+          val t = modeTimes[m]
+          val time =
+              when {
+                // The lit tab says what the sheet below says: live traffic when there is some.
+                m == mode && !routing && preview.mode == m -> formatDuration(extras.eta?.travelSeconds?.takeIf { m.vehicle } ?: preview.durationSeconds)
+                m == mode && !routing -> formatDuration(t ?: preview.durationSeconds)
+                t == null -> if (m == mode) "…" else "·"
+                t.isNaN() -> "None"
+                else -> formatDuration(t)
+              }
+          ChoiceChip(spec, time, m == mode, { onMode(m) }, Modifier.weight(1f), when (m) { com.thealgothrim.overworld.routing.TravelMode.CAR -> GameIcon.CAR; com.thealgothrim.overworld.routing.TravelMode.BIKE -> GameIcon.BIKE; com.thealgothrim.overworld.routing.TravelMode.WALK -> GameIcon.WALK })
+        }
+      }
     }
   }
 
   SkinPanel(spec, Modifier.align(Alignment.BottomCenter).sheetFloat(spec).fillMaxWidth()) {
     Column(Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
-      // Live-traffic time when TomTom is set up, otherwise the routing engine's estimate.
-      val seconds = extras.eta?.travelSeconds ?: preview.durationSeconds
+      val walking = preview.mode == com.thealgothrim.overworld.routing.TravelMode.WALK
+      // Live-traffic time when TomTom is set up, otherwise the routing engine's estimate. A walk has no traffic.
+      val eta = extras.eta.takeIf { !walking }
+      val seconds = eta?.travelSeconds ?: preview.durationSeconds
       Row(verticalAlignment = Alignment.Bottom) {
-        SkinText(formatDuration(seconds).uppercase(), spec.big, 34.sp, spec.trafficColor(extras.eta))
+        SkinText(formatDuration(seconds).uppercase(), spec.big, 34.sp, spec.trafficColor(eta))
         Spacer(Modifier.width(10.dp))
         SkinText("(${formatDistance(preview.distanceMeters)})", spec.body, 18.sp, spec.sub, Modifier.padding(bottom = 4.dp))
       }
+      val prefs = com.thealgothrim.overworld.AppModule.prefs
+      val avoiding =
+          listOfNotNull("tolls".takeIf { prefs.avoidTolls.value && !walking }, "highways".takeIf { prefs.avoidHighways.value && !walking }, "ferries".takeIf { prefs.avoidFerries.value })
+              .takeIf { it.isNotEmpty() }
+              ?.let { "Avoiding ${it.joinToString(" and ")}" }
       val facts =
           listOfNotNull(
               preview.via?.let { "via $it" },
-              trafficNote(extras.eta),
-              extras.lightsOnRoute.takeIf { it > 0 }?.let { "$it traffic light${if (it == 1) "" else "s"}" },
-              extras.markedIncidents.size.takeIf { it > 0 }?.let { "$it incident${if (it == 1) "" else "s"} on route" },
+              avoiding,
+              trafficNote(eta),
+              extras.lightsOnRoute.takeIf { it > 0 && !walking }?.let { "$it traffic light${if (it == 1) "" else "s"}" },
+              extras.markedIncidents.size.takeIf { it > 0 && !walking }?.let { "$it incident${if (it == 1) "" else "s"} on route" },
           )
       if (facts.isNotEmpty()) SkinText(facts.joinToString("  ·  "), spec.body, 16.sp, spec.fg, Modifier.padding(top = 4.dp), maxLines = 2)
       SkinText(
-          if (testDrive) "Test drive is on: the trip will be simulated. Turn it off in Settings."
-          else "Arrive at ${arrivalClock(seconds)}${if (extras.eta == null) "  ·  typical traffic" else "  ·  live traffic"}",
+          when {
+            testDrive -> "Test drive is on: the trip will be simulated. Turn it off in Settings."
+            walking -> "Arrive at ${arrivalClock(seconds)}  ·  walking at ${prefs.walkPace.value.kmh} km/h"
+            else -> "Arrive at ${arrivalClock(seconds)}${if (eta == null) "  ·  typical traffic" else "  ·  live traffic"}"
+          },
           spec.body, 14.sp, if (testDrive) spec.accent else spec.sub, Modifier.padding(top = 4.dp), maxLines = 2,
       )
       Spacer(Modifier.height(14.dp))
-      SkinPrimaryButton(spec, if (testDrive) "Start test drive" else "Start", onStart, Modifier.fillMaxWidth(), GameIcon.NAVIGATE)
+      Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        SkinPrimaryButton(spec, if (testDrive) "Start test drive" else "Start", onStart, Modifier.weight(1f), GameIcon.NAVIGATE)
+        onSaveTrip?.let { save ->
+          // Save this trip (You > Saved > Saved trips), like Google's pinned trips.
+          com.thealgothrim.overworld.ui.skin.SkinSecondaryButton(spec, "", save, icon = if (saved) GameIcon.STAR_FILLED else GameIcon.STAR)
+        }
+      }
     }
   }
 }

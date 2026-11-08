@@ -46,10 +46,22 @@ class GoogleMaps(http: OkHttpClient) {
   private val client = http.newBuilder().cookieJar(MemoryCookies()).callTimeout(java.time.Duration.ofSeconds(5)).build()
   @Volatile private var warmedAt = 0L
 
-  suspend fun driving(from: GeographicCoordinate, to: GeographicCoordinate): List<GoogleRoute> =
+  /** Roads to keep off, as Google's route options name them. */
+  data class Avoid(val highways: Boolean = false, val tolls: Boolean = false, val ferries: Boolean = false) {
+    val any: Boolean
+      get() = highways || tolls || ferries
+  }
+
+  suspend fun driving(from: GeographicCoordinate, to: GeographicCoordinate): List<GoogleRoute> = directions(from, to)
+
+  /**
+   * Google's routes in travel [mode] (0 drive, 2 walk; Google's web has no two-wheeler mode), with
+   * [avoid] for a drive. Walking answers one route and no traffic.
+   */
+  suspend fun directions(from: GeographicCoordinate, to: GeographicCoordinate, mode: Int = 0, avoid: Avoid = Avoid()): List<GoogleRoute> =
       withContext(Dispatchers.IO) {
         warm()
-        val body = get(ENDPOINT + URLEncoder.encode(pb(from, to), "UTF-8")) ?: return@withContext emptyList()
+        val body = get(ENDPOINT + URLEncoder.encode(pb(from, to, mode, if (mode == 0) avoid else Avoid()), "UTF-8")) ?: return@withContext emptyList()
         runCatching { parse(body) }.onFailure { Log.w(TAG, "couldn't read Google's routes", it) }.getOrDefault(emptyList())
       }
 
@@ -84,14 +96,16 @@ class GoogleMaps(http: OkHttpClient) {
         null
       }
 
-  private fun pb(from: GeographicCoordinate, to: GeographicCoordinate): String {
+  private fun pb(from: GeographicCoordinate, to: GeographicCoordinate, mode: Int, avoid: Avoid): String {
     fun n(v: Double) = String.format(Locale.US, "%.7f", v)
-    return TEMPLATE.replace("{OLAT}", n(from.lat))
+    return withAvoid(TEMPLATE, avoid)
+        .replace("{OLAT}", n(from.lat))
         .replace("{OLNG}", n(from.lng))
         .replace("{DLAT}", n(to.lat))
         .replace("{DLNG}", n(to.lng))
         .replace("{CLAT}", n((from.lat + to.lat) / 2))
         .replace("{CLNG}", n((from.lng + to.lng) / 2))
+        .replace("{MODE}", mode.toString())
   }
 
   companion object {
@@ -141,16 +155,70 @@ class GoogleMaps(http: OkHttpClient) {
       return listOfNotNull(place(root.at(0).at(1).at(0).at(14)))
     }
 
-    /** Google's web client's request, driving (`!20m5!1e0`), with the trip's two ends and a viewport between them. */
+    /**
+     * Google's web client's request with the trip's two ends and a viewport between them. The
+     * travel mode is `!20m5!1e{MODE}` (0 drive, 1 cycle, 2 walk, 3 transit), as Vela found and a
+     * plain client confirmed on 8 Nov 2026 (Chhatarpur to Connaught Place: drive 16.1 km / 40 min,
+     * walk 17.7 km / 4 h 6 min; cycling answers nothing in India).
+     */
     private const val TEMPLATE =
         "!1m4!3m2!3d{OLAT}!4d{OLNG}!6e2!1m4!3m2!3d{DLAT}!4d{DLNG}!6e2" +
             "!3m12!1m3!1d24960.741896132306!2d{CLNG}!3d{CLAT}!2m3!1f0.0!2f0.0!3f0.0" +
             "!3m2!1i1024!2i768!4f13.1!6m56!1m5!18b1!30b1!31m1!1b1!34e1!2m4!5m1!6e2!20e3!39b1!6m27!32i1" +
             "!49b1!63m0!66b1!85b1!114b1!149b1!206b1!209b1!212b1!216b1!222b1!223b1!232b1!234b1!235b1" +
             "!244b1!246b1!250b1!253b1!260b1!266b1!270b1!273b1!279b1!281b1!291m0!10b1!12b1!13b1!14b1" +
-            "!16b1!17m1!3e1!20m5!1e0!2e3!5e2!6b1!14b1!46m1!1b0!96b1!99b1!15i10142!20m28!1m6!1m2" +
+            "!16b1!17m1!3e1!20m5!1e{MODE}!2e3!5e2!6b1!14b1!46m1!1b0!96b1!99b1!15i10142!20m28!1m6!1m2" +
             "!1i0!2i0!2m2!1i530!2i768!1m6!1m2!1i974!2i0!2m2!1i1024!2i768!1m6!1m2!1i0!2i0!2m2!1i1024" +
             "!2i20!1m6!1m2!1i0!2i748!2m2!1i1024!2i768!27b1!40i783!47m2!8b1!10e2"
+
+    /** The route options block: the outer `!6m` count, its first child, and the `!2m` group's count. */
+    private val AVOID_BLOCK = Regex("""!6m(\d+)(!1m5!18b1!30b1!31m1!1b1!34e1!2m)(\d+)""")
+
+    /**
+     * [template] with Google's avoid flags, where its own web client puts them (captured by Vela
+     * with the boxes ticked): `!1b1` avoid highways and `!2b1` avoid tolls open the `!2m` group;
+     * `!7b1` avoid ferries is a direct child of the outer `!6m`, before its first child numbered
+     * above 7. Every count that encloses an added flag grows by one per flag.
+     */
+    internal fun withAvoid(template: String, avoid: Avoid): String {
+      if (!avoid.any) return template
+      val m = AVOID_BLOCK.find(template) ?: return template
+      val flags = (if (avoid.highways) "!1b1" else "") + (if (avoid.tolls) "!2b1" else "")
+      val added = flags.count { it == '!' }
+      val outer = m.groupValues[1].toInt()
+      var out = template
+      var ferry = 0
+      if (avoid.ferries) {
+        val bodyStart = m.range.first + 3 + m.groupValues[1].length
+        val children = directChildren(template, bodyStart, outer) ?: return template
+        val at = children.firstOrNull { it.first > 7 }?.second ?: children.lastOrNull()?.third ?: return template
+        out = template.substring(0, at) + "!7b1" + template.substring(at)
+        ferry = 1
+      }
+      return out.replaceRange(m.range, "!6m${outer + added + ferry}${m.groupValues[2]}${m.groupValues[3].toInt() + added}$flags")
+    }
+
+    private val TOKEN = Regex("""!(\d+)([a-zA-Z])([^!]*)""")
+
+    /**
+     * The direct children of a pb group whose body starts at [from] and holds [count] tokens (an
+     * `m` token's value counts its own descendants): (field, start, end). Null when it doesn't parse.
+     */
+    private fun directChildren(pb: String, from: Int, count: Int): List<Triple<Int, Int, Int>>? {
+      val tokens = TOKEN.findAll(pb, from).take(count).toList()
+      if (tokens.size < count) return null
+      val out = mutableListOf<Triple<Int, Int, Int>>()
+      var i = 0
+      while (i < tokens.size) {
+        val t = tokens[i]
+        val span = if (t.groupValues[2] == "m") t.groupValues[3].toIntOrNull() ?: return null else 0
+        val last = i + span
+        if (last >= tokens.size) return null
+        out += Triple(t.groupValues[1].toInt(), t.range.first, tokens[last].range.last + 1)
+        i = last + 1
+      }
+      return out
+    }
 
     /**
      * The answer: `)]}'` then JSON. Routes at [0][1] (each with its summary at [0]: name [1],

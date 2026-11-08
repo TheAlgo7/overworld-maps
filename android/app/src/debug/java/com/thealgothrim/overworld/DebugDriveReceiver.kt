@@ -64,6 +64,78 @@ class DebugDriveReceiver : BroadcastReceiver() {
       }
       // --ez on true|false: the phone's car remote without a car (RemoteScreen).
       "com.thealgothrim.overworld.DEBUG_REMOTE" -> com.thealgothrim.overworld.ui.CarRemote.forced = intent.getBooleanExtra("on", true)
+      // 0.6 screens, opened from adb for checks: --es you saved|timeline|history|none,
+      // --ei settings 0..6 (-1 closes), --es day today|yesterday|2026-11-07|none, --ez area true.
+      "com.thealgothrim.overworld.DEBUG_UI" -> {
+        intent.getStringExtra("you")?.let { com.thealgothrim.overworld.ui.DebugUi.you.value = it }
+        if (intent.hasExtra("settings")) com.thealgothrim.overworld.ui.DebugUi.settingsTab.value = intent.getIntExtra("settings", 0)
+        intent.getStringExtra("day")?.let { com.thealgothrim.overworld.ui.DebugUi.day.value = it }
+        if (intent.getBooleanExtra("area", false)) com.thealgothrim.overworld.ui.DebugUi.pickArea.value = true
+        intent.getStringExtra("mode")?.let { m -> runCatching { com.thealgothrim.overworld.routing.TravelMode.valueOf(m.uppercase()) }.getOrNull()?.let { AppModule.prefs.setMode(it) } }
+        intent.getStringExtra("units")?.let { u -> runCatching { com.thealgothrim.overworld.prefs.Units.valueOf(u.uppercase()) }.getOrNull()?.let { AppModule.prefs.setUnits(it) } }
+        intent.getStringExtra("engine")?.let { e -> runCatching { com.thealgothrim.overworld.prefs.EngineType.valueOf(e.uppercase()) }.getOrNull()?.let { AppModule.prefs.setEngine(it) } }
+        // --ef to_lat --ef to_lng [--es to_name X] [--ez preview true]: a place card, and with
+        // preview its route preview with the mode tabs, as a tap on Directions would.
+        if (intent.hasExtra("to_lat")) {
+          val place = com.thealgothrim.overworld.search.Place(intent.getStringExtra("to_name")?.replace("%s", " ") ?: "Dropped pin", "", GeographicCoordinate(intent.getFloatExtra("to_lat", 0f).toDouble(), intent.getFloatExtra("to_lng", 0f).toDouble()))
+          vm.choose(place)
+          if (intent.getBooleanExtra("preview", false)) vm.directions()
+        }
+        // --ez icons/b3d true|false: the map's place icons and 3D buildings (phone and car), for
+        // measuring what each costs a frame.
+        if (intent.hasExtra("icons") || intent.hasExtra("b3d")) {
+          val store = AppModule.themeStore
+          val d = store.details.value
+          val c = store.carDetails.value
+          val icons = intent.getBooleanExtra("icons", d.placeIcons)
+          val b3d = intent.getBooleanExtra("b3d", d.buildings3d)
+          store.setDetails(d.copy(placeIcons = icons, buildings3d = b3d))
+          store.setCarDetails(c.copy(placeIcons = intent.getBooleanExtra("icons", c.placeIcons), buildings3d = intent.getBooleanExtra("b3d", c.buildings3d)))
+        }
+        // --es bench "lat,lng,zoom,tilt,seconds": a scripted pan of the phone map there, then one
+        // frames line in logcat (see FrameBenchEffect). The app must be open on the map.
+        intent.getStringExtra("bench")?.let { b ->
+          com.thealgothrim.overworld.ui.DebugUi.bench.value = b.split(',').mapNotNull { it.trim().toDoubleOrNull() }.toDoubleArray().takeIf { it.size >= 2 }
+        }
+        // --ez frames true: how smoothly each map drew since the last call (fps, stutters, CPU/GPU
+        // per frame), in logcat under DebugDrive; the first call starts a fresh count.
+        if (intent.getBooleanExtra("frames", false)) {
+          android.os.Handler(android.os.Looper.getMainLooper()).post { Log.i("DebugDrive", "frames: ${com.thealgothrim.overworld.map.FrameStats.summary() ?: "no map drew"}") }
+        }
+        // --es net off|on|auto: MapLibre as if offline (only downloaded areas and its cache draw), or back.
+        when (intent.getStringExtra("net")) {
+          "off" -> org.maplibre.android.MapLibre.setConnected(false)
+          "on" -> org.maplibre.android.MapLibre.setConnected(true)
+          "auto" -> org.maplibre.android.MapLibre.setConnected(null)
+        }
+        // --es offline download|list: download a small demo box at Connaught Place, or log the areas.
+        when (intent.getStringExtra("offline")) {
+          "download" -> AppModule.offline.download("Connaught Place (test)", 28.640, 77.228, 28.622, 77.206) { Log.i("DebugDrive", "offline download: ${it ?: "started"}") }
+          // Deletes every downloaded area (test areas off a phone).
+          "deleteall" -> {
+            AppModule.offline.refresh()
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ AppModule.offline.areas.value.forEach { AppModule.offline.delete(it.id) } }, 1500)
+          }
+          // Empties MapLibre's ordinary cache, so with --es net off only downloaded areas can draw.
+          "clearcache" ->
+              org.maplibre.android.offline.OfflineManager.getInstance(context)
+                  .clearAmbientCache(
+                      object : org.maplibre.android.offline.OfflineManager.FileSourceCallback {
+                        override fun onSuccess() = Log.i("DebugDrive", "ambient cache cleared").let {}
+
+                        override fun onError(message: String) = Log.w("DebugDrive", "cache: $message").let {}
+                      }
+                  )
+          "list" -> {
+            AppModule.offline.refresh()
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ AppModule.offline.areas.value.forEach { Log.i("DebugDrive", "offline: $it") } }, 1500)
+          }
+        }
+      }
+      // Demo saved places and lists (public Delhi landmarks), a demo Timeline for today and
+      // yesterday, and a parked car: for checking the screens on a test phone. --ez clear true
+      // removes what the demo added.
+      "com.thealgothrim.overworld.DEBUG_DEMO" -> DebugDemo.run(intent.getBooleanExtra("clear", false))
       "com.thealgothrim.overworld.DEBUG_CHIME" -> com.thealgothrim.overworld.traffic.CameraChime.play(context)
       // A problem report's files, written but not sent (logcat under DebugDrive lists them); with
       // --ez send true, the email app opens as from Settings.

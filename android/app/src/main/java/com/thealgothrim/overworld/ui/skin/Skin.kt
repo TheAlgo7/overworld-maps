@@ -421,15 +421,41 @@ enum class GameIcon {
   SEARCH, SETTINGS, LOCATE, CLOSE, BACK, STAR, STAR_FILLED, HOME, WORK, RECENT, PIN, SOUND_ON, SOUND_OFF,
   ROUTE, OVERVIEW, CHEVRON_UP, CHEVRON_DOWN, NORTH, NAVIGATE, CAR, LAYERS,
   FUEL, FOOD, PARKING, TOILET, HOSPITAL, HOTEL, CAMERA, ZOOM_IN, ZOOM_OUT,
-  /** "Mark this moment" for a problem report; drawn in code in every theme. */
+  /** "Mark this moment" for a problem report, and the Want to go list. */
   FLAG,
+  // In the generated sets already (tools/make_icons.py names them so): drawn in code without them.
+  EDIT, DELETE, SHARE, NEARBY, SPEEDOMETER, ADD_STOP, CHARGING, CNG,
+  // Saved lists, Timeline, travel modes and Settings (0.6). Batches 11-12 of each world's icon chat
+  // (Ongoing Apps Assets\Overworld Maps\Icon Generation) bring their art; until then, drawn in code.
+  HEART, SUITCASE, LABEL, LIST, NOTE, TIMELINE, CALENDAR, BIKE, WALK, OFFLINE, DOWNLOAD, BELL, SHIELD, INFO, STATS,
 }
+
+/** The icon for a saved list: Google's four defaults have their own, yours show their emoji or a list. */
+val com.thealgothrim.overworld.search.SavedList.icon: GameIcon
+  get() =
+      when (kind) {
+        com.thealgothrim.overworld.search.ListKind.FAVOURITES -> GameIcon.HEART
+        com.thealgothrim.overworld.search.ListKind.WANT_TO_GO -> GameIcon.FLAG
+        com.thealgothrim.overworld.search.ListKind.TRAVEL_PLANS -> GameIcon.SUITCASE
+        com.thealgothrim.overworld.search.ListKind.STARRED -> GameIcon.STAR_FILLED
+        com.thealgothrim.overworld.search.ListKind.CUSTOM -> GameIcon.LIST
+      }
+
+/** The icon for a travel mode. */
+val com.thealgothrim.overworld.routing.TravelMode.icon: GameIcon
+  get() =
+      when (this) {
+        com.thealgothrim.overworld.routing.TravelMode.CAR -> GameIcon.CAR
+        com.thealgothrim.overworld.routing.TravelMode.BIKE -> GameIcon.BIKE
+        com.thealgothrim.overworld.routing.TravelMode.WALK -> GameIcon.WALK
+      }
 
 /** The icon for a kind of nearby place. */
 val Nearby.icon: GameIcon
   get() =
       when (this) {
-        Nearby.FUEL -> GameIcon.FUEL
+        Nearby.FUEL -> if (com.thealgothrim.overworld.AppModule.prefs.engine.value == com.thealgothrim.overworld.prefs.EngineType.CNG) GameIcon.CNG else GameIcon.FUEL
+        Nearby.CHARGING -> GameIcon.CHARGING
         Nearby.FOOD -> GameIcon.FOOD
         Nearby.PARKING -> GameIcon.PARKING
         Nearby.TOILETS -> GameIcon.TOILET
@@ -622,6 +648,147 @@ fun DrawScope.drawGameIcon(icon: GameIcon, color: Color) {
       drawPath(path(16f to 8f, 21f to 6.5f, 21f to 13.5f, 16f to 12f), color, style = line)
       drawLine(color, p(9.5f, 14f), p(9.5f, 21f), strokeWidth = w, cap = StrokeCap.Round)
       drawCircle(color, 1.4f * u, p(7f, 10f))
+    }
+    GameIcon.EDIT -> {
+      drawPath(path(5f to 19f, 5.5f to 15f, 16f to 4.5f, 19.5f to 8f, 9f to 18.5f, close = true), color, style = line)
+      drawLine(color, p(13.5f, 7f), p(17f, 10.5f), strokeWidth = w * 0.8f)
+    }
+    GameIcon.DELETE -> {
+      drawLine(color, p(4f, 6.5f), p(20f, 6.5f), strokeWidth = w, cap = StrokeCap.Round)
+      drawPath(path(9f to 6.5f, 9f to 3.5f, 15f to 3.5f, 15f to 6.5f), color, style = line)
+      drawPath(path(6f to 6.5f, 7.2f to 21f, 16.8f to 21f, 18f to 6.5f), color, style = line)
+    }
+    GameIcon.SHARE -> {
+      drawPath(path(8f to 9f, 5f to 9f, 5f to 21f, 19f to 21f, 19f to 9f, 16f to 9f), color, style = line)
+      drawLine(color, p(12f, 2.5f), p(12f, 14.5f), strokeWidth = w, cap = StrokeCap.Round)
+      drawPath(path(8f to 6.5f, 12f to 2.5f, 16f to 6.5f), color, style = line)
+    }
+    GameIcon.NEARBY -> {
+      drawCircle(color, 2.6f * u, p(12f, 12f))
+      drawCircle(color, 6f * u, p(12f, 12f), style = line)
+      drawCircle(color, 9.5f * u, p(12f, 12f), style = Stroke(width = w * 0.7f))
+    }
+    GameIcon.SPEEDOMETER -> {
+      drawArc(color, 180f, 180f, false, p(3f, 5f), Size(18f * u, 18f * u), style = line)
+      drawLine(color, p(12f, 14f), p(17f, 8.5f), strokeWidth = w, cap = StrokeCap.Round)
+      drawCircle(color, 1.8f * u, p(12f, 14f))
+    }
+    GameIcon.ADD_STOP -> {
+      drawPath(path(9f to 21f, 3.5f to 13f, 3.5f to 8f, 6f to 4f, 12f to 4f, 14.5f to 8f, 14.5f to 13f, close = true), color, style = line)
+      drawLine(color, p(19f, 8f), p(19f, 16f), strokeWidth = w, cap = StrokeCap.Round)
+      drawLine(color, p(15f, 12f), p(23f, 12f), strokeWidth = w, cap = StrokeCap.Round)
+    }
+    GameIcon.CHARGING -> {
+      // A plug with a bolt.
+      drawRoundRect(color, p(6f, 7f), Size(12f * u, 9f * u), CornerRadius(2f * u), style = line)
+      drawLine(color, p(9.5f, 3f), p(9.5f, 7f), strokeWidth = w, cap = StrokeCap.Round)
+      drawLine(color, p(14.5f, 3f), p(14.5f, 7f), strokeWidth = w, cap = StrokeCap.Round)
+      drawLine(color, p(12f, 16f), p(12f, 21f), strokeWidth = w, cap = StrokeCap.Round)
+      drawPath(path(12.8f to 8.5f, 10.5f to 12f, 13.5f to 12f, 11.2f to 15f), color, style = Stroke(width = w * 0.7f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+    }
+    GameIcon.CNG -> {
+      // A gas cylinder with a small flame.
+      drawRoundRect(color, p(7f, 6f), Size(10f * u, 16f * u), CornerRadius(4f * u), style = line)
+      drawLine(color, p(10f, 3f), p(14f, 3f), strokeWidth = w, cap = StrokeCap.Round)
+      drawLine(color, p(12f, 3f), p(12f, 6f), strokeWidth = w, cap = StrokeCap.Round)
+      drawPath(path(12f to 11f, 14f to 14.5f, 12f to 18f, 10f to 14.5f, close = true), color)
+    }
+    GameIcon.HEART -> {
+      val heart =
+          Path().apply {
+            moveTo(12f * u, 20.5f * u)
+            cubicTo(4f * u, 14.5f * u, 2.5f * u, 11f * u, 2.5f * u, 8f * u)
+            cubicTo(2.5f * u, 5f * u, 5f * u, 3f * u, 7.5f * u, 3f * u)
+            cubicTo(9.5f * u, 3f * u, 11f * u, 4.2f * u, 12f * u, 6f * u)
+            cubicTo(13f * u, 4.2f * u, 14.5f * u, 3f * u, 16.5f * u, 3f * u)
+            cubicTo(19f * u, 3f * u, 21.5f * u, 5f * u, 21.5f * u, 8f * u)
+            cubicTo(21.5f * u, 11f * u, 20f * u, 14.5f * u, 12f * u, 20.5f * u)
+            close()
+          }
+      drawPath(heart, color)
+    }
+    GameIcon.SUITCASE -> {
+      drawRoundRect(color, p(3f, 7.5f), Size(18f * u, 13f * u), CornerRadius(2f * u), style = line)
+      drawPath(path(9f to 7.5f, 9f to 4f, 15f to 4f, 15f to 7.5f), color, style = line)
+      drawLine(color, p(8f, 7.5f), p(8f, 20.5f), strokeWidth = w * 0.8f)
+      drawLine(color, p(16f, 7.5f), p(16f, 20.5f), strokeWidth = w * 0.8f)
+    }
+    GameIcon.LABEL -> {
+      drawPath(path(3f to 5f, 13f to 5f, 21f to 12f, 13f to 19f, 3f to 19f, close = true), color, style = line)
+      drawCircle(color, 1.7f * u, p(8f, 12f))
+    }
+    GameIcon.LIST -> {
+      for (y in listOf(6f, 12f, 18f)) {
+        drawCircle(color, 1.5f * u, p(4.5f, y))
+        drawLine(color, p(8.5f, y), p(20.5f, y), strokeWidth = w, cap = StrokeCap.Round)
+      }
+    }
+    GameIcon.NOTE -> {
+      drawPath(path(5f to 3f, 15f to 3f, 19f to 7f, 19f to 21f, 5f to 21f, close = true), color, style = line)
+      drawPath(path(15f to 3f, 15f to 7f, 19f to 7f), color, style = line)
+      drawLine(color, p(8f, 12f), p(16f, 12f), strokeWidth = w * 0.8f, cap = StrokeCap.Round)
+      drawLine(color, p(8f, 16f), p(14f, 16f), strokeWidth = w * 0.8f, cap = StrokeCap.Round)
+    }
+    GameIcon.TIMELINE -> {
+      // A winding road with stops on it.
+      drawPath(path(4f to 20f, 4f to 14f, 12f to 14f, 12f to 9f, 20f to 9f, 20f to 4f), color, style = line)
+      drawCircle(color, 2.4f * u, p(4f, 20f))
+      drawCircle(color, 2.4f * u, p(12f, 11.5f))
+      drawCircle(color, 2.4f * u, p(20f, 4f))
+    }
+    GameIcon.CALENDAR -> {
+      drawRoundRect(color, p(3f, 5f), Size(18f * u, 16f * u), CornerRadius(2f * u), style = line)
+      drawLine(color, p(3f, 10f), p(21f, 10f), strokeWidth = w)
+      drawLine(color, p(8f, 3f), p(8f, 7f), strokeWidth = w, cap = StrokeCap.Round)
+      drawLine(color, p(16f, 3f), p(16f, 7f), strokeWidth = w, cap = StrokeCap.Round)
+      drawCircle(color, 1.3f * u, p(8f, 14.5f))
+      drawCircle(color, 1.3f * u, p(12f, 14.5f))
+      drawCircle(color, 1.3f * u, p(16f, 14.5f))
+    }
+    GameIcon.BIKE -> {
+      // A motorbike from the side: two wheels, the body between, bars up front.
+      drawCircle(color, 3.6f * u, p(5.5f, 16.5f), style = line)
+      drawCircle(color, 3.6f * u, p(18.5f, 16.5f), style = line)
+      drawPath(path(5.5f to 16.5f, 9f to 11f, 15f to 11f, 18.5f to 16.5f), color, style = line)
+      drawPath(path(15f to 11f, 16.5f to 6.5f, 19.5f to 6.5f), color, style = line)
+      drawPath(path(8f to 11f, 9.5f to 8.5f, 13f to 8.5f), color, style = line)
+    }
+    GameIcon.WALK -> {
+      drawCircle(color, 2.2f * u, p(13f, 3.8f))
+      drawPath(path(12f to 7.5f, 10f to 14f, 7f to 21f), color, style = line)
+      drawPath(path(10f to 14f, 14f to 16f, 15f to 21f), color, style = line)
+      drawPath(path(7f to 11.5f, 11.5f to 8f, 16.5f to 11.5f), color, style = line)
+    }
+    GameIcon.OFFLINE -> {
+      // A folded map with an arrow down onto it.
+      drawPath(path(3f to 8f, 9f to 6f, 15f to 8f, 21f to 6f, 21f to 20f, 15f to 22f, 9f to 20f, 3f to 22f, close = true), color, style = line)
+      drawLine(color, p(12f, 1.5f), p(12f, 14f), strokeWidth = w, cap = StrokeCap.Round)
+      drawPath(path(8.5f to 10.5f, 12f to 14f, 15.5f to 10.5f), color, style = line)
+    }
+    GameIcon.DOWNLOAD -> {
+      drawLine(color, p(12f, 3f), p(12f, 15f), strokeWidth = w, cap = StrokeCap.Round)
+      drawPath(path(7f to 10.5f, 12f to 15.5f, 17f to 10.5f), color, style = line)
+      drawPath(path(4f to 16f, 4f to 20.5f, 20f to 20.5f, 20f to 16f), color, style = line)
+    }
+    GameIcon.BELL -> {
+      drawPath(path(4f to 17.5f, 6.5f to 14f, 6.5f to 10f, 9f to 5.5f, 12f to 4.5f, 15f to 5.5f, 17.5f to 10f, 17.5f to 14f, 20f to 17.5f, close = true), color, style = line)
+      drawLine(color, p(10f, 20.5f), p(14f, 20.5f), strokeWidth = w, cap = StrokeCap.Round)
+    }
+    GameIcon.SHIELD -> {
+      drawPath(path(12f to 2.5f, 20f to 5.5f, 20f to 11f, 12f to 21.5f, 4f to 11f, 4f to 5.5f, close = true), color, style = line)
+      drawCircle(color, 2f * u, p(12f, 10f))
+      drawLine(color, p(12f, 11f), p(12f, 15f), strokeWidth = w, cap = StrokeCap.Round)
+    }
+    GameIcon.INFO -> {
+      drawCircle(color, 9.5f * u, p(12f, 12f), style = line)
+      drawCircle(color, 1.4f * u, p(12f, 7.5f))
+      drawLine(color, p(12f, 11f), p(12f, 17f), strokeWidth = w * 1.1f, cap = StrokeCap.Round)
+    }
+    GameIcon.STATS -> {
+      drawLine(color, p(3f, 21f), p(21f, 21f), strokeWidth = w, cap = StrokeCap.Round)
+      drawRect(color, p(4.5f, 13f), Size(4f * u, 8f * u))
+      drawRect(color, p(10f, 8f), Size(4f * u, 13f * u))
+      drawRect(color, p(15.5f, 3.5f), Size(4f * u, 17.5f * u))
     }
   }
 }

@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.stadiamaps.ferrostar.core.NavigationUiState
@@ -21,6 +22,7 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.maplibre.spatialk.geojson.Position
 import uniffi.ferrostar.CourseOverGround
@@ -64,13 +66,30 @@ private fun rememberLeadOnRoute(raw: NavigationUiState): NavigationUiState {
   val route = remember(steady) { RoutePolyline(steady) }
   // Where on the route the last fix was, so the next is looked for near it (see projectNear).
   val lastAlong = remember(route) { doubleArrayOf(Double.NaN) }
-  val led =
+  val at =
       remember(fix, route) {
         val here = Position(fix.coordinates.lng, fix.coordinates.lat)
         val previous = lastAlong[0]
-        val at =
+        val along =
             (if (previous.isNaN()) route.project(here) else route.projectNear(here, previous, reachAhead(fix.speed?.value))).progressMeters
-        lastAlong[0] = at
+        lastAlong[0] = along
+        along
+      }
+  // Between fixes the car keeps going, so the map is told so four times a second. Each glide
+  // lasts a second and fixes come every 1.0 to 1.4 s: given only the fixes, the camera and the
+  // arrow stopped for up to 0.4 s before each one, the stop-and-go of the 8 Nov drive (stutters of
+  // 370 to 400 ms in its log). leadMetres grows with the fix's age, so each step is where the car
+  // is by then; it stops growing 2 s after the fix, so a tunnel doesn't run the arrow on.
+  val step by
+      produceState(0, fix) {
+        if ((fix.speed?.value ?: 0.0) < MIN_LEAD_SPEED) return@produceState
+        for (i in 1..LEAD_STEPS) {
+          delay(LEAD_STEP_MS)
+          value = i
+        }
+      }
+  val led =
+      remember(fix, route, step) {
         val lead = leadMetres(fix)
         if (lead <= 0.0) return@remember fix
         // Lead only along the line the car is following: projected on the route, then ahead on it.
@@ -79,6 +98,10 @@ private fun rememberLeadOnRoute(raw: NavigationUiState): NavigationUiState {
       }
   return if (led === fix) uiState else uiState.copy(location = led)
 }
+
+private const val LEAD_STEP_MS = 250L
+/** Steps after a fix: 1.75 s, about where leadMetres stops counting the fix's age (2 s from when it was taken). */
+private const val LEAD_STEPS = 7
 
 /**
  * [line] without the points that sit within [STEADY_METRES] of the straight line around them

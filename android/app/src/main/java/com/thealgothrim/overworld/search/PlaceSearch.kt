@@ -38,13 +38,35 @@ data class Place(
 )
 
 /** Kinds of place to find nearby, with TomTom's category numbers and the words for its route search. */
-enum class Nearby(val label: String, val tomtom: String, val words: String, val osm: String) {
+enum class Nearby(private val name0: String, val tomtom: String, val words: String, val osm: String) {
   FUEL("Petrol & CNG", "7311", "petrol station", """node["amenity"="fuel"]"""),
+  /** Charging stations, in place of fuel for an electric car (Settings > Vehicle). */
+  CHARGING("Charging", "7309", "ev charging station", """node["amenity"="charging_station"]"""),
   FOOD("Food", "7315", "restaurant", """node["amenity"~"^(restaurant|fast_food|cafe)$"]"""),
   PARKING("Parking", "7369,7313", "parking", """nwr["amenity"="parking"]"""),
   TOILETS("Toilets", "9932005", "toilet", """node["amenity"="toilets"]"""),
   HOSPITAL("Hospitals", "7321", "hospital", """nwr["amenity"~"^(hospital|clinic)$"]"""),
-  HOTEL("Hotels", "7314", "hotel", """nwr["tourism"~"^(hotel|motel|guest_house)$"]"""),
+  HOTEL("Hotels", "7314", "hotel", """nwr["tourism"~"^(hotel|motel|guest_house)$"]""");
+
+  /** The button's word: fuel is named for the car's engine (Petrol, Diesel, CNG). */
+  val label: String
+    get() =
+        if (this != FUEL) name0
+        else
+            when (runCatching { com.thealgothrim.overworld.AppModule.prefs.engine.value }.getOrNull()) {
+              com.thealgothrim.overworld.prefs.EngineType.DIESEL -> "Diesel"
+              com.thealgothrim.overworld.prefs.EngineType.CNG -> "CNG"
+              com.thealgothrim.overworld.prefs.EngineType.PETROL, com.thealgothrim.overworld.prefs.EngineType.HYBRID -> "Petrol"
+              else -> name0
+            }
+
+  companion object {
+    /** The kinds to offer: chargers instead of fuel for an electric car, fuel otherwise. */
+    fun shown(): List<Nearby> {
+      val electric = runCatching { com.thealgothrim.overworld.AppModule.prefs.engine.value }.getOrNull() == com.thealgothrim.overworld.prefs.EngineType.ELECTRIC
+      return entries.filter { if (electric) it != FUEL else it != CHARGING }
+    }
+  }
 }
 
 /**
@@ -172,6 +194,20 @@ class PlaceSearch(
             // Some OpenStreetMap names are typed loosely ("Barodia Scheme , Jaipur").
             ?.replace(Regex("""\s+,"""), ",")
             ?.trim()
+      }
+
+  /** A spot's name (the place or street there), its area and its city, from one reverse lookup. */
+  data class Reverse(val name: String?, val area: String?, val city: String?)
+
+  suspend fun reverseInfo(at: GeographicCoordinate): Reverse =
+      withContext(Dispatchers.IO) {
+        val p =
+            JSONObject(fetch("$photon/reverse?lat=${at.lat}&lon=${at.lng}&lang=en&limit=1")).optJSONArray("features")?.optJSONObject(0)?.optJSONObject("properties")
+                ?: return@withContext Reverse(null, null, null)
+        fun s(key: String) = p.optString(key).trim().takeIf { it.isNotEmpty() }
+        val street = listOfNotNull(s("housenumber"), s("street")).joinToString(" ").takeIf { it.isNotBlank() }
+        val area = listOf("district", "locality", "suburb").firstNotNullOfOrNull { k -> s(k)?.takeUnless { it.lowercase() in GENERIC_AREAS } }
+        Reverse(s("name") ?: street ?: area, area, s("city") ?: s("county") ?: s("state"))
       }
 
   // ---------------------------------------------------------------- written places

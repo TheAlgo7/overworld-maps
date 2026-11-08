@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.stadiamaps.ferrostar.core.NavigationUiState
 import com.stadiamaps.ferrostar.core.annotation.Speed
+import com.stadiamaps.ferrostar.core.isNavigating
 import com.thealgothrim.overworld.HazardAhead
 import com.thealgothrim.overworld.map.RoadFeaturePainter
 import com.thealgothrim.overworld.theme.Skin
@@ -145,6 +146,9 @@ fun rememberSpeedNow(uiState: NavigationUiState): SpeedNow {
   val limit = (uiState.currentAnnotation?.speed as? Speed.Value)?.let {
     if (it.unit.name.contains("MILE", ignoreCase = true)) (it.value * 1.609).roundToInt() else it.value.roundToInt()
   }
+  // Both in the chosen units (mph with miles), the limit to the nearest 5 like a real sign.
+  val units by AppModule.prefs.units.collectAsState()
+  if (units.miles) return SpeedNow(kmh?.let(::displaySpeed), limit?.let { (displaySpeed(it) / 5.0).roundToInt() * 5 })
   return SpeedNow(kmh, limit)
 }
 
@@ -165,8 +169,14 @@ private fun SkinSpec.unitFont() = when (skin) { Skin.GTA -> GameFonts.condensed;
 @Composable
 fun SpeedBadge(spec: SkinSpec, uiState: NavigationUiState, modifier: Modifier = Modifier) {
   val speed = rememberSpeedNow(uiState)
-  val kmh = speed.kmh
-  val limit = speed.limit
+  // Settings > Navigation: the speedometer and the limit sign each turn off on their own. On a
+  // walk neither means anything.
+  val walking = AppModule.viewModel.tripMode.collectAsState().value == com.thealgothrim.overworld.routing.TravelMode.WALK && uiState.isNavigating()
+  if (walking) return
+  val showSpeed by AppModule.prefs.showSpeed.collectAsState()
+  val showLimit by AppModule.prefs.showLimit.collectAsState()
+  val kmh = speed.kmh.takeIf { showSpeed }
+  val limit = speed.limit.takeIf { showLimit }
   if (kmh == null && limit == null) return
   Row(modifier.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
     if (kmh != null) {
@@ -184,13 +194,15 @@ fun SpeedBadge(spec: SkinSpec, uiState: NavigationUiState, modifier: Modifier = 
  */
 @Composable
 fun Speedometer(spec: SkinSpec, speed: SpeedNow, modifier: Modifier = Modifier) {
+  val showSpeed by AppModule.prefs.showSpeed.collectAsState()
+  if (!showSpeed) return
   val kmh = speed.kmh ?: return
   val measurer = rememberTextMeasurer()
   val density = androidx.compose.ui.platform.LocalDensity.current
   val outline = with(density) { (if (spec.rdr) 1.5.dp else 2.dp).toPx() }
   val text = kmh.toString()
   val number = measurer.measure(text, TextStyle(fontFamily = spec.speedFont(), fontSize = 44.sp))
-  val unitText = if (spec.rdr) "KM/H" else "km/h"
+  val unitText = speedUnit(spec.rdr)
   val unit = measurer.measure(unitText, TextStyle(fontFamily = spec.unitFont(), fontSize = 16.sp))
   // Placed by the letters' own outlines: line boxes carry uneven space above and below.
   val numberInk = number.multiParagraph.getPathForRange(0, text.length).getBounds()
@@ -216,6 +228,8 @@ fun Speedometer(spec: SkinSpec, speed: SpeedNow, modifier: Modifier = Modifier) 
 /** The road's limit sign on the car screen, in the theme's art; red ring past the limit. */
 @Composable
 fun SpeedLimitSign(spec: SkinSpec, speed: SpeedNow, modifier: Modifier = Modifier) {
+  val showLimit by AppModule.prefs.showLimit.collectAsState()
+  if (!showLimit) return
   val limit = speed.limit ?: return
   LimitSign(spec, limit, speed.over, 66.dp, modifier)
 }
@@ -293,7 +307,7 @@ private fun SpeedReadout(spec: SkinSpec, kmh: Int, color: Color, height: Dp) {
   val outline = with(density) { (if (spec.rdr) 1.5.dp else 2.dp).toPx() }
   // GTA VI: the mission HUD's bold condensed numerals, like its race timer.
   val number = measurer.measure(kmh.toString(), TextStyle(fontFamily = spec.speedFont(), fontSize = 30.sp))
-  val unit = measurer.measure(if (spec.rdr) "KM/H" else "km/h", TextStyle(fontFamily = spec.unitFont(), fontSize = 11.sp))
+  val unit = measurer.measure(speedUnit(spec.rdr), TextStyle(fontFamily = spec.unitFont(), fontSize = 11.sp))
   val numberInk = number.multiParagraph.getPathForRange(0, kmh.toString().length).getBounds()
   val unitInk = unit.multiParagraph.getPathForRange(0, unit.layoutInput.text.length).getBounds()
   val width = with(density) { (maxOf(numberInk.width, unitInk.width, 44.dp.toPx()) + outline * 2).toDp() }

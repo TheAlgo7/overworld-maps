@@ -80,12 +80,19 @@ fun rememberDisplayedPosition(
 fun leadMetres(fix: UserLocation): Double {
   val speed = fix.speed?.value ?: return 0.0
   if (speed < MIN_LEAD_SPEED) return 0.0
-  val age = (Duration.between(fix.timestamp, Instant.now()).toMillis() / 1000.0).coerceIn(0.0, 1.5)
+  val age = (Duration.between(fix.timestamp, Instant.now()).toMillis() / 1000.0).coerceIn(0.0, MAX_LEAD_AGE_S)
   return speed * (DISPLAY_LOCATION_ANIMATION_DURATION.inWholeMilliseconds / 1000.0 + age)
 }
 
+/**
+ * A fix older than this isn't carried further (the steps between fixes in rememberLeadOnRoute
+ * stop growing): fixes come every 1.0 to 1.4 s plus up to half a second late, and past that the
+ * car may have stopped or gone into a tunnel.
+ */
+private const val MAX_LEAD_AGE_S = 2.0
+
 /** About 4 km/h: slower than this the car is standing and GPS speed is noise. */
-private const val MIN_LEAD_SPEED = 1.2
+internal const val MIN_LEAD_SPEED = 1.2
 
 @Composable
 private fun rememberRouteSnappedLocation(

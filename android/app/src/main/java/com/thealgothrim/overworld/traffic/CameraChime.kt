@@ -20,10 +20,15 @@ import kotlin.math.sin
  */
 object CameraChime {
   private const val RATE = 44_100
-  private val pcm: ShortArray by lazy { notes(listOf(1046.5 to 110, 0.0 to 45, 1318.5 to 150)) }
+  private val tune = listOf(1046.5 to 110, 0.0 to 45, 1318.5 to 150)
+  private val pcm: ShortArray by lazy { notes(tune, 0.55) }
+  /** Settings > Navigation > Guidance volume, Louder: the same notes near full scale. */
+  private val loud: ShortArray by lazy { notes(tune, 0.95) }
 
   fun play(context: Context) {
     Log.i("CameraChime", "camera chime")
+    val volume = runCatching { com.thealgothrim.overworld.AppModule.prefs.volume.value }.getOrDefault(com.thealgothrim.overworld.prefs.GuidanceVolume.NORMAL)
+    val pcm = if (volume == com.thealgothrim.overworld.prefs.GuidanceVolume.LOUDER) loud else pcm
     val attributes =
         AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
@@ -46,6 +51,7 @@ object CameraChime {
               .setTransferMode(AudioTrack.MODE_STATIC)
               .build()
       track.write(pcm, 0, pcm.size)
+      if (volume == com.thealgothrim.overworld.prefs.GuidanceVolume.SOFTER) track.setVolume(0.45f)
       audio.requestAudioFocus(focus)
       track.play()
       Handler(Looper.getMainLooper()).postDelayed(
@@ -62,14 +68,14 @@ object CameraChime {
   }
 
   /** Sine notes (Hz, ms; 0 Hz is a pause), each faded in and out over 8 ms so they don't click. */
-  private fun notes(spec: List<Pair<Double, Int>>): ShortArray {
+  private fun notes(spec: List<Pair<Double, Int>>, amplitude: Double): ShortArray {
     val out = ArrayList<Short>()
     for ((hz, ms) in spec) {
       val n = RATE * ms / 1000
       val fade = RATE * 8 / 1000
       for (i in 0 until n) {
         val envelope = min(1.0, min(i, n - 1 - i).toDouble() / fade)
-        val v = if (hz == 0.0) 0.0 else sin(2 * PI * hz * i / RATE) * 0.55 * envelope
+        val v = if (hz == 0.0) 0.0 else sin(2 * PI * hz * i / RATE) * amplitude * envelope
         out += (v * Short.MAX_VALUE).toInt().toShort()
       }
     }

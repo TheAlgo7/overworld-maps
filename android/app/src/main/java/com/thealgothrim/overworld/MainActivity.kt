@@ -31,6 +31,12 @@ class MainActivity : ComponentActivity() {
     AppModule.init(this)
     AppModule.ferrostarCore.spokenInstructionObserver = AppModule.spokenInstructions
     createFerrostarLogger()
+    // 0.6: notification channels, Timeline auto-delete and last month's recap, offline areas.
+    com.thealgothrim.overworld.notify.Notices.channels(this)
+    if (savedInstanceState == null) {
+      AppModule.timeline.startUp()
+      AppModule.offline.refresh()
+    }
 
     setContent {
       val theme by AppModule.themeStore.theme.collectAsState()
@@ -106,10 +112,17 @@ class MainActivity : ComponentActivity() {
     AppModule.viewModel.mapInView(true)
     // A newer version out? (Settings shows a dot.) At most every few hours.
     lifecycleScope.launch { AppModule.updates.check() }
+    // Offline areas older than a month refresh by themselves (Settings > Offline).
+    lifecycleScope.launch {
+      kotlinx.coroutines.delay(5_000)
+      AppModule.offline.autoUpdate()
+    }
   }
 
   override fun onStop() {
     super.onStop()
     AppModule.viewModel.mapInView(false)
+    // What the Timeline has so far is kept in case Android ends the app in the background.
+    AppModule.timeline.flush()
   }
 }

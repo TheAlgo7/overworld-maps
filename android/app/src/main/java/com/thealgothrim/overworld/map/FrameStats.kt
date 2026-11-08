@@ -28,12 +28,15 @@ object FrameStats {
     internal var gpuSum = 0.0
     internal var gpuMax = 0.0
     internal var lastAt = 0L
+    /** The longest wait between any two frames, rest included (for a scripted pan, where there is none). */
+    internal var longestGapMs = 0L
 
     @Synchronized
     internal fun frame(encodingSeconds: Double, renderingSeconds: Double) {
       val now = SystemClock.uptimeMillis()
       val gap = if (lastAt == 0L) 0L else now - lastAt
       lastAt = now
+      longestGapMs = maxOf(longestGapMs, gap)
       // A map at rest draws nothing; a long pause is the map standing still, not a stutter.
       if (gap in 1..IDLE_MS) {
         activeMs += gap
@@ -53,9 +56,9 @@ object FrameStats {
 
     /** The summary since the last one, or null if this map drew too little to say; then starts again. */
     @Synchronized
-    internal fun take(): String? {
+    internal fun take(minFrames: Int = MIN_FRAMES): String? {
       val line =
-          if (frames < MIN_FRAMES || activeMs <= 0) null
+          if (frames < minFrames || activeMs <= 0) null
           else {
             val fps = frames * 1000.0 / activeMs
             "$name ${"%.0f".format(fps)} fps, $stutters stutters" +
@@ -66,6 +69,9 @@ object FrameStats {
       activeMs = 0
       stutters = 0
       longestStutterMs = 0
+      longestGapMs = 0
+      // The next frame starts the new count: the wait before it (the map at rest) isn't a gap.
+      lastAt = 0L
       cpuSum = 0.0
       cpuMax = 0.0
       gpuSum = 0.0
@@ -84,8 +90,8 @@ object FrameStats {
    * One line for every map that drew since the last call ("car 31 fps, 4 stutters (longest 180
    * ms), CPU 6.2/19 ms, GPU 8.0/23 ms; cluster ..."), or null when none did. Main thread.
    */
-  fun summary(): String? {
-    val parts = meters.values.sortedBy { it.name }.mapNotNull { it.take() }
+  fun summary(minFrames: Int = MIN_FRAMES): String? {
+    val parts = meters.values.sortedBy { it.name }.mapNotNull { it.take(minFrames) }
     if (parts.isEmpty()) return null
     val line = parts.joinToString("; ")
     synchronized(recent) {

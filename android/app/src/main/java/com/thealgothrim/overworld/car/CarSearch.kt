@@ -59,7 +59,8 @@ internal fun previewOrStop(carContext: CarContext, place: Place) {
     }
   } else {
     vm.choose(place)
-    vm.directions()
+    // The car drives as a car, whatever mode the phone last used.
+    vm.directions(com.thealgothrim.overworld.routing.TravelMode.CAR)
   }
 }
 
@@ -143,7 +144,7 @@ class CarNearbyScreen(carContext: CarContext) : Screen(carContext) {
 /** The kinds of nearby place, one tap each. Its own screen or a map panel. */
 internal fun nearbyGridTemplate(withBack: Boolean, onKind: (Nearby) -> Unit): GridTemplate {
   val grid = ItemList.Builder()
-  Nearby.entries.forEach { kind ->
+  Nearby.shown().forEach { kind ->
     grid.addItem(GridItem.Builder().setTitle(kind.label).setImage(carIcon(kind.icon)).setOnClickListener { onKind(kind) }.build())
   }
   return GridTemplate.Builder().setTitle("Nearby").apply { if (withBack) setHeaderAction(Action.BACK) }.setSingleList(grid.build()).build()

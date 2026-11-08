@@ -35,6 +35,9 @@ class RecenterGlide {
   /** The arrow on this map, set by the map's layers. Read each frame of a glide, never composed. */
   internal var shown: DisplayedPosition? = null
 
+  /** The phone's "Keep map north up": a glide onto a trip lands facing north, not along the road. */
+  var northUp: Boolean = false
+
   /** Glide back to following the car in [mode]. */
   fun start(mode: NavigationCameraMode) {
     request = mode
@@ -77,7 +80,7 @@ fun RecenterGlideEffect(mapState: NavigationMapState) {
         val location = glide.shown?.location ?: break
         val f = ((now - start) / 1_000_000f / GLIDE_MS).coerceIn(0f, 1f)
         val target = location.position.value
-        val bearing = location.course?.value?.let { (it - Bearing.North).inDegrees }
+        val bearing = if (glide.northUp) 0.0 else location.course?.value?.let { (it - Bearing.North).inDegrees }
         val to =
             if (mode == NavigationCameraMode.FOLLOW_USER) options.browsingUser(target)
             else options.navigatingUser(target, bearing ?: from.bearing)

@@ -44,13 +44,18 @@ import uniffi.ferrostar.GeographicCoordinate
 enum class SavedKind(val icon: GameIcon) {
   HOME(GameIcon.HOME),
   WORK(GameIcon.WORK),
-  STAR(GameIcon.STAR_FILLED);
+  STAR(GameIcon.STAR_FILLED),
+  /** Where you parked (Save parking), like Google's "You parked here". */
+  PARKING(GameIcon.PARKING);
 
   val layer get() = "ow-saved-${name.lowercase()}"
 }
 
 /** The layers [SavedPlacesLayer] draws, for picking a place under a finger. */
 val SAVED_LAYERS = SavedKind.entries.map { it.layer }.toSet()
+
+/** The parked car's name on the map and its card. */
+const val PARKED_NAME = "Your parked car"
 
 /**
  * Home, Work and starred places on the map, the way the games mark a safehouse: GTA V's house and
@@ -66,12 +71,15 @@ fun SavedPlacesLayer(theme: OverworldTheme, car: Boolean, end: GeographicCoordin
   val home = shown(saved.home)
   val work = shown(saved.work)?.takeIf { home == null || !it.samePlace(home) }
   val stars = saved.starred.mapNotNull { shown(it) }.filter { s -> listOfNotNull(home, work).none { it.samePlace(s) } }
+  // The parked car on the phone only: in the car you're sitting in it.
+  val parked = saved.parking?.takeIf { !car }?.let { Place(PARKED_NAME, it.near?.let { n -> "Parked near $n" } ?: "Parked here", it.at) }
   for (kind in SavedKind.entries) {
     val places =
         when (kind) {
           SavedKind.HOME -> listOfNotNull(home)
           SavedKind.WORK -> listOfNotNull(work)
           SavedKind.STAR -> stars
+          SavedKind.PARKING -> listOfNotNull(parked)
         }
     val source = rememberGeoJsonSource(remember(places) { features(places) })
     val painter = remember(theme.skin, kind) { savedBlip(context, theme.skin, kind) }

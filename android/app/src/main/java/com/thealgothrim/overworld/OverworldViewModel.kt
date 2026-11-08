@@ -14,11 +14,17 @@ import com.stadiamaps.ferrostar.core.NavigationUiState
 import com.stadiamaps.ferrostar.core.annotation.valhalla.valhallaExtendedOSRMAnnotationPublisher
 import com.stadiamaps.ferrostar.core.isNavigating
 import com.stadiamaps.ferrostar.core.location.toUserLocation
+import com.thealgothrim.overworld.notify.Notices
 import com.thealgothrim.overworld.routing.CurrentLevels
 import com.thealgothrim.overworld.routing.LevelCue
 import com.thealgothrim.overworld.routing.RoadLevels
+import com.thealgothrim.overworld.routing.TravelMode
 import com.thealgothrim.overworld.search.Nearby
 import com.thealgothrim.overworld.search.Place
+import com.thealgothrim.overworld.search.samePlace
+import com.thealgothrim.overworld.timeline.Fix
+import com.thealgothrim.overworld.timeline.TimelineRecorder
+import kotlinx.coroutines.async
 import com.thealgothrim.overworld.theme.Daylight
 import com.thealgothrim.overworld.theme.MapTime
 import com.thealgothrim.overworld.theme.OverworldTheme
@@ -111,6 +117,7 @@ data class RoutePreview(
     val distanceMeters: Double,
     /** The road the route spends longest on, for "via ...". */
     val via: String?,
+    val mode: TravelMode = TravelMode.CAR,
 )
 
 /** What the phone shows around the map when not navigating. */
@@ -124,6 +131,10 @@ data class PlannerState(
     val routing: Boolean = false,
     val error: String? = null,
     val preview: RoutePreview? = null,
+    /** The mode the preview shows (its tab is lit). */
+    val mode: TravelMode = TravelMode.CAR,
+    /** Each mode's time for the previewed place, as the tabs show it: null while asking, NaN when there's no route. */
+    val modeTimes: Map<TravelMode, Double> = emptyMap(),
 )
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
@@ -166,6 +177,16 @@ class OverworldViewModel :
    */
   val gpsLost: StateFlow<Boolean> = _gpsLost.asStateFlow()
   @Volatile private var lastFixAt = SystemClock.elapsedRealtime()
+
+  private val _locationOff = MutableStateFlow(false)
+  /**
+   * The phone's own location switch is off (not just a weak signal): the phone offers to turn it
+   * on, the car says to turn it on when it's safe. Checked with [gpsLost].
+   */
+  val locationOff: StateFlow<Boolean> = _locationOff.asStateFlow()
+
+  private fun locationSwitchOff(): Boolean =
+      runCatching { AppModule.context.getSystemService(android.location.LocationManager::class.java)?.isLocationEnabled == false }.getOrDefault(false)
 
   private val _arrived = MutableSharedFlow<String>(extraBufferCapacity = 1)
   /** Emits the destination name once when a trip reaches its end (not when the driver ends it). */
@@ -266,7 +287,9 @@ class OverworldViewModel :
         if (location !== seen) {
           seen = location
           lastFixAt = SystemClock.elapsedRealtime()
-          if (_gpsLost.value) _gpsLost.value = false
+          // A fix means the signal is back, unless the location switch is off (a test drive's
+          // made-up fixes still come then): the card stays until location is on again.
+          if (_gpsLost.value && !locationSwitchOff()) _gpsLost.value = false
         }
         val at = location.coordinates
         val now = System.currentTimeMillis()
@@ -290,7 +313,9 @@ class OverworldViewModel :
             // A fresh start gets the full wait before it counts as lost.
             lastFixAt = maxOf(lastFixAt, SystemClock.elapsedRealtime())
             while (true) {
-              _gpsLost.value = SystemClock.elapsedRealtime() - lastFixAt > GPS_LOST_MS
+              _locationOff.value = locationSwitchOff()
+              // Location switched off: said at once, not after the wait for a fix.
+              _gpsLost.value = _locationOff.value || SystemClock.elapsedRealtime() - lastFixAt > GPS_LOST_MS
               delay(2_000)
             }
           }
@@ -313,6 +338,28 @@ class OverworldViewModel :
             state.progress?.distanceToNextManeuver,
             state.visualInstruction?.primaryContent?.text,
             cue?.let { "${it.cue.kind.text} in ${it.distance.toInt()} m" },
+        )
+      }
+    }
+    viewModelScope.launch {
+      // The Timeline: every new fix while Overworld runs, trip or not. A test drive's simulated
+      // trip isn't a real drive, so it isn't kept.
+      var seen: UserLocation? = null
+      navigationUiState.collect { state ->
+        val location = state.location ?: return@collect
+        if (location === seen) return@collect
+        seen = location
+        val navigating = state.isNavigating()
+        if (navigating && _testDrive.value) return@collect
+        val car = carDark.value != null
+        val phoneMode = AppModule.prefs.mode.value
+        AppModule.timeline.fix(
+            Fix(location.coordinates.lat, location.coordinates.lng, location.speed?.value, location.horizontalAccuracy, location.timestamp.toEpochMilli()),
+            TimelineRecorder.Context(
+                tripMode = if (navigating) _tripMode.value else null,
+                tripTo = if (navigating) destinationName else null,
+                vehicle = if (car || !phoneMode.vehicle) TravelMode.CAR else phoneMode,
+            ),
         )
       }
     }
@@ -352,6 +399,8 @@ class OverworldViewModel :
               if (!announced) {
                 announced = true
                 _arrived.tryEmit(destinationName ?: "your destination")
+                // The Timeline's stop begins here, under the trip's own name for the place.
+                navigationUiState.value.location?.coordinates?.let { AppModule.timeline.arrived(destinationName ?: "Destination", it) }
                 stopNavigation()
               }
           is TripState.Navigating -> announced = false
@@ -398,6 +447,10 @@ class OverworldViewModel :
       _planner.value = _planner.value.copy(results = emptyList(), searching = false)
       return
     }
+    // Your own places first, by your name for them, as Google lists labelled places: at once,
+    // before any server answers.
+    val own = savedMatches(query)
+    _planner.value = _planner.value.copy(results = own)
     searchJob =
         viewModelScope.launch {
           delay(250)
@@ -408,8 +461,19 @@ class OverworldViewModel :
                   // it blanked the list ("No places found") until the next search came back.
                   .onFailure { if (it is CancellationException) throw it; Log.w(TAG, "search failed", it) }
                   .getOrDefault(emptyList())
-          _planner.value = _planner.value.copy(results = results, searching = false)
+          _planner.value = _planner.value.copy(results = own + results.filter { r -> own.none { it.samePlace(r) } }, searching = false)
         }
+  }
+
+  /** Home, Work and saved places matching [query], under your names, marked as saved. */
+  fun savedMatches(query: String): List<Place> {
+    if (query.isBlank()) return emptyList()
+    val s = AppModule.saved.state.value
+    val words = com.thealgothrim.overworld.search.fold(query)
+    val labels = listOfNotNull(s.home?.let { "Home" to it }, s.work?.let { "Work" to it }).filter { (name, _) -> com.thealgothrim.overworld.search.fold(name).startsWith(words) }
+    val own = labels.map { (name, p) -> Place(name, p.name, p.coordinate, note = "Saved") }
+    val places = s.matching(query).map { it.asPlace().copy(note = "Saved") }
+    return own + places.filter { p -> own.none { it.samePlace(p) } }
   }
 
   /** The nearest petrol pumps, toilets, parking and so on, closest first, in the search list. */
@@ -474,7 +538,12 @@ class OverworldViewModel :
   fun choose(place: Place) {
     searchJob?.cancel()
     routeJob?.cancel()
-    _planner.value = PlannerState(destination = place)
+    // Into Maps history: the search that found it (not a Nearby kind's name), and the place.
+    val before = _planner.value
+    if (before.nearby == null && before.query.isNotBlank()) AppModule.history.searched(before.query)
+    AppModule.history.viewed(place)
+    previews.clear()
+    _planner.value = PlannerState(destination = place, mode = AppModule.prefs.mode.value)
   }
 
   /** Long-press on the map: drop a pin, then name it from Photon if possible. */
@@ -598,38 +667,132 @@ class OverworldViewModel :
 
   private var routeJob: Job? = null
 
-  /** Directions: fetch the route and show it with time, distance and the main road. */
-  fun directions() {
+  /** Each mode's preview for the place on screen, kept while it stays (switching tabs is instant). */
+  private val previews = java.util.concurrent.ConcurrentHashMap<TravelMode, RoutePreview>()
+
+  /**
+   * Directions: the route in the chosen mode, shown with time, distance and the main road, and the
+   * other modes' times beside it on their tabs, like Google Maps.
+   */
+  fun directions(only: TravelMode? = null) {
     val place = _planner.value.destination ?: return
     // Tapped again while the route is on its way: it would only be asked for twice.
     if (routeJob?.isActive == true) return
-    _planner.update { it.copy(routing = true, error = null) }
+    AppModule.history.directions(place)
+    // The car (and the phone remote driving it) asks for a car's route whatever the phone last used.
+    val chosen = only ?: _planner.value.mode
+    _planner.update { it.copy(routing = true, error = null, modeTimes = emptyMap(), mode = chosen) }
     routeJob =
         viewModelScope.launch(Dispatchers.IO) {
           // Only while the place is still the one on screen: closed or swapped for another while
           // the route was coming, its preview used to pop up anyway a moment later.
           fun stillShown(state: PlannerState) = state.destination?.coordinate == place.coordinate
+          val from = freshOrigin()
+          // A walk over this far isn't a walk: no tab time for it.
+          val straight = metres(from.coordinates, place.coordinate)
+          val modes = if (only != null) listOf(only) else TravelMode.entries.filter { it != TravelMode.WALK || straight < MAX_WALK_METRES || it == chosen }
+          val jobs =
+              modes.associateWith { mode ->
+                async {
+                  try {
+                    previewFor(place, from, mode).also { p ->
+                      previews[mode] = p
+                      _planner.update { s -> if (stillShown(s)) s.copy(modeTimes = s.modeTimes + (mode to p.durationSeconds)) else s }
+                    }
+                  } catch (e: CancellationException) {
+                    throw e
+                  } catch (e: Exception) {
+                    Log.w(TAG, "routing ${mode.name} failed", e)
+                    _planner.update { s -> if (stillShown(s)) s.copy(modeTimes = s.modeTimes + (mode to Double.NaN)) else s }
+                    if (mode == chosen) _planner.update { s -> if (stillShown(s)) s.copy(routing = false, error = routeError(e)) else s }
+                    null
+                  }
+                }
+              }
+          val preview = jobs[chosen]?.await() ?: return@launch
+          _planner.update { if (stillShown(it) && it.mode == chosen) it.copy(routing = false, preview = preview) else it }
+          if (_planner.value.preview === preview) launch(Dispatchers.Main) { loadExtras(preview.route.geometry, live = false, mode = chosen) }
+        }
+  }
+
+  /** The route to [place] in [mode], as a preview. */
+  private suspend fun previewFor(place: Place, from: UserLocation, mode: TravelMode): RoutePreview {
+    val route = AppModule.routes.routesFor(mode, from, listOf(Waypoint(coordinate = place.coordinate, kind = WaypointKind.BREAK))).first()
+    noteStart("${mode.label.lowercase()} preview of ${place.name}", from, route)
+    val via =
+        route.steps
+            .filter { !it.roadName.isNullOrBlank() }
+            .groupBy { it.roadName!! }
+            .maxByOrNull { (_, steps) -> steps.sumOf { it.distance } }
+            ?.key
+    return RoutePreview(place, route, route.steps.sumOf { it.duration }, route.distance, via, mode)
+  }
+
+  /** A mode's tab tapped in the preview: its route at once when it's in, else asked for now. */
+  fun setPreviewMode(mode: TravelMode) {
+    AppModule.prefs.setMode(mode)
+    val state = _planner.value
+    if (state.mode == mode) return
+    val ready = previews[mode]?.takeIf { it.place.coordinate == state.destination?.coordinate }
+    _planner.update { it.copy(mode = mode, preview = ready ?: it.preview, error = null) }
+    if (ready != null) {
+      loadExtras(ready.route.geometry, live = false, mode = mode)
+      return
+    }
+    if (state.preview == null && state.destination != null && !state.routing) return
+    val place = state.destination ?: return
+    routeJob?.cancel()
+    _planner.update { it.copy(routing = true) }
+    routeJob =
+        viewModelScope.launch(Dispatchers.IO) {
           try {
-            val from = freshOrigin()
-            val route =
-                core.getRoutes(from, listOf(Waypoint(coordinate = place.coordinate, kind = WaypointKind.BREAK))).first()
-            noteStart("preview of ${place.name}", from, route)
-            val via =
-                route.steps
-                    .filter { !it.roadName.isNullOrBlank() }
-                    .groupBy { it.roadName!! }
-                    .maxByOrNull { (_, steps) -> steps.sumOf { it.distance } }
-                    ?.key
-            val preview = RoutePreview(place, route, route.steps.sumOf { it.duration }, route.distance, via)
-            _planner.update { if (stillShown(it)) it.copy(routing = false, preview = preview) else it }
-            if (_planner.value.preview === preview) launch(Dispatchers.Main) { loadExtras(route.geometry, live = false) }
+            val p = previewFor(place, freshOrigin(), mode)
+            previews[mode] = p
+            _planner.update { s -> if (s.destination?.coordinate == place.coordinate && s.mode == mode) s.copy(routing = false, preview = p, modeTimes = s.modeTimes + (mode to p.durationSeconds)) else s }
+            if (_planner.value.preview === p) launch(Dispatchers.Main) { loadExtras(p.route.geometry, live = false, mode = mode) }
           } catch (e: CancellationException) {
             throw e
           } catch (e: Exception) {
-            Log.w(TAG, "routing failed", e)
-            _planner.update { if (stillShown(it)) it.copy(routing = false, error = routeError(e)) else it }
+            _planner.update { s -> if (s.mode == mode) s.copy(routing = false, error = routeError(e), modeTimes = s.modeTimes + (mode to Double.NaN)) else s }
           }
         }
+  }
+
+  /** A saved trip tapped: its place, its mode, its route preview. */
+  fun startSavedTrip(trip: com.thealgothrim.overworld.search.SavedTrip) {
+    choose(trip.to)
+    AppModule.prefs.setMode(trip.mode)
+    _planner.update { it.copy(mode = trip.mode) }
+    directions()
+  }
+
+  /** Save the previewed route as a trip (You > Saved > Saved trips). */
+  fun saveTrip() {
+    val p = _planner.value.preview ?: return
+    AppModule.saved.saveTrip(p.place, p.mode)
+  }
+
+  /** Where the car is parked: here, named by its street or area when that's found. */
+  fun saveParking(at: GeographicCoordinate? = currentCoordinate) {
+    val spot = at ?: return
+    AppModule.saved.park(spot)
+    Notices.scheduleParking(AppModule.context, null)
+    viewModelScope.launch {
+      val near = runCatching { AppModule.search.reverseInfo(spot) }.getOrNull()?.let { it.name ?: it.area }
+      if (near != null) AppModule.saved.updateParking { if (it.at == spot) it.copy(near = near) else it }
+    }
+  }
+
+  /** The parking time limit, [minutes] from now (null clears it), with its reminders. */
+  fun setParkingTime(minutes: Int?) {
+    val until = minutes?.let { System.currentTimeMillis() + it * 60_000L }
+    AppModule.saved.updateParking { it.copy(until = until) }
+    Notices.scheduleParking(AppModule.context, until)
+  }
+
+  fun clearParking() {
+    AppModule.saved.clearParking()
+    Notices.scheduleParking(AppModule.context, null)
   }
 
   /** Voice guidance on or off, remembered for next time (it starts off). */
@@ -652,7 +815,7 @@ class OverworldViewModel :
    * Loads lights and cameras once per route, and incidents plus live travel time now and, while
    * driving, every 150 seconds from the current position.
    */
-  private fun loadExtras(route: List<GeographicCoordinate>, live: Boolean) {
+  private fun loadExtras(route: List<GeographicCoordinate>, live: Boolean, mode: TravelMode = AppModule.routes.tripMode) {
     extrasJob?.cancel()
     val sameRoute = route == extrasRoute
     extrasRoute = route
@@ -660,6 +823,11 @@ class OverworldViewModel :
     if (!sameRoute) {
       _extras.value = RouteExtras()
       extrasLoaded.clear()
+    }
+    // On foot: no traffic, cameras or flyover choices to look for.
+    if (!mode.vehicle) {
+      if (live) CurrentLevels.value = null
+      return
     }
     extrasJob =
         viewModelScope.launch {
@@ -954,15 +1122,19 @@ class OverworldViewModel :
     }
   }
 
-  /** Start: drive the previewed route. */
+  /** Start: drive (or ride, or walk) the previewed route. */
   fun startPreview() {
     val preview = _planner.value.preview ?: return
-    begin(preview.route, preview.place)
-    _planner.value = PlannerState()
+    begin(preview.route, preview.place, preview.mode)
+    _planner.value = PlannerState(mode = preview.mode)
   }
 
+  private val _tripMode = MutableStateFlow(TravelMode.CAR)
+  /** How the trip being driven is made: a walk hides the speed and the car's alerts. */
+  val tripMode: StateFlow<TravelMode> = _tripMode.asStateFlow()
+
   /** Main thread only, like everything else that starts or stops Ferrostar. */
-  private fun begin(given: Route, place: Place) {
+  private fun begin(given: Route, place: Place, mode: TravelMode = TravelMode.CAR) {
     val route = given.safeForCar()
     // Set both ways: a test drive ended from the notification's Stop never turned the simulator
     // off, and the next real trip would then have been driven by it.
@@ -971,16 +1143,25 @@ class OverworldViewModel :
     destinationName = place.name
     _area.value = null
     AppModule.saved.addRecent(place)
-    DriveLog.note("started ${if (_testDrive.value) "a test drive" else "a trip"} to ${place.name}")
+    // Reroutes come back in the same mode; a walk turns and strays at walking distances.
+    AppModule.routes.tripMode = mode
+    _tripMode.value = mode
+    DriveLog.note("started ${if (_testDrive.value) "a test drive" else "a trip"} to ${place.name}${if (mode != TravelMode.CAR) " (${mode.label.lowercase()})" else ""}")
     // The core's own state, not the UI's copy, which reaches the main thread a moment later.
-    if (core.state.value.isNavigating()) core.replaceRoute(route = route) else core.startNavigation(route = route)
+    val navigating = core.state.value.isNavigating()
+    if (mode == TravelMode.WALK) {
+      if (navigating) core.replaceRoute(route, AppModule.walkingConfig) else core.startNavigation(route, AppModule.walkingConfig)
+    } else {
+      if (navigating) core.replaceRoute(route = route) else core.startNavigation(route = route)
+    }
   }
 
   /**
    * Straight to driving, without a preview (used by the car and by saved-place shortcuts there).
-   * [from] replaces the phone's position as the start (debug test drives).
+   * [from] replaces the phone's position as the start (debug test drives). The car always asks
+   * for a car's route.
    */
-  fun startNavigation(destination: GeographicCoordinate, name: String?, from: GeographicCoordinate? = null, fromHeading: Double? = null) {
+  fun startNavigation(destination: GeographicCoordinate, name: String?, from: GeographicCoordinate? = null, fromHeading: Double? = null, mode: TravelMode = TravelMode.CAR) {
     _planner.value = _planner.value.copy(routing = true, error = null)
     viewModelScope.launch(Dispatchers.IO) {
       try {
@@ -989,10 +1170,10 @@ class OverworldViewModel :
             from?.let {
               UserLocation(it, 6.0, fromHeading?.let { h -> uniffi.ferrostar.CourseOverGround(h.toInt().toUShort(), null) }, Instant.now(), fromHeading?.let { uniffi.ferrostar.Speed(10.0, null) })
             } ?: freshOrigin()
-        val route = core.getRoutes(start, listOf(Waypoint(coordinate = destination, kind = WaypointKind.BREAK))).first()
+        val route = AppModule.routes.routesFor(mode, start, listOf(Waypoint(coordinate = destination, kind = WaypointKind.BREAK))).first()
         noteStart("trip to ${name ?: "a point"}", start, route)
         withContext(Dispatchers.Main) {
-          begin(route, Place(name ?: "Destination", "", destination))
+          begin(route, Place(name ?: "Destination", "", destination), mode)
           _planner.value = PlannerState()
         }
       } catch (e: Exception) {
@@ -1094,6 +1275,8 @@ class OverworldViewModel :
     private const val SHARP_FIX_METRES = 25.0
     /** 250 km/h, in m/s. */
     private const val MAX_CAR_SPEED = 70.0
+    /** Further than this in a straight line, the preview doesn't offer a walk. */
+    private const val MAX_WALK_METRES = 40_000.0
     /** Flyovers are worked out this far ahead at a time, and the next stretch when this little is left. */
     private const val LEVELS_WINDOW_M = 30_000.0
     private const val LEVELS_AHEAD_M = 10_000.0

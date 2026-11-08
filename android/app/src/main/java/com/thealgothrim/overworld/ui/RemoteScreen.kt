@@ -157,7 +157,7 @@ fun RemoteScreen(viewModel: OverworldViewModel, onShowMap: () -> Unit) {
               SkinChip(spec, "Saved", GameIcon.STAR) { searchOpen = true }
             }
             // On a trip these look along the rest of the route, and a pick becomes a stop.
-            Nearby.entries.forEach { kind ->
+            Nearby.shown().forEach { kind ->
               SkinChip(spec, kind.label, kind.icon) {
                 searchOpen = true
                 viewModel.searchNearby(kind)
@@ -167,7 +167,8 @@ fun RemoteScreen(viewModel: OverworldViewModel, onShowMap: () -> Unit) {
           (added?.takeIf { navigating } ?: planner.error)?.let { note ->
             SkinPanel(spec, Modifier.fillMaxWidth()) { SkinText(note, spec.body, 15.sp, spec.accent, Modifier.padding(14.dp), maxLines = 3) }
           }
-          planner.destination?.takeIf { !navigating }?.let { PlaceSheet(spec, it, planner, saved, here, viewModel::directions) }
+          // The remote plans the car's trips: always a car's route.
+          planner.destination?.takeIf { !navigating }?.let { PlaceSheet(spec, it, planner, saved, here, { viewModel.directions(com.thealgothrim.overworld.routing.TravelMode.CAR) }) }
         }
       }
 

@@ -49,33 +49,59 @@ import uniffi.ferrostar.Waypoint
  * as a ramp further on (NH-48 at Ambience, every reroute of the 29 Oct drive), the match comes
  * back in pieces: each gap is bridged with Valhalla's own way across and matched again.
  */
+/** Settings > Navigation's route options, read for each route asked. */
+data class RouteOptions(
+    val avoidTolls: Boolean = false,
+    val avoidHighways: Boolean = false,
+    val avoidFerries: Boolean = false,
+    /** Of two routes about as quick, take the shorter one (less fuel), like Google's fuel-efficient routes. */
+    val fuelSaver: Boolean = false,
+    /** Walking pace for walking routes, km/h. */
+    val walkKmh: Double = 5.1,
+) {
+  val avoid: GoogleMaps.Avoid
+    get() = GoogleMaps.Avoid(highways = avoidHighways, tolls = avoidTolls, ferries = avoidFerries)
+}
+
 class OverworldRoutes(
     private val valhalla: RouteAdapter,
     private val http: OkHttpClient,
     val google: GoogleMaps,
     /** The Settings switch: Google may be asked. */
     private val googleOn: () -> Boolean,
+    /** The route options in Settings, read afresh for each route. */
+    private val options: () -> RouteOptions = { RouteOptions() },
 ) : CustomRouteProvider {
   /** Which engine made the last route, for the drive log and Settings. */
   @Volatile var lastSource: String = "none"
     private set
 
-  override suspend fun getRoutes(given: UserLocation, waypoints: List<Waypoint>): List<Route> {
+  /**
+   * How the trip being driven is made: Ferrostar asks [getRoutes] for the trip and its reroutes
+   * without saying, so the view model sets this when a trip starts. The car always drives as a car.
+   */
+  @Volatile var tripMode: TravelMode = TravelMode.CAR
+
+  override suspend fun getRoutes(given: UserLocation, waypoints: List<Waypoint>): List<Route> = routesFor(tripMode, given, waypoints)
+
+  /** Routes in travel [mode]; a preview asks for each mode at once to show their times side by side. */
+  suspend fun routesFor(mode: TravelMode, given: UserLocation, waypoints: List<Waypoint>): List<Route> {
     // A reroute because GPS put the car on the flyover beside the route (or the road under it):
     // start on that road, facing its way. From the raw fix a router could pick the road the route
     // already took, and the car would be sent straight back to it.
-    val hint = RerouteHints.take(given.coordinates)
+    val hint = if (mode.vehicle) RerouteHints.take(given.coordinates) else null
     val userLocation =
         hint?.let { given.copy(coordinates = it.at, courseOverGround = CourseOverGround(it.heading.toInt().coerceIn(0, 359).toUShort(), null)) } ?: given
     hint?.let { DriveLog.note("route: starting on the ${it.level.name.lowercase().replace("surface", "road")} the car is on, at ${DriveLog.at(it.at)}") }
+    val opts = options()
     // Valhalla is asked at once, beside Google, not after it: Google may need its route for a
     // start, and when Google can't help the fallback is already in hand (a preview took 3 s when
     // they ran one after the other, 30 Oct). Left to finish on its own when Google wins.
-    val own = background.async { valhallaRoute(userLocation, waypoints, hint) }
-    if (waypoints.size == 1 && googleOn()) {
+    val own = background.async { valhallaRoute(mode, opts, userLocation, waypoints, hint) }
+    if (waypoints.size == 1 && googleOn() && mode.google != null) {
       val viaGoogle =
           try {
-            googleRoute(userLocation, waypoints.single()) { own.await() }
+            googleRoute(mode, opts, userLocation, waypoints.single()) { own.await() }
           } catch (e: CancellationException) {
             own.cancel()
             throw e
@@ -90,40 +116,75 @@ class OverworldRoutes(
       }
     }
     lastSource = "Valhalla"
-    DriveLog.note("route: Valhalla (${when { !googleOn() -> "Google off"; waypoints.size > 1 -> "stops on the way"; else -> "Google unavailable" }})")
+    DriveLog.note(
+        "route: Valhalla ${mode.costing} (${when { !googleOn() -> "Google off"; mode.google == null -> "Google has no ${mode.label.lowercase()} routes"; waypoints.size > 1 -> "stops on the way"; else -> "Google unavailable" }})"
+    )
     return own.await()
   }
 
   private val background = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+  /** [body] (a Valhalla request) set to travel [mode] with the route options. */
+  private fun applyMode(body: JSONObject, mode: TravelMode, opts: RouteOptions) {
+    body.put("costing", mode.costing)
+    val all = body.optJSONObject("costing_options") ?: JSONObject()
+    val own = all.optJSONObject(mode.costing) ?: JSONObject()
+    if (mode == TravelMode.WALK) {
+      own.put("walking_speed", opts.walkKmh)
+    } else {
+      // 0 keeps off them unless there is no other way, the way Google's "avoid" behaves.
+      if (opts.avoidTolls) own.put("use_tolls", 0.0)
+      if (opts.avoidHighways) own.put("use_highways", 0.0)
+    }
+    if (opts.avoidFerries) own.put("use_ferry", 0.0)
+    all.put(mode.costing, own)
+    body.put("costing_options", all)
+  }
+
   /**
-   * Ferrostar's own request to Valhalla, as it would have sent it, plus the way the car faces. With
-   * a [hint] that the car is on the ground beside the route's flyover, flyovers and underpasses are
-   * kept out of the start, so it can't snap back up onto the deck.
+   * Ferrostar's own request to Valhalla, as it would have sent it, in [mode] with the route
+   * options, plus the way the car faces. With a [hint] that the car is on the ground beside the
+   * route's flyover, flyovers and underpasses are kept out of the start, so it can't snap back up
+   * onto the deck.
    */
-  private suspend fun valhallaRoute(userLocation: UserLocation, waypoints: List<Waypoint>, hint: RerouteHint? = null): List<Route> {
+  private suspend fun valhallaRoute(mode: TravelMode, opts: RouteOptions, userLocation: UserLocation, waypoints: List<Waypoint>, hint: RerouteHint? = null): List<Route> {
     val request = valhalla.generateRequest(userLocation, waypoints) as RouteRequest.HttpPost
     val body = JSONObject(String(request.body))
+    applyMode(body, mode, opts)
     val start = body.optJSONArray("locations")?.optJSONObject(0)
-    (hint?.heading ?: movingCourse(userLocation))?.let { course -> start?.put("heading", course.toInt())?.put("heading_tolerance", HEADING_TOLERANCE) }
+    if (mode.vehicle) (hint?.heading ?: movingCourse(userLocation))?.let { course -> start?.put("heading", course.toInt())?.put("heading_tolerance", HEADING_TOLERANCE) }
     if (hint?.level == Level.SURFACE) start?.put("search_filter", JSONObject().put("exclude_bridge", true).put("exclude_tunnel", true))
     val (code, bytes) = post(request.url, request.headers, body.toString().toByteArray())
     if (code !in 200..299) throw InvalidStatusCodeException(code)
     return valhalla.parseResponse(bytes ?: throw NoResponseBodyException())
   }
 
-  private suspend fun googleRoute(userLocation: UserLocation, destination: Waypoint, ownRoutes: suspend () -> List<Route>): List<Route>? {
-    var best = google.driving(userLocation.coordinates, destination.coordinate).firstOrNull() ?: return null
+  /**
+   * Google's first route, or with the fuel saver on, the shortest of those within 5% (or two
+   * minutes) of the quickest: about as fast, less road, less fuel.
+   */
+  private fun pick(routes: List<GoogleMaps.GoogleRoute>, opts: RouteOptions): GoogleMaps.GoogleRoute? {
+    if (!opts.fuelSaver || routes.size < 2) return routes.firstOrNull()
+    fun time(r: GoogleMaps.GoogleRoute) = r.trafficSeconds ?: r.typicalSeconds
+    val quickest = routes.minOf(::time)
+    val chosen = routes.filter { time(it) <= maxOf(quickest * 1.05, quickest + 120.0) }.minByOrNull { it.metres } ?: return routes.first()
+    if (chosen !== routes.first()) DriveLog.note("route: fuel saver took Google's ${"%.1f".format(chosen.metres / 1000)} km route over ${"%.1f".format(routes.first().metres / 1000)} km")
+    return chosen
+  }
+
+  private suspend fun googleRoute(mode: TravelMode, opts: RouteOptions, userLocation: UserLocation, destination: Waypoint, ownRoutes: suspend () -> List<Route>): List<Route>? {
+    val googleMode = mode.google ?: return null
+    var best = pick(google.directions(userLocation.coordinates, destination.coordinate, googleMode, opts.avoid), opts) ?: return null
     // The stretch before Google's line when it had to be asked from further along.
     var lead = emptyList<GeographicCoordinate>()
-    val course = movingCourse(userLocation)
+    val course = if (mode.vehicle) movingCourse(userLocation) else null
     if (course != null && startsAgainst(best.line, course)) {
       // Google put the car on the other side of the road. Valhalla, told the heading, knows which
       // side it's on: ask Google again from a point that far along Valhalla's way.
       val own = ownRoutes().firstOrNull()?.geometry ?: return null
       lead = prefix(own, ((userLocation.speed?.value ?: 0.0) * LEAD_SECONDS).coerceIn(LEAD_MIN_METRES, LEAD_MAX_METRES))
       if (lead.size < 2) return null
-      val again = google.driving(lead.last(), destination.coordinate).firstOrNull() ?: return null
+      val again = pick(google.directions(lead.last(), destination.coordinate, googleMode, opts.avoid), opts) ?: return null
       if (startsAgainst(again.line, bearing(lead[lead.lastIndex - 1], lead.last()))) {
         DriveLog.note("route: Google started against the car twice, used Valhalla")
         return null
@@ -139,6 +200,8 @@ class OverworldRoutes(
     val body = JSONObject(String(request.body))
     body.remove("locations")
     body.put("shape_match", "map_snap")
+    // Matched in the same mode: a walk laid onto footpaths, a drive onto roads cars may use.
+    applyMode(body, mode, opts)
     val traceUrl = request.url.substringBeforeLast("/route") + "/trace_route"
     suspend fun trace(shape: List<GeographicCoordinate>): JSONObject? {
       body.put(
@@ -162,7 +225,7 @@ class OverworldRoutes(
     if (pieces > 1) {
       // Matched in pieces: OpenStreetMap's way across a gap differs from Google's (a U-turn cut
       // mapped as a ramp further on). Bridge each gap with Valhalla's way and match once more.
-      val bridged = bridged(shape, answer, request.url, request.headers)
+      val bridged = bridged(shape, answer, request.url, request.headers, mode.costing)
       if (bridged == null) {
         DriveLog.note("route: Google's ${metres.toInt()} m matched in $pieces pieces with no way across, used Valhalla")
         return null
@@ -218,7 +281,7 @@ class OverworldRoutes(
    * driven the way Google's line enters and leaves it. Null when a way across is missing or a long
    * way round (then OpenStreetMap really lacks Google's road, and its turns would be wrong).
    */
-  private suspend fun bridged(shape: List<GeographicCoordinate>, answer: JSONObject, routeUrl: String, headers: Map<String, String>): List<GeographicCoordinate>? {
+  private suspend fun bridged(shape: List<GeographicCoordinate>, answer: JSONObject, routeUrl: String, headers: Map<String, String>, costing: String = "auto"): List<GeographicCoordinate>? {
     val gaps = gaps(answer.optJSONArray("tracepoints") ?: return null)
     if (gaps.isEmpty() || gaps.size > MAX_BRIDGES) return null
     // Every gap asked at once.
@@ -230,7 +293,7 @@ class OverworldRoutes(
                   val outHeading = bearing(shape[gap.toIndex], shape[minOf(gap.toIndex + 1, shape.lastIndex)])
                   fun location(p: GeographicCoordinate, heading: Double) =
                       JSONObject().put("lat", p.lat).put("lon", p.lng).put("heading", heading.toInt()).put("heading_tolerance", HEADING_TOLERANCE)
-                  val request = JSONObject().put("costing", "auto").put("locations", JSONArray().put(location(gap.from, inHeading)).put(location(gap.to, outHeading)))
+                  val request = JSONObject().put("costing", costing).put("locations", JSONArray().put(location(gap.from, inHeading)).put(location(gap.to, outHeading)))
                   val (code, bytes) = post(routeUrl, headers, request.toString().toByteArray())
                   if (code !in 200..299 || bytes == null) return@async null
                   val leg = JSONObject(String(bytes)).optJSONObject("trip")?.optJSONArray("legs")?.optJSONObject(0) ?: return@async null

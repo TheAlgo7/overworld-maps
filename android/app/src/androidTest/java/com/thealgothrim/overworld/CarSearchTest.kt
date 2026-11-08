@@ -60,7 +60,9 @@ class CarSearchTest {
     main { AppModule.viewModel.stopNavigation() }
     Thread.sleep(11_000)
     val grid = main { CarNearbyScreen(TestCarContext.createCarContext(context)).onGetTemplate() } as GridTemplate
-    assertEquals(Nearby.entries.size, grid.singleList!!.items.size)
+    // Fuel or chargers, by the engine type (Settings > Vehicle), with the other five kinds.
+    assertEquals(Nearby.shown().size, grid.singleList!!.items.size)
+    assertEquals(Nearby.entries.size - 1, grid.singleList!!.items.size)
 
     val list = main { CarNearbyListScreen(TestCarContext.createCarContext(context), Nearby.FUEL).also { ScreenController(it).moveToState(Lifecycle.State.RESUMED) } }
     fun rows() = (list.onGetTemplate() as ListTemplate).let { t -> if (t.isLoading) emptyList() else t.singleList!!.items.map { it as Row } }

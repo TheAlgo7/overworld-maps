@@ -23,6 +23,7 @@ import com.thealgothrim.overworld.ui.skin.GameIconView
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -150,9 +151,10 @@ fun BoxScope.CarGameHud(
       SpeedLimitSign(spec, speed, Modifier.padding(start = 12.dp))
       CameraButton(spec, Modifier.padding(start = 12.dp))
     }
-    Box(Modifier.weight(1f).padding(bottom = 6.dp), contentAlignment = Alignment.Center) {
-      // With no fix the street would be the last one seen: say so instead.
-      if (lost) LostCard(spec, Modifier)
+    BoxWithConstraints(Modifier.weight(1f).padding(bottom = 6.dp), contentAlignment = Alignment.Center) {
+      // With no fix the street would be the last one seen: say so instead, a size down on a narrow
+      // head unit (800 dp wide), where this slot beside the time card is only about 240 dp.
+      if (lost) LostCard(spec, Modifier, compact = maxWidth < 460.dp)
       else StreetLine(spec, listOfNotNull(uiState.currentStepRoadName?.takeIf { it.isNotBlank() }, area), Modifier)
     }
     // Keeps the street name clear of the map buttons on the right.
@@ -354,15 +356,29 @@ private fun StreetLine(spec: SkinSpec, parts: List<String>, modifier: Modifier) 
   }
 }
 
-/** No GPS fix for a while: said plainly, like Google Maps, instead of a frozen arrow. */
+/**
+ * No location, said big and plainly on the car screen (his ask, 8 Nov): the world's title type over
+ * one calm line. With the phone's location switched off it says to turn it on only when it's safe
+ * (Android Auto's rule for anything that sends the driver to the phone); with only the signal gone
+ * (a tunnel) it asks nothing of the driver.
+ */
 @Composable
-private fun LostCard(spec: SkinSpec, modifier: Modifier) {
-  Row(modifier.widthIn(max = 420.dp).skinPanel(spec).padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-    GameIconView(GameIcon.LOCATE, spec.sub, Modifier.size(32.dp))
-    Spacer(Modifier.width(14.dp))
+private fun LostCard(spec: SkinSpec, modifier: Modifier, compact: Boolean = false) {
+  val off by AppModule.viewModel.locationOff.collectAsState()
+  Row(
+      modifier.widthIn(max = 560.dp).skinPanel(spec)
+          .padding(horizontal = if (compact) 16.dp else 26.dp, vertical = if (compact) 12.dp else 18.dp),
+      verticalAlignment = Alignment.CenterVertically,
+  ) {
+    GameIconView(GameIcon.LOCATE, if (off) spec.accent else spec.sub, Modifier.size(if (compact) 30.dp else 44.dp))
+    Spacer(Modifier.width(if (compact) 12.dp else 18.dp))
     Column {
-      SkinText(spec.title("Location not found"), spec.title, spec.titleSize(if (spec.vi) 26.sp else 24.sp, 26.sp), spec.fg, spacing = spec.titleSpacing)
-      SkinText("Waiting for GPS", spec.body, 18.sp, spec.sub, Modifier.padding(top = 2.dp))
+      val title = if (compact) spec.titleSize(if (spec.vi) 26.sp else 24.sp, 26.sp) else spec.titleSize(if (spec.vi) 36.sp else 34.sp, 36.sp)
+      SkinText(spec.title(if (off) "No location" else "No GPS signal"), spec.title, title, spec.fg, spacing = spec.titleSpacing)
+      SkinText(
+          if (off) "Turn on location when it's safe to do so." else "Waiting for the signal to come back.",
+          spec.body, if (compact) 16.sp else 20.sp, spec.sub, Modifier.padding(top = 4.dp), maxLines = 3,
+      )
     }
   }
 }

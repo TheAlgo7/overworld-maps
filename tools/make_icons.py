@@ -39,6 +39,9 @@ NAMES = {
     65: "my_home", 66: "my_work", 67: "my_star", 68: "my_recent", 69: "stop", 70: "destination",
     71: "traffic_light", 72: "speed_camera", 73: "accident", 74: "roadworks", 75: "closure", 76: "flooding",
     77: "lane_closed", 78: "speed_breaker", 79: "toll", 80: "school_zone",
+    # 0.6 (batches 11 and 12): saved lists, Timeline, travel modes, Settings. Buttons, like 1-32.
+    81: "heart", 82: "flag", 83: "suitcase", 84: "label", 85: "list", 86: "note", 87: "timeline", 88: "calendar",
+    89: "bike", 90: "walk", 91: "offline", 92: "download", 93: "bell", 94: "shield", 95: "info", 96: "stats",
 }
 # Buttons in the app are drawn at up to 32 dp: 144 px covers that on a 4.5x screen.
 SIZE = 144
@@ -48,7 +51,9 @@ PANEL_PLACES = {"fuel", "food", "parking", "toilet", "hospital", "hotel"}
 # pale tile. The app tints what it draws on a panel, so those are written as plain white pictograms:
 # a disc would vanish on the black panel, a tile would leave a pictogram half the size. Their map
 # icons keep them.
-PLAIN = {"rdr2": {name for n, name in NAMES.items() if n <= 32} | PANEL_PLACES, "gta6": PANEL_PLACES}
+# Buttons are 1-32 and, since 0.6, 81-96; 33-80 are map icons.
+BUTTON_NUMBERS = set(range(1, 33)) | set(range(81, 97))
+PLAIN = {"rdr2": {name for n, name in NAMES.items() if n in BUTTON_NUMBERS} | PANEL_PLACES, "gta6": PANEL_PLACES}
 # The games whose pictogram is darker than what's behind it.
 DARK_INK = {"gta6"}
 
@@ -172,7 +177,7 @@ def art(game: str, name: str, size: int, margin: float = 0.06, panel: bool = Fal
     icon = Image.open(path).convert("RGBA")
     if panel and name in PLAIN.get(game, ()):
         icon = plain(icon, game in DARK_INK)
-    elif game == "gta6" and next(n for n, v in NAMES.items() if v == name) > 32:
+    elif game == "gta6" and next(n for n, v in NAMES.items() if v == name) not in BUTTON_NUMBERS:
         icon = vi_tile(icon, name, path.parent.name == "blips")
     box = icon.getchannel("A").point(lambda a: 255 if a > 8 else 0).getbbox()
     if box:

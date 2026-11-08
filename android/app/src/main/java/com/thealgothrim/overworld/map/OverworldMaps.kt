@@ -92,6 +92,10 @@ fun OverworldPhoneMap(
     previewRoute: List<GeographicCoordinate>? = null,
     /** A shop, temple, petrol pump... tapped on the map: picked like a search result. */
     onPlaceTap: (Place) -> Unit = {},
+    /** A Timeline day shown on the map (You > Timeline > Show on map). */
+    timelineDay: List<com.thealgothrim.overworld.timeline.Segment>? = null,
+    /** Settings > Navigation > Keep map north up: on a trip the camera stays north while the arrow turns. */
+    northUp: Boolean = false,
 ) {
   val context = LocalContext.current
   val details by AppModule.themeStore.details.collectAsState()
@@ -104,12 +108,20 @@ fun OverworldPhoneMap(
   val baseStyle = rememberMapStyle(StyleKey(theme, car = false, trafficTiles, variant, flat, places)) { k ->
     BaseStyle.Json(StyleCache.json(context, k.theme, k.car, k.trafficTiles, k.variant, k.flat, k.places))
   }
+  val smoothed = rememberSmoothedUiState(uiState)
+  // North up: the camera is told the car faces north, so its bearing stays put; the arrow (the
+  // layers below) keeps the real course and turns on the map instead.
+  val cameraState =
+      if (northUp && smoothed.isNavigating())
+          remember(smoothed) { smoothed.copy(location = smoothed.location?.copy(courseOverGround = uniffi.ferrostar.CourseOverGround(0u, null))) }
+      else smoothed
+  mapState.glide.northUp = northUp
   Box(Modifier.fillMaxSize().tiltGesture(mapState)) {
     FrameStatsProbe("phone")
     NavigationMapView(
         baseStyle = baseStyle,
         navigationMapState = mapState,
-        uiState = rememberSmoothedUiState(uiState),
+        uiState = cameraState,
         // No MapLibre ornaments: its (i) attribution button moved around with the camera padding.
         // The OpenStreetMap credit is drawn by the screen instead (MapCredit).
         // Tilt is ours (tiltGesture): MapLibre's started late and moved half as far.
@@ -133,8 +145,9 @@ fun OverworldPhoneMap(
             NavigationMapClickResult.Consume
           }
         },
-    ) { state ->
-      OverworldLayers(state, theme, car = false, extras, details, previewRoute, pickedDestination, style = baseStyle, headingUp = mapState.headingUp, glide = mapState.glide)
+    ) { _ ->
+      timelineDay?.let { TimelineDayLayer(it, theme) }
+      OverworldLayers(smoothed, theme, car = false, extras, details, previewRoute, pickedDestination, style = baseStyle, headingUp = { mapState.headingUp() && !northUp }, glide = mapState.glide)
     }
     // "Take flyover" on the map at the split, clear of the turn banner and the trip sheet.
     val levels = extras.levels
@@ -143,6 +156,7 @@ fun OverworldPhoneMap(
     }
   }
   RecenterGlideEffect(mapState)
+  FrameBenchEffect(mapState)
 }
 
 /**
@@ -436,7 +450,7 @@ private fun placeAt(projection: CameraProjection, at: DpOffset): Place? {
   val box = DpRect(at.x - r, at.y - r, at.x + r, at.y + r)
   // Your own places first: Home over a shop that happens to share the spot.
   val hits =
-      listOf(SAVED_LAYERS, setOf("poi-blips")).flatMap { runCatching { projection.queryRenderedFeatures(box, it) }.getOrNull().orEmpty() }
+      listOf(SAVED_LAYERS, setOf("poi-blips", "poi-blips-near", "poi-blips-close")).flatMap { runCatching { projection.queryRenderedFeatures(box, it) }.getOrNull().orEmpty() }
   for (f in hits) {
     val props = f.properties ?: continue
     fun text(key: String) = (props[key] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }

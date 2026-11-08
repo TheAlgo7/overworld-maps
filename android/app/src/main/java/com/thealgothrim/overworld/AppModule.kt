@@ -27,8 +27,14 @@ import com.stadiamaps.ferrostar.core.withJsonOptions
 import com.stadiamaps.ferrostar.googleplayservices.FusedNavigationLocationProvider
 import com.stadiamaps.ferrostar.ui.formatters.DistanceMeasurementSystem
 import com.stadiamaps.ferrostar.ui.formatters.LocalizedDistanceFormatter
+import com.thealgothrim.overworld.offline.OfflineMaps
+import com.thealgothrim.overworld.prefs.NavPrefs
+import com.thealgothrim.overworld.routing.RouteOptions
 import com.thealgothrim.overworld.search.PlaceSearch
 import com.thealgothrim.overworld.search.SavedPlaces
+import com.thealgothrim.overworld.search.SearchHistory
+import com.thealgothrim.overworld.timeline.TimelineKeeper
+import com.thealgothrim.overworld.timeline.TimelineStore
 import com.thealgothrim.overworld.traffic.MyCameras
 import com.thealgothrim.overworld.traffic.TrafficService
 import com.thealgothrim.overworld.theme.GameFonts
@@ -108,6 +114,41 @@ object AppModule {
         httpClient,
         GoogleMaps(httpClient),
         googleOn = { themeStore.useGoogle.value },
+        options = {
+          RouteOptions(
+              avoidTolls = prefs.avoidTolls.value,
+              avoidHighways = prefs.avoidHighways.value,
+              avoidFerries = prefs.avoidFerries.value,
+              fuelSaver = prefs.fuelSaver.value,
+              walkKmh = prefs.walkPace.value.kmh,
+          )
+        },
+    )
+  }
+
+  /** Settings Google keeps under Navigation, Your vehicles, Privacy, Offline maps and Notifications. */
+  val prefs: NavPrefs by lazy { NavPrefs(appContext) }
+
+  /** Maps history: searches, places looked at, directions (You > History). */
+  val history: SearchHistory by lazy { SearchHistory(appContext) { prefs.keepHistory.value } }
+
+  /** Drives and stops, kept on the phone (You > Timeline). */
+  val timeline: TimelineKeeper by lazy { TimelineKeeper(TimelineStore(appContext)) }
+
+  val offline: OfflineMaps by lazy { OfflineMaps(appContext) }
+
+  /**
+   * A walk's trip settings: turns advance and a detour is noticed sooner than a car's, at walking
+   * distances (a car's 30 m to advance a step is half a street on foot).
+   */
+  val walkingConfig: NavigationControllerConfig by lazy {
+    NavigationControllerConfig(
+        WaypointAdvanceMode.WaypointWithinRange(30.0),
+        stepAdvanceDistanceEntryAndExit(12u, 3u, 15u),
+        stepAdvanceDistanceToEndOfStep(5u, 15u),
+        // Off the path by 35 m with a fix sure to 25 m: city GPS on foot is rarely sharper.
+        RouteDeviationTracking.StaticThreshold(25u, 35.0),
+        CourseFiltering.RAW,
     )
   }
 
@@ -124,7 +165,7 @@ object AppModule {
                     // and with English (US) the trip notification counted miles.
                     DefaultForegroundNotificationBuilder(
                         appContext,
-                        distanceFormatter = LocalizedDistanceFormatter(distanceMeasurementSystemOverride = DistanceMeasurementSystem.SI),
+                        distanceFormatter = com.thealgothrim.overworld.car.ChosenUnitsFormatter,
                     ),
                 ),
             navigationControllerConfig =
@@ -146,7 +187,10 @@ object AppModule {
     // Ferrostar only calls this while off the route. Same as its default (take the first new
     // route), but made safe for Android Auto first: a reroute often starts on a roundabout.
     core.alternativeRouteProcessor = AlternativeRouteProcessor { c, routes ->
-      routes.firstOrNull()?.let { c.replaceRoute(it.safeForCar()) }
+      routes.firstOrNull()?.let { r ->
+        // A walk keeps its walking distances after a reroute.
+        if (AppModule.routes.tripMode == com.thealgothrim.overworld.routing.TravelMode.WALK) c.replaceRoute(r.safeForCar(), walkingConfig) else c.replaceRoute(r.safeForCar())
+      }
     }
     core
   }
@@ -170,9 +214,47 @@ object AppModule {
   val spokenInstructions: SpokenInstructionObserver by lazy {
     object : SpokenInstructionObserver by ttsObserver {
       override fun onSpokenInstructionTrigger(spokenInstruction: SpokenInstruction) {
-        if (!ttsObserver.isMuted) ttsObserver.onSpokenInstructionTrigger(spokenInstruction)
+        if (ttsObserver.isMuted) return
+        // Settings > Navigation > Guidance volume: Softer speaks quieter; Normal and Louder are
+        // Ferrostar's own full-volume voice, as before.
+        if (prefs.volume.value == com.thealgothrim.overworld.prefs.GuidanceVolume.SOFTER) say(spokenInstruction.text, spokenInstruction.utteranceId.toString(), 0.45f)
+        else ttsObserver.onSpokenInstructionTrigger(spokenInstruction)
       }
     }
+  }
+
+  /**
+   * Speaks [text] at [gain] on the navigation channel, ducking music while it talks, the way
+   * Ferrostar does (its listener is the voice's only one, so the duck ends once it stops talking).
+   */
+  fun say(text: String, id: String = "overworld-${System.nanoTime()}", gain: Float = 1f) {
+    startVoice()
+    val tts = ttsObserver.tts ?: return
+    val attributes =
+        android.media.AudioAttributes.Builder()
+            .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build()
+    val audio = appContext.getSystemService(android.media.AudioManager::class.java)
+    val focus = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK).setAudioAttributes(attributes).build()
+    audio?.requestAudioFocus(focus)
+    tts.speak(text, TextToSpeech.QUEUE_ADD, android.os.Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, gain) }, id)
+    val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    handler.postDelayed(
+        object : Runnable {
+          override fun run() {
+            if (tts.isSpeaking) handler.postDelayed(this, 300) else audio?.abandonAudioFocusRequest(focus)
+          }
+        },
+        700,
+    )
+  }
+
+  /** Settings' "Play test sound": the camera beep, then a turn in the voice, at the chosen volume. */
+  fun testSound() {
+    com.thealgothrim.overworld.traffic.CameraChime.play(appContext)
+    val gain = if (prefs.volume.value == com.thealgothrim.overworld.prefs.GuidanceVolume.SOFTER) 0.45f else 1f
+    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ say("In 300 metres, turn left.", gain = gain) }, 600)
   }
 
   /** Starts the voice engine once; later calls (every phone or car screen start) do nothing. */

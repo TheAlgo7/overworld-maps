@@ -62,6 +62,7 @@ Speed cameras: Overpass API. Live traffic (optional, your own key): TomTom.
 Overworld Maps asks Google Maps for routes, traffic and places the way Vela Maps
 (https://github.com/PimpinPumpkin/Vela, GPL-3.0, Copyright the Vela contributors) does.
 The request templates and the positions read from the answers follow Vela's
-core/data/google/DirectionsPb.kt, SearchPb.kt and parse/DirectionsParser.kt, in:
+core/data/google/DirectionsPb.kt, SearchPb.kt and parse/DirectionsParser.kt (including
+its travel-mode field and the avoid-highways, avoid-tolls and avoid-ferries flags), in:
   android/app/src/main/java/com/thealgothrim/overworld/routing/GoogleMaps.kt
 The GNU General Public License v3.0: https://www.gnu.org/licenses/gpl-3.0.txt

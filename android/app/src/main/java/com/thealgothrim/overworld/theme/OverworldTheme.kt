@@ -363,7 +363,8 @@ object StyleCache {
     val root = JSONObject(style)
     val layers = root.getJSONArray("layers")
     val out = JSONArray()
-    for (i in 0 until layers.length()) layers.getJSONObject(i).takeIf { it.optString("id") != id }?.let { out.put(it) }
+    // The layer and its zoom-in steps ("poi-blips", "poi-blips-near", "poi-blips-close").
+    for (i in 0 until layers.length()) layers.getJSONObject(i).takeIf { l -> l.optString("id").let { it != id && !it.startsWith("$id-") } }?.let { out.put(it) }
     root.put("layers", out)
     return root.toString()
   }

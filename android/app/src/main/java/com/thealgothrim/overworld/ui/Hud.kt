@@ -20,13 +20,30 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
+/** Whether distances and speeds show in miles (Settings > Display > Distance units). */
+val milesNow: Boolean
+  get() = runCatching { com.thealgothrim.overworld.AppModule.prefs.units.value.miles }.getOrDefault(false)
+
+/** A distance in the chosen units: metres then km, or feet then miles. */
 fun formatDistance(meters: Double): String =
-    if (meters < 950) "${max(10, (meters / 10).roundToInt() * 10)} m"
-    else "%.1f km".format(meters / 1000)
+    if (milesNow) {
+      val miles = meters / 1609.344
+      if (miles < 0.1) "${max(10, (meters * 3.28084 / 10).roundToInt() * 10)} ft"
+      else if (miles < 10) "%.1f mi".format(miles)
+      else "${miles.roundToInt()} mi"
+    } else if (meters < 950) "${max(10, (meters / 10).roundToInt() * 10)} m"
+    else if (meters < 100_000) "%.1f km".format(meters / 1000)
+    else "${(meters / 1000).roundToInt()} km"
+
+/** A speed in km/h, shown in the chosen units (mph with miles). */
+fun displaySpeed(kmh: Int): Int = if (milesNow) (kmh / 1.609344).roundToInt() else kmh
+
+/** The speed unit in the chosen units, in the game's case. */
+fun speedUnit(upper: Boolean): String = if (milesNow) (if (upper) "MPH" else "mph") else if (upper) "KM/H" else "km/h"
 
 fun formatDuration(seconds: Double): String {
   val min = (seconds / 60).roundToInt().coerceAtLeast(1)
-  return if (min < 60) "$min min" else "${min / 60} h ${min % 60} min"
+  return if (min < 60) "$min min" else if (min % 60 == 0) "${min / 60} h" else "${min / 60} h ${min % 60} min"
 }
 
 /** Arrival time on a 12-hour clock, e.g. "10:05 pm". */

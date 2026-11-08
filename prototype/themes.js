@@ -751,16 +751,54 @@
         return e;
       };
       const icon = byKey("class", byKey("subclass", ""));
+      // Only places that have a blip go into the layer at all. With no filter, all 2,285 places in
+      // Connaught Place's tile (gates, bins, offices, bus stops that never show) went through
+      // MapLibre's layout and collision on every move: the map crawled wherever icons were dense,
+      // phone and car (8 Nov). With it, 1,364 (GTA) or 1,587 (Red Dead's general stores too).
+      const iconClasses = new Set();
+      const iconSubclasses = new Set();
+      for (const [name, classes] of groups) {
+        if (P.only && !P.only.includes(name)) continue;
+        for (const c of classes) {
+          iconClasses.add(c);
+          if (c !== "shop") iconSubclasses.add(c);
+        }
+      }
+      const hasIcon = ["any",
+        ["match", ["get", "class"], [...iconClasses], true, false],
+        ["match", ["get", "subclass"], [...iconSubclasses], true, false]];
+      const rankAtMost = (n) => ["<=", ["coalesce", ["get", "rank"], 99], n];
+      // Which icon wins a crowded corner goes by rank in four bands (1-5, 6-15, 16-30, the rest),
+      // not by OpenStreetMap's rank itself: MapLibre draws a separate batch for every distinct
+      // sort key in every tile, every frame, and Connaught Place has 314 of them. That was the
+      // 8 fps on the phone there (8 Nov); place icons off ran at 120.
+      const blipLayout = {
+        "icon-image": icon,
+        "icon-size": (P.size || 0.95) * (car ? 1.15 : 1),
+        "symbol-sort-key": ["step", ["coalesce", ["get", "rank"], 99], 0, 6, 1, 16, 2, 31, 3],
+        "icon-padding": 4,
+      };
+      const minzoom = P.minzoom || 15.5;
+      // The most important places first (OpenStreetMap's rank, about 240 of Connaught Place's),
+      // then more as you zoom in on the phone: rank 30 from zoom 16 and every place with a blip
+      // from 17, so a pharmacy or a shirt shop still shows close up (why the old cap went, 30 Oct).
+      // The car keeps the first set: a glance at speed needs the big ones, and it stays light.
+      // Ids start "poi-blips" (Place icons off drops them all; a tap on any picks the place).
       layers.push({
-        id: "poi-blips", type: "symbol", source: "omt", "source-layer": "poi", minzoom: P.minzoom || 15.5,
-        // Every place with a blip, not only OpenStreetMap's top-ranked ones: in a dense area like
-        // Chhatarpur the rank cap left a pharmacy and a shirt shop out of dozens of places.
-        // Collisions still thin them (icon-padding), the important first (sort key).
-        layout: {
-          "icon-image": icon,
-          "icon-size": (P.size || 0.95) * (car ? 1.15 : 1), "symbol-sort-key": ["coalesce", ["get", "rank"], 99], "icon-padding": 4,
-        },
+        id: "poi-blips", type: "symbol", source: "omt", "source-layer": "poi", minzoom,
+        ...(car ? {} : { maxzoom: 16 }),
+        filter: ["all", hasIcon, rankAtMost(15)], layout: blipLayout,
       });
+      if (!car) {
+        layers.push({
+          id: "poi-blips-near", type: "symbol", source: "omt", "source-layer": "poi", minzoom: Math.max(16, minzoom), maxzoom: 17,
+          filter: ["all", hasIcon, rankAtMost(30)], layout: blipLayout,
+        });
+        layers.push({
+          id: "poi-blips-close", type: "symbol", source: "omt", "source-layer": "poi", minzoom: 17,
+          filter: hasIcon, layout: blipLayout,
+        });
+      }
     }
     if (m.fonts && m.fonts.pencil && !car) {
       // Parks and landmarks in pencil handwriting, the way the RDR2 map names farms and features.
@@ -796,7 +834,7 @@
     // the app anchors its route line under "label-water", so that layer must exist.
     if (m.labels === false) {
       // Text labels only: the map's blips stay, like the game's pause map.
-      for (const l of layers.slice(firstLabel)) if (l.id !== "poi-blips") l.layout = Object.assign({}, l.layout, { visibility: "none" });
+      for (const l of layers.slice(firstLabel)) if (!l.id.startsWith("poi-blips")) l.layout = Object.assign({}, l.layout, { visibility: "none" });
     }
 
     const style = {

@@ -80,6 +80,11 @@
                 android:resource="@xml/report_paths" />
         </provider>
 
+        <!-- The parked car's time-limit reminders (Notices.scheduleParking). -->
+        <receiver
+            android:name=".notify.ParkingAlarmReceiver"
+            android:exported="false" />
+
         <service
             android:name=".car.OverworldCarAppService"
             android:exported="true">

@@ -1,12 +1,14 @@
 # Overworld Maps privacy policy
 
-Last updated 7 November 2026.
+Last updated 8 November 2026.
 
 Overworld Maps is a navigation app for Android phones and Android Auto, made by Gaurav Kumar (The Algothrim). This page says what the app does with your information. In short: it has no account, no ads and no analytics, and nothing about you is sent to the developer unless you send a problem report yourself.
 
 ## Location
 
 The app uses your phone's precise location to show where you are on the map, to plan and follow a route, and to warn you about turns, traffic lights and speed cameras ahead. During a trip it keeps using your location while the phone screen is off, through a navigation notification you can see and stop at any time. It does not use your location when no trip is running and the app isn't open.
+
+While the app is open (on the phone or the car screen), Timeline uses the same location to keep your drives and the places you stop at, so You > Timeline can show them by day and month. Timeline is on when you install the app and stays on your phone (see below); turn it off, delete a day or delete all of it in Settings > Privacy.
 
 ## What leaves your phone, and where it goes
 
@@ -19,13 +21,16 @@ To draw the map and plan routes, the app asks these services over encrypted conn
 | Photon by komoot | The words you search for, with roughly where you are | Place search |
 | Overpass API (overpass-api.de, overpass.kumi.systems) | Small map areas along your route | Speed cameras from OpenStreetMap |
 | TomTom | The route, or the area around it | Traffic, incidents and travel times |
-| OpenFreeMap | The map tiles for the area on screen, and along a planned route | Drawing the map, and finding the flyovers and underpasses on and beside the route |
+| OpenFreeMap | The map tiles for the area on screen, along a planned route, and for any area you download in Settings > Offline | Drawing the map (online and offline), and finding the flyovers and underpasses on and beside the route |
+| Photon by komoot, again | Where a Timeline stop or your parked car is | Naming the place (a street, area or city) |
 
 These services handle requests under their own privacy policies. The developer has no access to what they log.
 
 ## What stays on your phone
 
-Saved places (Home, Work and the places you save), speed cameras you mark, your settings, a short drive log used for fixing problems (points in it are rounded to about 100 metres), and a track of the last few hours of driving (each GPS fix as it came, with its speed, heading and height, and the height from the phone's air-pressure sensor where it has one) are kept only on your phone. The app never uploads them. Uninstalling the app, or clearing its data in Android's settings, deletes them. Settings can also forget Home, Work, recent places and marked cameras.
+Saved places (Home, Work, the places in your lists, the names and notes you give them, saved trips and where you parked), search history (what you searched for, places you looked at and asked directions to), Timeline (your drives with their lines, and the places you stopped at, with times), downloaded offline maps, speed cameras you mark, your settings, a short drive log used for fixing problems (points in it are rounded to about 100 metres), and a track of the last few hours of driving (each GPS fix as it came, with its speed, heading and height, and the height from the phone's air-pressure sensor where it has one) are kept only on your phone. The app never uploads them. Uninstalling the app, or clearing its data in Android's settings, deletes them. Settings > Privacy can also turn Timeline and search history off, delete them, keep Timeline for 3, 18 or 36 months only, and forget Home, Work, recent places and marked cameras.
+
+The only notifications the app makes itself (besides the trip's own) are a reminder when your parked car's time limit is nearly up, a monthly Timeline recap, and an offline map finishing; each can be turned off in Settings > Alerts. They are made on the phone; nothing is sent to make them.
 
 ## Reporting a problem
 

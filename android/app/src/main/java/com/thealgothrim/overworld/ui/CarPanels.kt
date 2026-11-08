@@ -355,7 +355,7 @@ private fun SavedBody(spec: SkinSpec, actions: CarPanelActions) {
 
 @Composable
 private fun KindsBody(spec: SkinSpec, actions: CarPanelActions) {
-  Nearby.entries.chunked(3).forEach { row ->
+  Nearby.shown().chunked(3).forEach { row ->
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
       row.forEach { kind ->
         val key = "kind-${kind.name}"

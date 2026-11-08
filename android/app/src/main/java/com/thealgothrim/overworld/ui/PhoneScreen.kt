@@ -2,10 +2,13 @@ package com.thealgothrim.overworld.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
@@ -121,6 +124,13 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
 
   var settingsOpen by rememberSaveable { mutableStateOf(false) }
   var layersOpen by rememberSaveable { mutableStateOf(false) }
+  // You (saved lists, Timeline, history), a Timeline day on the map, the offline download frame.
+  var youOpen by rememberSaveable { mutableStateOf(false) }
+  var youTab by rememberSaveable { mutableStateOf(YouTab.SAVED) }
+  var dayOnMap by remember { mutableStateOf<java.time.LocalDate?>(null) }
+  var pickingArea by remember { mutableStateOf(false) }
+  var notice by remember { mutableStateOf<String?>(null) }
+  val keepNorthUp by AppModule.prefs.northUp.collectAsState()
   val extras by viewModel.extras.collectAsState()
   var searchOpen by remember { mutableStateOf(false) }
   var arrivedAt by remember { mutableStateOf<String?>(null) }
@@ -128,7 +138,7 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
 
   // Back steps out one level at a time, like Google Maps. The handler registered last runs first,
   // so these go from the bottom level (the place card) up to the top (the Layers sheet).
-  val overlay = layersOpen || settingsOpen
+  val overlay = layersOpen || settingsOpen || youOpen || dayOnMap != null || pickingArea
   BackHandler(!overlay && !searchOpen && planner.preview == null && planner.destination != null) {
     viewModel.clearDestination()
   }
@@ -137,10 +147,95 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
     searchOpen = false
     viewModel.onQueryChange("")
   }
+  BackHandler(pickingArea) { pickingArea = false }
+  BackHandler(dayOnMap != null && !youOpen) {
+    dayOnMap = null
+    youTab = YouTab.TIMELINE
+    youOpen = true
+  }
+  BackHandler(youOpen && !settingsOpen) { youOpen = false }
   BackHandler(settingsOpen && !layersOpen) { settingsOpen = false }
   BackHandler(layersOpen) { layersOpen = false }
 
+  // A Timeline day on the map: its pieces, and the camera framing them.
+  val daySegments by androidx.compose.runtime.produceState<List<com.thealgothrim.overworld.timeline.Segment>?>(null, dayOnMap) {
+    val d = dayOnMap
+    value = if (d == null) null else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { AppModule.timeline.store.day(d) }
+  }
+  LaunchedEffect(daySegments) {
+    val segs = daySegments?.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
+    val points =
+        segs.flatMap { s -> listOfNotNull(s.at, s.to) + (s.path?.let { com.thealgothrim.overworld.routing.OverworldRoutes.decodePolyline6(it) } ?: emptyList()) }
+    if (points.isEmpty()) return@LaunchedEffect
+    mapState.cameraMode = NavigationCameraMode.FREE
+    val bounds = points.boundingBox() ?: return@LaunchedEffect
+    mapState.showRouteOverview(boundingBox = bounds, paddingValues = PaddingValues(start = 48.dp, end = 48.dp, top = 120.dp, bottom = 240.dp))
+  }
+  LaunchedEffect(notice) {
+    if (notice != null) {
+      delay(6_000)
+      notice = null
+    }
+  }
+  // Debug builds open these from adb (DebugDriveReceiver), for checks and screenshots.
+  LaunchedEffect(Unit) {
+    DebugUi.you.collect { t ->
+      if (t == null) return@collect
+      if (t == "none") youOpen = false
+      else {
+        settingsOpen = false
+        youTab = runCatching { YouTab.valueOf(t.uppercase()) }.getOrDefault(YouTab.SAVED)
+        youOpen = true
+      }
+      DebugUi.you.value = null
+    }
+  }
+  LaunchedEffect(Unit) {
+    DebugUi.settingsTab.collect { t ->
+      if (t == null) return@collect
+      youOpen = false
+      settingsOpen = t >= 0
+      // The tab itself is picked by SettingsScreen, which reads the same value.
+      if (t < 0) DebugUi.settingsTab.value = null
+    }
+  }
+  LaunchedEffect(Unit) {
+    DebugUi.day.collect { d ->
+      if (d == null) return@collect
+      youOpen = false
+      settingsOpen = false
+      dayOnMap =
+          when (d) {
+            "today" -> java.time.LocalDate.now()
+            "yesterday" -> java.time.LocalDate.now().minusDays(1)
+            "none" -> null
+            else -> runCatching { java.time.LocalDate.parse(d) }.getOrNull()
+          }
+      DebugUi.day.value = null
+    }
+  }
+  LaunchedEffect(Unit) {
+    DebugUi.pickArea.collect { on ->
+      if (!on) return@collect
+      youOpen = false
+      settingsOpen = false
+      pickingArea = true
+      DebugUi.pickArea.value = false
+    }
+  }
+
   LaunchedEffect(navigating) { if (navigating) mapState.recenter(isNavigating = true) }
+  // A trip that ends at its destination offers to save the parking there, like Google's arrival card.
+  var offerParking by remember { mutableStateOf(false) }
+  LaunchedEffect(Unit) {
+    viewModel.arrived.collect {
+      if (viewModel.tripMode.value != com.thealgothrim.overworld.routing.TravelMode.WALK) {
+        offerParking = true
+        delay(30_000)
+        offerParking = false
+      }
+    }
+  }
   LaunchedEffect(planner.destination) {
     val d = planner.destination ?: return@LaunchedEffect
     if (planner.preview != null) return@LaunchedEffect
@@ -252,6 +347,8 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
           searchOpen = false
           viewModel.choose(it)
         },
+        timelineDay = daySegments,
+        northUp = keepNorthUp && navigating,
     )
     if (theme.paperOverlay) PaperOverlay()
     if (theme.skin == Skin.GTA6) {
@@ -271,7 +368,10 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
       }
     }
 
-    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+    // Under You or Settings the map still shows faintly, as behind a game's pause menu, but not the
+    // map's own cards: an open Save panel read through as ghost text (8 Nov).
+    val menuOpen = youOpen || settingsOpen
+    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).graphicsLayer { alpha = if (menuOpen) 0f else 1f }) {
       when {
         navigating ->
             NavigationLayer(
@@ -291,6 +391,23 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
                 onBottomBlocked = { bottomBlocked = it },
                 onMapRoom = { mapRoom = it },
             )
+        pickingArea ->
+            OfflineAreaPicker(spec, mapState, mapArea ?: area) { message ->
+              pickingArea = false
+              notice = message
+            }
+        dayOnMap != null ->
+            TimelineDayCard(
+                spec,
+                dayOnMap!!,
+                daySegments.orEmpty(),
+                onDate = { dayOnMap = it },
+                onClose = {
+                  dayOnMap = null
+                  youTab = YouTab.TIMELINE
+                  youOpen = true
+                },
+            )
         planner.preview != null ->
             PreviewLayer(
                 spec = spec,
@@ -299,6 +416,12 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
                 testDrive = testDrive,
                 onBack = viewModel::cancelPreview,
                 onStart = viewModel::startPreview,
+                mode = planner.mode,
+                modeTimes = planner.modeTimes,
+                routing = planner.routing,
+                onMode = viewModel::setPreviewMode,
+                saved = saved.trips.any { it.to.coordinate == planner.preview!!.place.coordinate && it.mode == planner.preview!!.mode },
+                onSaveTrip = viewModel::saveTrip,
             )
         else ->
             BrowseLayer(
@@ -323,6 +446,11 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
                 onSettings = { settingsOpen = true },
                 onLayers = { layersOpen = true },
                 onLocate = locate,
+                onYou = {
+                  searchOpen = false
+                  youTab = YouTab.SAVED
+                  youOpen = true
+                },
                 compass = compass,
                 following = mapState.isTrackingUser,
                 onNorthUp = northUp,
@@ -332,18 +460,25 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
       }
     }
 
-    // No GPS fix for a while: said over the map, above where the arrow would be.
+    // No location: a small pill under the top bar (his ask, 8 Nov: subtle on the phone), not a card
+    // over the middle of the map. With the phone's location switched off it offers to turn it on.
     val lost by viewModel.gpsLost.collectAsState()
-    if (lost && !searchOpen && !settingsOpen && !layersOpen) {
-      Row(
-          Modifier.align(Alignment.Center).offset(y = (-140).dp).skinPanel(spec).padding(horizontal = 18.dp, vertical = 12.dp),
-          verticalAlignment = Alignment.CenterVertically,
-      ) {
-        GameIconView(GameIcon.LOCATE, spec.sub, Modifier.size(26.dp))
-        Spacer(Modifier.width(12.dp))
-        Column {
-          SkinText(spec.title("Location not found"), spec.title, spec.titleSize(20.sp, 22.sp), spec.fg, spacing = spec.titleSpacing)
-          SkinText("Waiting for GPS", spec.body, 15.sp, spec.sub)
+    val off by viewModel.locationOff.collectAsState()
+    val turnOn = rememberWithLocationOn {}
+    if (lost && !searchOpen && !settingsOpen && !layersOpen && !youOpen && dayOnMap == null && !pickingArea) {
+      Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        val top = if (navigating) mapRoom.calculateTopPadding() + 8.dp else 124.dp
+        Row(
+            Modifier.align(Alignment.TopCenter)
+                .padding(top = top)
+                .skinPanel(spec, elevated = false)
+                .then(if (off) Modifier.clickable { turnOn() } else Modifier)
+                .padding(horizontal = 14.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+          GameIconView(GameIcon.LOCATE, if (off) spec.accent else spec.sub, Modifier.size(16.dp))
+          Spacer(Modifier.width(8.dp))
+          SkinText(if (off) "Location is off  ·  Turn on" else "No GPS signal", spec.body, 14.sp, spec.fg)
         }
       }
     }
@@ -355,6 +490,35 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
       Skin.RDR -> RdrBigMessage(arrivedVisible, "ARRIVED", arrivedAt.orEmpty(), Modifier.align(Alignment.Center))
     }
 
+    // A word that something started (an offline download), over the map for a few seconds.
+    notice?.let { text ->
+      Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        Row(Modifier.align(Alignment.TopCenter).padding(top = 76.dp, start = 16.dp, end = 16.dp).skinPanel(spec).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+          GameIconView(GameIcon.DOWNLOAD, spec.accent, Modifier.size(22.dp))
+          Spacer(Modifier.width(10.dp))
+          SkinText(text, spec.body, 15.sp, spec.fg, maxLines = 3)
+        }
+      }
+    }
+
+    // Arrived by car: save the parking here, one tap (it goes after 30 s).
+    if (offerParking && !navigating && saved.parking?.let { p -> uiState.location?.coordinates?.let { metres(it, p.at) < 60.0 } } != true) {
+      Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        Row(
+            Modifier.align(Alignment.BottomCenter).padding(start = 12.dp, end = 12.dp, bottom = 96.dp).fillMaxWidth().skinPanel(spec).padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+          GameIconView(GameIcon.PARKING, spec.accent, Modifier.size(26.dp))
+          Spacer(Modifier.width(12.dp))
+          SkinText("Save your parking?", spec.body, 16.sp, spec.fg, Modifier.weight(1f))
+          com.thealgothrim.overworld.ui.skin.SkinPrimaryButton(spec, "Save", {
+            viewModel.saveParking()
+            offerParking = false
+          })
+        }
+      }
+    }
+
     if (settingsOpen) {
       SettingsScreen(
           theme = theme,
@@ -364,6 +528,35 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
           onTestDrive = viewModel::setTestDrive,
           onMute = viewModel::toggleMute,
           onClose = { settingsOpen = false },
+          onDownloadArea = {
+            settingsOpen = false
+            viewModel.clearDestination()
+            pickingArea = true
+          },
+      )
+    }
+
+    if (youOpen) {
+      YouScreen(
+          theme = theme,
+          saved = saved,
+          here = uiState.location?.coordinates,
+          start = youTab,
+          onChoose = {
+            youOpen = false
+            viewModel.choose(it)
+          },
+          onSearch = {
+            youOpen = false
+            searchOpen = true
+            viewModel.onQueryChange(it)
+          },
+          onShowDay = {
+            youOpen = false
+            viewModel.clearDestination()
+            dayOnMap = it
+          },
+          onClose = { youOpen = false },
       )
     }
 
