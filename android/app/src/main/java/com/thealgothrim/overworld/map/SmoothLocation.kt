@@ -8,6 +8,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -61,7 +62,8 @@ fun rememberSmoothedUiState(uiState: NavigationUiState): NavigationUiState {
 private fun rememberLeadOnRoute(raw: NavigationUiState): NavigationUiState {
   val geometry = raw.routeGeometry ?: return raw
   val steady = remember(geometry) { steadied(geometry) }
-  val uiState = raw.copy(routeGeometry = steady)
+  // The same object until the next fix: the map's layers are skipped while nothing changed.
+  val uiState = remember(raw, steady) { raw.copy(routeGeometry = steady) }
   val fix = uiState.location ?: return uiState
   val route = remember(steady) { RoutePolyline(steady) }
   // Where on the route the last fix was, so the next is looked for near it (see projectNear).
@@ -80,12 +82,16 @@ private fun rememberLeadOnRoute(raw: NavigationUiState): NavigationUiState {
   // arrow stopped for up to 0.4 s before each one, the stop-and-go of the 8 Nov drive (stutters of
   // 370 to 400 ms in its log). leadMetres grows with the fix's age, so each step is where the car
   // is by then; it stops growing 2 s after the fix, so a tunnel doesn't run the arrow on.
+  // Profiling marks (no-ops unless a system trace is recording): each fix, and each step after it.
+  SideEffect { if (android.os.Trace.isEnabled()) android.os.Trace.setCounter("ow.fix.speed_cms", ((fix.speed?.value ?: -1.0) * 100).toLong()) }
   val step by
       produceState(0, fix) {
+        if (android.os.Trace.isEnabled()) android.os.Trace.setCounter("ow.fix.n", (++traceFixes).toLong())
         if ((fix.speed?.value ?: 0.0) < MIN_LEAD_SPEED) return@produceState
         for (i in 1..LEAD_STEPS) {
           delay(LEAD_STEP_MS)
           value = i
+          if (android.os.Trace.isEnabled()) android.os.Trace.setCounter("ow.lead.step", i.toLong())
         }
       }
   val led =
@@ -96,10 +102,11 @@ private fun rememberLeadOnRoute(raw: NavigationUiState): NavigationUiState {
         val p = route.positionAt((at + lead).coerceAtMost(route.length))
         fix.copy(coordinates = GeographicCoordinate(p.latitude, p.longitude))
       }
-  return if (led === fix) uiState else uiState.copy(location = led)
+  return if (led === fix) uiState else remember(uiState, led) { uiState.copy(location = led) }
 }
 
 private const val LEAD_STEP_MS = 250L
+private var traceFixes = 0
 /** Steps after a fix: 1.75 s, about where leadMetres stops counting the fix's age (2 s from when it was taken). */
 private const val LEAD_STEPS = 7
 

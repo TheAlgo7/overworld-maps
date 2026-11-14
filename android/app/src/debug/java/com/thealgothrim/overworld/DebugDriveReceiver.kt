@@ -163,6 +163,8 @@ class DebugDriveReceiver : BroadcastReceiver() {
         if (intent.getBooleanExtra("send", false)) com.thealgothrim.overworld.report.ProblemReport.send(context.applicationContext, "Debug report.")
         else com.thealgothrim.overworld.report.ProblemReport.write(context).forEach { Log.i("DebugDrive", "report file ${it.name}: ${it.length()} bytes at ${it.absolutePath}") }
       }
+      // GTA's wanted flash, as if a speed camera had just been passed over the limit.
+      "com.thealgothrim.overworld.DEBUG_WANTED" -> vm.wanted()
       // The route's flyover and underpass choices as worked out (see RoadLevels).
       "com.thealgothrim.overworld.DEBUG_LEVELS" -> {
         val lv = vm.extras.value.levels

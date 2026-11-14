@@ -22,6 +22,7 @@ To draw the map and plan routes, the app asks these services over encrypted conn
 | Overpass API (overpass-api.de, overpass.kumi.systems) | Small map areas along your route | Speed cameras from OpenStreetMap |
 | TomTom | The route, or the area around it | Traffic, incidents and travel times |
 | OpenFreeMap | The map tiles for the area on screen, along a planned route, and for any area you download in Settings > Offline | Drawing the map (online and offline), and finding the flyovers and underpasses on and beside the route |
+| Terrain Tiles on AWS (s3.amazonaws.com) | Elevation tiles for the area on screen, in the Red Dead world | Drawing its contour lines |
 | Photon by komoot, again | Where a Timeline stop or your parked car is | Naming the place (a street, area or city) |
 
 These services handle requests under their own privacy policies. The developer has no access to what they log.

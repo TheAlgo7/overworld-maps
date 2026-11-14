@@ -227,7 +227,8 @@ class TrafficService(private val http: OkHttpClient) {
     val servers = listOf("https://overpass.kumi.systems/api/interpreter", "https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter")
     for ((i, url) in servers.withIndex()) {
       try {
-        val request = Request.Builder().url(url).post(FormBody.Builder().add("data", query).build()).build()
+        // Overpass asks every client to say who it is; nameless requests are the first it turns away.
+        val request = Request.Builder().url(url).header("User-Agent", "OverworldMaps/${BuildConfig.VERSION_NAME} (Android)").post(FormBody.Builder().add("data", query).build()).build()
         slowHttp.newCall(request).execute().use { r ->
           if (r.isSuccessful) return r.body.string()
           Log.w(TAG, "overpass $url -> ${r.code}")

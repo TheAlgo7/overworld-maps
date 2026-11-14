@@ -54,7 +54,7 @@ import com.thealgothrim.overworld.ui.CarPanels
 import com.thealgothrim.overworld.ui.skin.spec
 import com.thealgothrim.overworld.ui.PaperOverlay
 import com.thealgothrim.overworld.ui.skin.LocalIconSkin
-import com.thealgothrim.overworld.ui.vi.ViEdgeMarkers
+import com.thealgothrim.overworld.ui.MinimapEdge
 import com.thealgothrim.overworld.ui.vi.ViMapLight
 import com.thealgothrim.overworld.theme.Skin
 import com.thealgothrim.overworld.theme.StyleCache
@@ -109,27 +109,22 @@ fun OverworldPhoneMap(
     BaseStyle.Json(StyleCache.json(context, k.theme, k.car, k.trafficTiles, k.variant, k.flat, k.places))
   }
   val smoothed = rememberSmoothedUiState(uiState)
-  // North up: the camera is told the car faces north, so its bearing stays put; the arrow (the
-  // layers below) keeps the real course and turns on the map instead.
-  val cameraState =
-      if (northUp && smoothed.isNavigating())
-          remember(smoothed) { smoothed.copy(location = smoothed.location?.copy(courseOverGround = uniffi.ferrostar.CourseOverGround(0u, null))) }
-      else smoothed
+  // One glide for the arrow, the route and the camera (see rememberCameraUiState).
+  val shown = rememberDisplayedPosition(smoothed)
   mapState.glide.northUp = northUp
   Box(Modifier.fillMaxSize().tiltGesture(mapState)) {
     FrameStatsProbe("phone")
-    NavigationMapView(
+    FollowedMapView(
         baseStyle = baseStyle,
-        navigationMapState = mapState,
-        uiState = cameraState,
+        mapState = mapState,
+        uiState = smoothed,
+        shown = shown,
+        northUp = northUp,
         // No MapLibre ornaments: its (i) attribution button moved around with the camera padding.
         // The OpenStreetMap credit is drawn by the screen instead (MapCredit).
         // Tilt is ours (tiltGesture): MapLibre's started late and moved half as far.
-        mapOptions = MapOptions(gestureOptions = PHONE_GESTURES, ornamentOptions = OrnamentOptions.AllDisabled),
-        // The route is drawn by OverworldLayers, which trims it at the arrow.
-        routeOverlayBuilder = null,
-        navigationCameraOptions = cameraOptions,
-        showDefaultPuck = false,
+        mapOptions = PHONE_MAP_OPTIONS,
+        cameraOptions = cameraOptions,
         onMapLongClick = { coordinate, _ ->
           if (uiState.isNavigating()) NavigationMapClickResult.Pass
           else {
@@ -145,9 +140,9 @@ fun OverworldPhoneMap(
             NavigationMapClickResult.Consume
           }
         },
-    ) { _ ->
+    ) {
       timelineDay?.let { TimelineDayLayer(it, theme) }
-      OverworldLayers(smoothed, theme, car = false, extras, details, previewRoute, pickedDestination, style = baseStyle, headingUp = { mapState.headingUp() && !northUp }, glide = mapState.glide)
+      OverworldLayers(smoothed, shown, theme, car = false, extras, details, previewRoute, pickedDestination, style = baseStyle, headingUp = { mapState.headingUp() && !northUp }, glide = mapState.glide, camera = mapState.cameraState)
     }
     // "Take flyover" on the map at the split, clear of the turn banner and the trip sheet.
     val levels = extras.levels
@@ -201,10 +196,11 @@ fun OverworldCarMap(
     if (theme.skin == Skin.GTA6) {
       val variant by AppModule.viewModel.carMapVariant.collectAsState()
       ViMapLight(variant)
-      // The minimap's "N" and, when the destination is off the map, its pink dot on the edge.
-      val destination = (uiState.routeGeometry?.takeIf { uiState.isNavigating() } ?: planner.preview?.route?.geometry)?.lastOrNull()
-      ViEdgeMarkers(mapState.cameraState, destination, stable)
     }
+    // The minimap's north and, when the destination is off the map, its waypoint on the edge.
+    val destination = (uiState.routeGeometry?.takeIf { uiState.isNavigating() } ?: planner.preview?.route?.geometry)?.lastOrNull()
+    MinimapEdge(theme, mapState.cameraState, destination, stable, avoid = com.thealgothrim.overworld.ui.CarHudBlocks.all)
+    com.thealgothrim.overworld.ui.WantedFlash(theme, car = true)
     // "Take flyover" on the map at the split, like Google Maps' callout (the turn card says it too).
     val levels = extras.levels
     AppModule.viewModel.levelCueAhead(uiState, extras)?.takeIf { levels != null && uiState.isCalculatingNewRoute != true }?.let { cue ->
@@ -304,9 +300,9 @@ fun OverworldClusterMap(
     if (theme.skin == Skin.GTA6) {
       val variant by AppModule.viewModel.carMapVariant.collectAsState()
       ViMapLight(variant)
-      val destination = (uiState.routeGeometry?.takeIf { uiState.isNavigating() } ?: planner.preview?.route?.geometry)?.lastOrNull()
-      ViEdgeMarkers(mapState.cameraState, destination, room)
     }
+    val destination = (uiState.routeGeometry?.takeIf { uiState.isNavigating() } ?: planner.preview?.route?.geometry)?.lastOrNull()
+    MinimapEdge(theme, mapState.cameraState, destination, room)
   }
 }
 
@@ -385,18 +381,47 @@ private fun CarMapView(
     BaseStyle.Json(StyleCache.json(context, k.theme, k.car, k.trafficTiles, k.variant, k.flat, k.places))
   }
   val mapOptions = remember(maximumFps) { MapOptions(renderOptions = RenderOptions(maximumFps = maximumFps), ornamentOptions = OrnamentOptions.AllDisabled) }
+  val smoothed = rememberSmoothedUiState(uiState)
+  val shown = rememberDisplayedPosition(smoothed)
+  FollowedMapView(baseStyle, mapState, smoothed, shown, northUp = false, mapOptions = mapOptions, cameraOptions = cameraOptions) {
+    OverworldLayers(smoothed, shown, theme, car = true, extras, details, previewRoute, null, style = baseStyle, headingUp = mapState.headingUp, glide = mapState.glide, camera = mapState.cameraState)
+  }
+  RecenterGlideEffect(mapState)
+}
+
+/**
+ * Ferrostar's map view with its camera on [shown], the glide the arrow follows (see
+ * rememberCameraUiState). The gliding position is read here and nowhere above, so each frame of a
+ * drive composes this and the map view again, not the screen around them.
+ */
+@Composable
+private fun FollowedMapView(
+    baseStyle: BaseStyle,
+    mapState: NavigationMapState,
+    uiState: NavigationUiState,
+    shown: DisplayedPosition?,
+    northUp: Boolean,
+    mapOptions: MapOptions,
+    cameraOptions: NavigationCameraOptions,
+    onMapLongClick: (GeographicCoordinate, DpOffset) -> NavigationMapClickResult = { _, _ -> NavigationMapClickResult.Pass },
+    onMapClick: (GeographicCoordinate, DpOffset) -> NavigationMapClickResult = { _, _ -> NavigationMapClickResult.Pass },
+    content: @Composable @MaplibreComposable () -> Unit,
+) {
   NavigationMapView(
       baseStyle = baseStyle,
       navigationMapState = mapState,
-      uiState = rememberSmoothedUiState(uiState),
+      uiState = rememberCameraUiState(uiState, shown, northUp),
       mapOptions = mapOptions,
       navigationCameraOptions = cameraOptions,
+      // The route is drawn by OverworldLayers, which trims it at the arrow; so is the arrow.
       routeOverlayBuilder = null,
       showDefaultPuck = false,
-  ) { state ->
-    OverworldLayers(state, theme, car = true, extras, details, previewRoute, null, style = baseStyle, headingUp = mapState.headingUp, glide = mapState.glide)
+      onMapLongClick = onMapLongClick,
+      onMapClick = onMapClick,
+  ) { _ ->
+    content()
   }
-  RecenterGlideEffect(mapState)
+  PreciseCameraBearing(mapState.cameraState, shown, enabled = !northUp)
 }
 
 /**
@@ -408,6 +433,8 @@ private fun CarMapView(
 @MaplibreComposable
 private fun OverworldLayers(
     state: NavigationUiState,
+    /** Where the arrow is drawn; the camera follows the same glide. */
+    shown: DisplayedPosition?,
     theme: OverworldTheme,
     car: Boolean,
     extras: RouteExtras,
@@ -420,9 +447,15 @@ private fun OverworldLayers(
     headingUp: () -> Boolean,
     /** The map's re-centre, which aims at this arrow. */
     glide: RecenterGlide,
+    /** The map's camera: Red Dead's contours are traced for the area round it. */
+    camera: org.maplibre.compose.camera.CameraState,
 ) {
-  val shown = rememberDisplayedPosition(state)
   SideEffect { glide.shown = shown }
+  // Red Dead's contour lines, from real ground heights (Contours.kt), fainter on the radar.
+  if (theme.skin == Skin.RDR) {
+    val variant by (if (car) AppModule.viewModel.carMapVariant else AppModule.viewModel.mapVariant).collectAsState()
+    ContourLayer(camera, radar = variant == com.thealgothrim.overworld.theme.RADAR, car = car)
+  }
   val trip = state.routeGeometry?.takeIf { state.isNavigating() && it.size >= 2 }
   val route = shown?.route
   if (trip != null && route != null) {
@@ -431,7 +464,14 @@ private fun OverworldLayers(
     ThemedRouteLine(previewRoute, theme, car, extras.trafficSpans)
   }
   RoadFeatureLayers(visibleFeatures(extras, details), theme, car)
-  val end = trip?.lastOrNull() ?: previewRoute?.lastOrNull() ?: pin
+  // The games put the waypoint where it was set, which can be off the road the route ends on;
+  // Red Dead then dashes the last bit across open ground (Gaurav's capture 26).
+  val roadEnd = trip?.lastOrNull() ?: previewRoute?.lastOrNull() ?: pin
+  val tripPlace by AppModule.viewModel.tripPlace.collectAsState()
+  val place = if (trip != null) tripPlace else pin
+  val offRoad = roadEnd != null && place != null && com.thealgothrim.overworld.traffic.metres(roadEnd, place) in OFF_ROAD_METRES
+  val end = if (offRoad) place else roadEnd
+  if (offRoad && theme.routeChalk) ThemedLastLeg(roadEnd!!, place!!, theme, car)
   SavedPlacesLayer(theme, car, end)
   end?.let { ThemedDestination(it, theme, car) }
   // Stops added on the way (Nearby during a trip) get the waypoint marker too.
@@ -487,6 +527,7 @@ fun visibleFeatures(extras: RouteExtras, details: MapDetails): List<RoadFeature>
 
 /** The map's own gestures on the phone, all but tilt. */
 private val PHONE_GESTURES = GestureOptions(isTiltEnabled = false)
+private val PHONE_MAP_OPTIONS = MapOptions(gestureOptions = PHONE_GESTURES, ornamentOptions = OrnamentOptions.AllDisabled)
 
 @Composable
 private fun themedListsOn(): Boolean {
@@ -524,3 +565,9 @@ fun rememberMapStyle(key: StyleKey, build: (StyleKey) -> BaseStyle): BaseStyle {
   }
   return built.value.second
 }
+
+/**
+ * How far off the route's end the place may be and still get its own waypoint (and Red Dead's
+ * dashed last leg): closer is the same spot, further is a bad match between place and road.
+ */
+private val OFF_ROAD_METRES = 15.0..1_500.0

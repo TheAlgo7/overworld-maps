@@ -50,7 +50,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.asPaddingValues
-import com.thealgothrim.overworld.ui.vi.ViEdgeMarkers
 import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.OverworldViewModel
 import com.thealgothrim.overworld.map.rememberOverworldMapState
@@ -112,6 +111,9 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
   val tilt = rememberDriveTilt(driveCamera, navState)
   // How much of the screen's bottom the trip sheet and street line cover while driving.
   var bottomBlocked by remember { mutableStateOf(0.dp) }
+  /** The speed readout's and street name's places in the window, for the edge markers to step round. */
+  var speedBox by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+  var streetBox by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
   // What the driving cards leave clear of the window (see NavigationLayer).
   var mapRoom by remember { mutableStateOf(PaddingValues(0.dp)) }
   val defaults = navigationCameraOptions()
@@ -124,6 +126,7 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
 
   var settingsOpen by rememberSaveable { mutableStateOf(false) }
   var layersOpen by rememberSaveable { mutableStateOf(false) }
+  var indexOpen by rememberSaveable { mutableStateOf(false) }
   // You (saved lists, Timeline, history), a Timeline day on the map, the offline download frame.
   var youOpen by rememberSaveable { mutableStateOf(false) }
   var youTab by rememberSaveable { mutableStateOf(YouTab.SAVED) }
@@ -138,7 +141,7 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
 
   // Back steps out one level at a time, like Google Maps. The handler registered last runs first,
   // so these go from the bottom level (the place card) up to the top (the Layers sheet).
-  val overlay = layersOpen || settingsOpen || youOpen || dayOnMap != null || pickingArea
+  val overlay = layersOpen || settingsOpen || youOpen || indexOpen || dayOnMap != null || pickingArea
   BackHandler(!overlay && !searchOpen && planner.preview == null && planner.destination != null) {
     viewModel.clearDestination()
   }
@@ -156,6 +159,7 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
   BackHandler(youOpen && !settingsOpen) { youOpen = false }
   BackHandler(settingsOpen && !layersOpen) { settingsOpen = false }
   BackHandler(layersOpen) { layersOpen = false }
+  BackHandler(indexOpen) { indexOpen = false }
 
   // A Timeline day on the map: its pieces, and the camera framing them.
   val daySegments by androidx.compose.runtime.produceState<List<com.thealgothrim.overworld.timeline.Segment>?>(null, dayOnMap) {
@@ -303,8 +307,10 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
     }
   }
   // The GTA pause maps name the area at the map's centre (GtaMapCorner); Red Dead's doesn't.
-  LaunchedEffect(spec.rdr) {
-    if (spec.rdr) return@LaunchedEffect
+  // Not on a trip: the name isn't shown then, and the camera moves every frame, so this only
+  // started and dropped a lookup that never ran, sixty times a second, for the whole drive.
+  LaunchedEffect(spec.rdr, navigating) {
+    if (spec.rdr || navigating) return@LaunchedEffect
     var looked: Pair<GeographicCoordinate, Double>? = null
     snapshotFlow { mapState.cameraState.position }
         .collectLatest { p ->
@@ -351,26 +357,32 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
         northUp = keepNorthUp && navigating,
     )
     if (theme.paperOverlay) PaperOverlay()
-    if (theme.skin == Skin.GTA6) {
-      ViMapLight(variant)
-      // Driving, the map is the minimap: its "N" round the edge and the waypoint dot when the
-      // destination is off screen, inside what the cards leave clear.
-      if (navigating) {
-        val safe = WindowInsets.safeDrawing.asPaddingValues()
-        val room =
-            PaddingValues(
-                start = maxOf(mapRoom.calculateStartPadding(LayoutDirection.Ltr), safe.calculateStartPadding(LayoutDirection.Ltr)),
-                top = maxOf(mapRoom.calculateTopPadding(), safe.calculateTopPadding()),
-                end = maxOf(mapRoom.calculateEndPadding(LayoutDirection.Ltr), safe.calculateEndPadding(LayoutDirection.Ltr)),
-                bottom = maxOf(mapRoom.calculateBottomPadding(), safe.calculateBottomPadding()),
-            )
-        ViEdgeMarkers(mapState.cameraState, uiState.routeGeometry?.lastOrNull(), room)
-      }
+    if (theme.skin == Skin.GTA6) ViMapLight(variant)
+    WantedFlash(theme, car = false)
+    // Red Dead's cursor on a picked place: red ticks round it and its name beside it.
+    planner.destination?.takeIf { theme.skin == Skin.RDR && !navigating }?.let { picked ->
+      com.thealgothrim.overworld.ui.rdr.RdrCursor(mapState.cameraState, picked.coordinate, picked.name)
+    }
+    // Driving, the map is the minimap: north round the edge and the waypoint on it when the
+    // destination is off screen, in every world (GTA V and Red Dead lost theirs in the 28 Sep
+    // layout change), inside what the cards leave clear.
+    if (navigating) {
+      val safe = WindowInsets.safeDrawing.asPaddingValues()
+      val room =
+          PaddingValues(
+              start = maxOf(mapRoom.calculateStartPadding(LayoutDirection.Ltr), safe.calculateStartPadding(LayoutDirection.Ltr)),
+              top = maxOf(mapRoom.calculateTopPadding(), safe.calculateTopPadding()),
+              end = maxOf(mapRoom.calculateEndPadding(LayoutDirection.Ltr), safe.calculateEndPadding(LayoutDirection.Ltr)),
+              // The sheet's edge, not above the speed and street line: the arrow sits just over that
+              // line, so with it N and W huddled round the arrow whenever north was behind (13 Nov).
+              bottom = maxOf(mapRoom.calculateBottomPadding(), safe.calculateBottomPadding()),
+          )
+      MinimapEdge(theme, mapState.cameraState, uiState.routeGeometry?.lastOrNull(), room, avoid = listOfNotNull(speedBox, streetBox))
     }
 
     // Under You or Settings the map still shows faintly, as behind a game's pause menu, but not the
     // map's own cards: an open Save panel read through as ghost text (8 Nov).
-    val menuOpen = youOpen || settingsOpen
+    val menuOpen = youOpen || settingsOpen || indexOpen
     Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).graphicsLayer { alpha = if (menuOpen) 0f else 1f }) {
       when {
         navigating ->
@@ -390,6 +402,8 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
                 onSettings = { settingsOpen = true },
                 onBottomBlocked = { bottomBlocked = it },
                 onMapRoom = { mapRoom = it },
+                onSpeedBox = { speedBox = it },
+                onStreetBox = { streetBox = it },
             )
         pickingArea ->
             OfflineAreaPicker(spec, mapState, mapArea ?: area) { message ->
@@ -446,6 +460,10 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
                 onSettings = { settingsOpen = true },
                 onLayers = { layersOpen = true },
                 onLocate = locate,
+                onIndex = {
+                  searchOpen = false
+                  indexOpen = true
+                },
                 onYou = {
                   searchOpen = false
                   youTab = YouTab.SAVED
@@ -497,6 +515,39 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
           GameIconView(GameIcon.DOWNLOAD, spec.accent, Modifier.size(22.dp))
           Spacer(Modifier.width(10.dp))
           SkinText(text, spec.body, 15.sp, spec.fg, maxLines = 3)
+        }
+      }
+    }
+
+    // Support Overworld, asked once (see SupportAsk): decided when the screen first opens, so it
+    // never comes up in the middle of the session a trip ended in, and only over the plain map.
+    var askSupport by remember {
+      mutableStateOf(
+          com.thealgothrim.overworld.prefs.SupportAsk.due(AppModule.prefs.finishedTrips, AppModule.prefs.supportAnswered, viewModel.carConnected, navigating)
+      )
+    }
+    if (askSupport && !navigating && !overlay && !searchOpen && !offerParking && planner.destination == null && planner.preview == null) {
+      val context = androidx.compose.ui.platform.LocalContext.current
+      Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        Column(Modifier.align(Alignment.BottomCenter).padding(start = 12.dp, end = 12.dp, bottom = 96.dp).fillMaxWidth().skinPanel(spec).padding(horizontal = 16.dp, vertical = 14.dp)) {
+          SkinText("Overworld is free, with no ads.", spec.body, 17.sp, spec.fg)
+          SkinText("If it's earned its place in your car, you can support it. Nothing in the app changes either way.", spec.body, 14.sp, spec.sub, Modifier.padding(top = 4.dp), maxLines = 3)
+          Row(Modifier.padding(top = 12.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+            com.thealgothrim.overworld.ui.skin.SkinPrimaryButton(spec, "Support", {
+              AppModule.prefs.answerSupport()
+              askSupport = false
+              runCatching {
+                context.startActivity(
+                    android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(com.thealgothrim.overworld.prefs.SupportAsk.URL))
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+              }
+            }, Modifier.weight(1f))
+            com.thealgothrim.overworld.ui.skin.SkinSecondaryButton(spec, "Not now", {
+              AppModule.prefs.answerSupport()
+              askSupport = false
+            })
+          }
         }
       }
     }
@@ -561,6 +612,19 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
     }
 
     if (layersOpen) MapLayersSheet(theme, onClose = { layersOpen = false })
+
+    if (indexOpen) {
+      MapIndexPanel(
+          theme,
+          mapState.cameraState,
+          uiState.location?.coordinates,
+          onChoose = {
+            indexOpen = false
+            viewModel.choose(it)
+          },
+          onClose = { indexOpen = false },
+      )
+    }
   }
 }
 

@@ -267,15 +267,32 @@ private fun RouteLayers(
         )
       }
     }
-    sources.forEachIndexed { i, source ->
-      LineLayer(
-          id = "$id-line-$i",
-          source = source,
-          color = const(theme.routeLine),
-          width = lineWidth,
-          cap = const(LineCap.Round),
-          join = const(LineJoin.Round),
-      )
+    if (theme.routeChalk) {
+      // Red Dead: chalky red flecks with the map showing through, like the game's (captures 01,
+      // 23-24; at the closest zoom it blends to #c45b4b on parchment). Square ends, so the route's
+      // pieces meet without overlapping into a darker spot.
+      val chalk = remember { chalkPattern() }
+      sources.forEachIndexed { i, source ->
+        LineLayer(
+            id = "$id-line-$i",
+            source = source,
+            pattern = image(chalk),
+            width = lineWidth,
+            cap = const(LineCap.Butt),
+            join = const(LineJoin.Round),
+        )
+      }
+    } else {
+      sources.forEachIndexed { i, source ->
+        LineLayer(
+            id = "$id-line-$i",
+            source = source,
+            color = const(theme.routeLine),
+            width = lineWidth,
+            cap = const(LineCap.Round),
+            join = const(LineJoin.Round),
+        )
+      }
     }
     faded?.let {
       LineLayer(
@@ -314,6 +331,57 @@ private fun RouteLayers(
           join = const(LineJoin.Round),
       )
     }
+  }
+}
+
+/**
+ * Red Dead's route texture: the game's red (COLOR_RED #CC0000) in flecks of different strength,
+ * a little lighter and darker in places, thinning out at both edges. MapLibre scales a line
+ * pattern to the line's width, so it reads the same at every zoom.
+ */
+private fun chalkPattern(): ImageBitmap {
+  val w = 64
+  val h = 16
+  val rnd = java.util.Random(23)
+  val pixels =
+      IntArray(w * h) { i ->
+        val y = i / w
+        val fromEdge = minOf(y, h - 1 - y)
+        val n = rnd.nextFloat()
+        val (r, g, b) =
+            when {
+              n < 0.12f -> Triple(0xDA, 0x3A, 0x2E)
+              n > 0.9f -> Triple(0xA8, 0x08, 0x08)
+              else -> Triple(0xCC, 0x00, 0x00)
+            }
+        // 55-100% strength, about 78% on average, sparser towards both edges: over the road's dark
+        // ink a weaker red read as maroon, where the game's route reads red (capture 01).
+        val solid = 0.55f + 0.45f * rnd.nextFloat()
+        val edge = when (fromEdge) { 0 -> 0.35f; 1 -> 0.7f; else -> 1f }
+        val a = (255 * (solid * edge).coerceIn(0f, 1f)).toInt()
+        (a shl 24) or (r shl 16) or (g shl 8) or b
+      }
+  return android.graphics.Bitmap.createBitmap(pixels, w, h, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
+}
+
+/**
+ * Red Dead's last stretch off the road: a thin dashed red line from where the route meets the
+ * road to the waypoint across open ground (capture 26).
+ */
+@Composable
+@MaplibreComposable
+fun ThemedLastLeg(from: GeographicCoordinate, to: GeographicCoordinate, theme: OverworldTheme, car: Boolean) {
+  val source = rememberGeoJsonSource(remember(from, to) { GeoJsonData.JsonString(lineJson(listOf(from, to))) })
+  Anchor.Below(FIRST_LABEL_LAYER) {
+    LineLayer(
+        id = "ow-last-leg",
+        source = source,
+        color = const(theme.routeLine),
+        width = widthByZoom(if (car) 1.6f else 1.3f, if (car) 4.2f else 3.4f),
+        dasharray = const(listOf<Number>(3, 2)),
+        cap = const(LineCap.Butt),
+        join = const(LineJoin.Round),
+    )
   }
 }
 

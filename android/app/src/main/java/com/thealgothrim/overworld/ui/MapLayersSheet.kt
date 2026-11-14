@@ -168,6 +168,34 @@ internal fun ThemeCard(
   }
 }
 
+/**
+ * One launcher icon as a picture, the way the phone's app list shows it, with its name under it.
+ * Lit like [ThemeCard]: the accent round it and on its name, no tick.
+ */
+@Composable
+internal fun AppIconTile(spec: SkinSpec, icon: com.thealgothrim.overworld.AppIcon, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+  val frame = if (selected) spec.accent else spec.fg.copy(alpha = 0.25f)
+  val shape = RoundedCornerShape(percent = 26)
+  val nameShape = RoundedCornerShape(if (spec.vi) 10.dp else 0.dp)
+  Column(modifier.clickable(onClick = onClick), horizontalAlignment = Alignment.CenterHorizontally) {
+    Box(Modifier.fillMaxWidth().aspectRatio(1f).border(if (selected) 3.dp else 1.dp, frame, shape).padding(if (selected) 5.dp else 3.dp)) {
+      Image(
+          painterResource(icon.preview),
+          contentDescription = "${icon.label} icon",
+          contentScale = ContentScale.Crop,
+          modifier = Modifier.fillMaxSize().clip(shape),
+      )
+    }
+    Spacer(Modifier.height(6.dp))
+    Box(
+        Modifier.fillMaxWidth().clip(nameShape).background(if (selected) spec.accent else spec.fg.copy(alpha = 0.08f)).padding(vertical = 5.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+      SkinFitText(icon.label, spec.title, spec.titleSize(if (spec.vi) 16.sp else 14.sp, 16.sp), if (selected) spec.onAccent else spec.sub, spacing = spec.titleSpacing)
+    }
+  }
+}
+
 /** The theme's preview picture on its card. */
 private fun themeArt(t: OverworldTheme): Int =
     when (t.skin) {

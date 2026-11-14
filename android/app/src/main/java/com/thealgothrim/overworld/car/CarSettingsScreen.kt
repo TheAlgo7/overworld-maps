@@ -55,7 +55,7 @@ internal fun carSettingsTemplate(withBack: Boolean): ListTemplate {
                   .build()
           )
           .apply {
-            if (theme.variants.isNotEmpty()) {
+            if (theme.timeOfDay) {
               val time = store.carMapTime.value
               addItem(
                   Row.Builder()
@@ -91,7 +91,7 @@ internal fun carSettingsTemplate(withBack: Boolean): ListTemplate {
 /** A theme with one map whatever the hour says so: GTA V's is always dark, Red Dead's always paper. */
 private fun fixedLook(theme: OverworldTheme): String =
     when {
-      theme.variants.isNotEmpty() -> ""
+      theme.timeOfDay -> ""
       theme.dark -> ", always dark"
       else -> ", always light"
     }

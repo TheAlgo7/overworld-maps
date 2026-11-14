@@ -269,7 +269,7 @@ private fun CarScreenSettings(spec: SkinSpec, theme: OverworldTheme) {
       Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         THEMES.forEach { t -> ThemeCard(spec, t, selected = t.id == theme.id, modifier = Modifier.weight(1f)) { store.selectCar(t.id) } }
       }
-      if (theme.variants.isNotEmpty()) {
+      if (theme.timeOfDay) {
         Spacer(Modifier.height(14.dp))
         SkinText("Time of day. Auto follows the car's day and night.", spec.body, 15.sp, spec.sub, maxLines = 2)
         Spacer(Modifier.height(6.dp))

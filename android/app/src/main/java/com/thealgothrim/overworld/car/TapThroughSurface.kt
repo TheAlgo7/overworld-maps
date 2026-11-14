@@ -47,7 +47,15 @@ fun ComposableScreen.passTapsTo(onTap: (x: Float, y: Float, shift: Float) -> Uni
           }
         }
 
-        override fun onSurfaceDestroyed(surfaceContainer: SurfaceContainer) = inner.onSurfaceDestroyed(surfaceContainer)
+        // The same care on the way out: a surface that was skipped or failed above was never set
+        // up, and a throw while taking it down would close the app in the car just the same.
+        override fun onSurfaceDestroyed(surfaceContainer: SurfaceContainer) {
+          try {
+            inner.onSurfaceDestroyed(surfaceContainer)
+          } catch (e: RuntimeException) {
+            Log.w(TAG, "Could not release the car surface", e)
+          }
+        }
 
         override fun onVisibleAreaChanged(visibleArea: Rect) {
           visible = visibleArea

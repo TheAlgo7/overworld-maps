@@ -80,9 +80,9 @@ fun trafficNote(eta: TrafficEta?): String? {
 
 /** A line between the parts of one HUD card (turn, "Then", alert), like Google's turn card. */
 @Composable
-fun CardDivider(spec: SkinSpec) {
+fun CardDivider(spec: SkinSpec, modifier: Modifier = Modifier) {
   Box(
-      Modifier.fillMaxWidth()
+      modifier.fillMaxWidth()
           .padding(horizontal = when (spec.skin) { Skin.GTA -> 0.dp; Skin.GTA6 -> 16.dp; Skin.RDR -> 5.dp })
           .height(1.dp)
           .background(when (spec.skin) { Skin.GTA -> Color(0x24FFFFFF); Skin.GTA6 -> Color(0x1FFFFFFF); Skin.RDR -> Rdr.Grey.copy(alpha = 0.35f) })

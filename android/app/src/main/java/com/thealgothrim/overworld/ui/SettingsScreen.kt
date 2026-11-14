@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -25,8 +26,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.stadiamaps.ferrostar.core.NavigationUiState
+import com.thealgothrim.overworld.AppIcon
 import com.thealgothrim.overworld.AppModule
 import com.thealgothrim.overworld.BuildConfig
 import com.thealgothrim.overworld.notify.Notices
@@ -51,6 +54,7 @@ import com.thealgothrim.overworld.ui.skin.GameIcon
 import com.thealgothrim.overworld.ui.skin.SkinPrimaryButton
 import com.thealgothrim.overworld.ui.skin.SkinSecondaryButton
 import com.thealgothrim.overworld.ui.skin.SkinSpec
+import com.thealgothrim.overworld.ui.skin.SkinText
 import com.thealgothrim.overworld.ui.skin.spec
 import com.thealgothrim.overworld.ui.vi.Vi
 import com.thealgothrim.overworld.ui.vi.ViDescription
@@ -161,6 +165,15 @@ fun SettingsScreen(
             listOf(
                 Setting("Overworld", "Version ${BuildConfig.VERSION_NAME}. Free, no ads, no account. Made by The Algothrim.", BuildConfig.VERSION_NAME) {},
                 Setting(
+                    "Support Overworld",
+                    "Overworld is free, with no ads and no subscription, and stays that way. If you'd like to put something toward its running costs, the website has a page for it. " +
+                        "Nothing in the app changes either way. Tap again to open it in your browser.",
+                    confirm = true,
+                ) {
+                  AppModule.prefs.answerSupport()
+                  open(com.thealgothrim.overworld.prefs.SupportAsk.URL)
+                },
+                Setting(
                     "Report a problem",
                     "Tap again to email the developer what the app saw: your settings, its drive diary and where you drove in the last few hours, " +
                         "with moments you marked on the car screen. Your email app opens with the files attached; take the track file off if you'd rather not share where you went. Nothing is sent until you press Send.",
@@ -174,7 +187,7 @@ fun SettingsScreen(
                 Setting("Open-source licences", "The open map data, fonts and libraries Overworld is built on, and their licences. Tap again to open them.", confirm = true) { open(NOTICES_URL) },
                 Setting(
                     "Map data and credits",
-                    "Map data © OpenStreetMap contributors (ODbL), tiles by OpenFreeMap, routing by Valhalla (FOSSGIS), search by TomTom and Photon (komoot), traffic lights from Valhalla and speed cameras from Overpass, navigation by Ferrostar (Stadia Maps)." +
+                    "Map data © OpenStreetMap contributors (ODbL), tiles by OpenFreeMap, routing by Valhalla (FOSSGIS), search by TomTom and Photon (komoot), traffic lights from Valhalla and speed cameras from Overpass, Red Dead's contour lines from Terrain Tiles (Mapzen, on AWS; SRTM, USGS), navigation by Ferrostar (Stadia Maps)." +
                         if (live) " Live traffic by TomTom." else " Live traffic is off: add a free TomTom key (tomtomKey in local.properties) for traffic, incidents and live travel times.",
                 ) {},
                 Setting("Website", "overworld.thealgothrim.com: guides, the worlds, what's new. Tap again to open it.", confirm = true) { open(SITE_URL) },
@@ -185,6 +198,8 @@ fun SettingsScreen(
         )
       }
     }
+    // On every tab, at the foot: the row in About was seven tabs deep, where nobody looks.
+    SupportLine(spec)
   }
 }
 
@@ -200,16 +215,33 @@ private fun DisplayTab(theme: OverworldTheme, spec: SkinSpec, selected: String?,
   Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
     THEMES.forEach { t -> ThemeCard(spec, t, selected = t.id == theme.id, modifier = Modifier.weight(1f)) { store.select(t.id) } }
   }
-  if (theme.variants.isNotEmpty()) {
+  if (theme.timeOfDay) {
     Gap(10)
     val now = (variant ?: "day").replaceFirstChar { it.uppercase() }
     LabeledChoices(spec, if (mapTime == com.thealgothrim.overworld.theme.MapTime.AUTO) "Time of day: by the sun, $now now" else "Time of day", com.thealgothrim.overworld.theme.MapTime.entries, mapTime, { it.label }) { store.setMapTime(it) }
   }
   LabeledChoices(spec, "Distance units", Units.entries, units, { if (it == Units.AUTO) "Auto (${if (it.miles) "mi" else "km"})" else it.label }) { AppModule.prefs.setUnits(it) }
+  // The launcher icon, as pictures like the worlds (his ask, 13 Nov): it follows the world unless
+  // one is picked by hand; GTA VI has two, plain and with Macca the Gator.
+  val icons = AppModule.appIcons
+  val iconChoice by icons.choice.collectAsState()
+  val iconNow = iconChoice.forWorld(theme.id)
+  Column(Modifier.padding(vertical = 6.dp)) {
+    SkinText(spec.title("App icon"), spec.title, spec.titleSize(14.sp, 16.sp), spec.sub, Modifier.padding(start = 2.dp, bottom = 6.dp), spacing = spec.titleSpacing)
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+      AppIcon.entries.forEach { i -> AppIconTile(spec, i, selected = i == iconNow, modifier = Modifier.weight(1f)) { icons.pick(i, theme.id) } }
+    }
+  }
   Gap(4)
   Rows(
       theme.skin,
       listOfNotNull(
+          Setting(
+              "Icon follows the world",
+              "On: picking a world switches the app's icon to that world's (GTA VI keeps the one you picked, plain or Macca). Off: the icon stays as picked above. " +
+                  "The new icon shows once you leave the app, and waits until a trip ends.",
+              onOff(iconChoice.followsWorld),
+          ) { icons.setFollowsWorld(!iconChoice.followsWorld, theme.id) },
           Setting("Place icons", "The game's shop, food and petrol icons on the map. Tap one there to go to it.", onOff(details.placeIcons)) { store.setDetails(details.copy(placeIcons = !details.placeIcons)) },
           if (theme.buildings3d) Setting("3D buildings", "Buildings stand up like on the GTA VI minimap. Off lays them flat, which is lighter work for the phone.", onOff(details.buildings3d)) { store.setDetails(details.copy(buildings3d = !details.buildings3d)) } else null,
           Setting("Traffic lights", "Signals along your route, from OpenStreetMap.", onOff(details.signals)) { store.setDetails(details.copy(signals = !details.signals)) },
@@ -414,7 +446,7 @@ private fun OfflineTab(theme: OverworldTheme, spec: SkinSpec, selected: String?,
           a.complete -> "${a.megabytes} MB · saved ${agoText(a.savedAt)}"
           else -> "Paused at ${(a.progress * 100).toInt()}%"
         }
-    Rows(theme.skin, listOf(Setting(a.name, "Tap Update, Rename or Delete below.", status) {}), selected, tap)
+    Rows(theme.skin, listOf(Setting(a.name, "Tap ${com.thealgothrim.overworld.offline.offlineAction(a.downloading, a.complete)}, Rename or Delete below.", status) {}), selected, tap)
     if (selected == a.name) {
       Gap(6)
       if (renaming == a.id) {
@@ -423,7 +455,19 @@ private fun OfflineTab(theme: OverworldTheme, spec: SkinSpec, selected: String?,
         SkinPrimaryButton(spec, "Rename", { if (newName.isNotBlank()) offline.rename(a.id, newName.trim()); renaming = null }, Modifier.fillMaxWidth(), GameIcon.EDIT)
       } else {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          ChoiceChip(spec, if (a.downloading) "Pause" else "Update", false, { if (a.downloading) offline.pause(a.id) else offline.update(a.id) }, Modifier.weight(1f), GameIcon.DOWNLOAD)
+          // An unfinished area carries on from where it stopped; only a finished one is fetched again.
+          val action = com.thealgothrim.overworld.offline.offlineAction(a.downloading, a.complete)
+          ChoiceChip(
+              spec, action, false,
+              {
+                when (action) {
+                  "Pause" -> offline.pause(a.id)
+                  "Resume" -> offline.resume(a.id)
+                  else -> offline.update(a.id)
+                }
+              },
+              Modifier.weight(1f), GameIcon.DOWNLOAD,
+          )
           ChoiceChip(spec, "Rename", false, { renaming = a.id; newName = a.name }, Modifier.weight(1f), GameIcon.EDIT)
           ChoiceChip(spec, "Delete", false, { offline.delete(a.id) }, Modifier.weight(1f), GameIcon.DELETE)
         }
@@ -453,6 +497,7 @@ private fun AlertsTab(theme: OverworldTheme, spec: SkinSpec, selected: String?, 
   val recap by prefs.notifyRecap.collectAsState()
   val offline by prefs.notifyOffline.collectAsState()
   val updates by prefs.notifyUpdates.collectAsState()
+  val wantedFlash by prefs.wantedFlash.collectAsState()
   if (!allowed) {
     SkinSecondaryButton(
         spec,
@@ -477,6 +522,11 @@ private fun AlertsTab(theme: OverworldTheme, spec: SkinSpec, selected: String?, 
           Setting("Timeline recap", "Once a month: last month's distance, trips and places, from your Timeline.", onOff(recap)) { prefs.setNotifyRecap(!recap) },
           Setting("Offline map ready", "When an area you downloaded has finished.", onOff(offline)) { prefs.setNotifyOffline(!offline) },
           Setting("Updates", "The dot on Settings when a newer Overworld is out.", onOff(updates)) { prefs.setNotifyUpdates(!updates) },
+          Setting(
+              "Wanted flash",
+              "In GTA V and GTA VI: pass a speed camera over the limit and the map flashes red and blue for a moment, like a police chase in the games.",
+              onOff(wantedFlash),
+          ) { prefs.setWantedFlash(!wantedFlash) },
           Setting("Android's notification settings", "Sounds and how each kind shows, in Android's own settings. Tap again to open them.", confirm = true) {
             runCatching { context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
           },

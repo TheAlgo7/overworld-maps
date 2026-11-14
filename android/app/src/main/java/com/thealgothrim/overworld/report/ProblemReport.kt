@@ -116,6 +116,7 @@ object ProblemReport {
       appendLine("Made ${DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm:ss z").format(ZonedDateTime.now())}")
       appendLine()
       appendLine("App: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}), ${BuildConfig.BUILD_TYPE}, ${context.packageName}, installed by ${installer ?: "sideload"}")
+      appendLine("TomTom calls from this phone, ${com.thealgothrim.overworld.traffic.TomTomUsage.summary()}")
       appendLine("Phone: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
       appendLine("Location: fine ${granted(android.Manifest.permission.ACCESS_FINE_LOCATION)}, coarse ${granted(android.Manifest.permission.ACCESS_COARSE_LOCATION)}; barometer ${Barometer.present ?: "not asked yet"}")
       appendLine()

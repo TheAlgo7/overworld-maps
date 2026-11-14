@@ -188,6 +188,10 @@ fun BoxScope.NavigationLayer(
     onBottomBlocked: (Dp) -> Unit = {},
     /** The part of the window the cards leave clear, for what GTA VI pins to the map's edge. */
     onMapRoom: (PaddingValues) -> Unit = {},
+    /** Where the speed readout sits in the window (px), or null: the map's edge markers step round it. */
+    onSpeedBox: (androidx.compose.ui.geometry.Rect?) -> Unit = {},
+    /** Where the street name sits (px), or null: the edge markers step round it too. */
+    onStreetBox: (androidx.compose.ui.geometry.Rect?) -> Unit = {},
 ) {
   var expanded by remember { mutableStateOf(false) }
   val progress = uiState.progress
@@ -254,10 +258,18 @@ fun BoxScope.NavigationLayer(
       if (following) {
         // Speed (when there is one) on the left, the street centred in whatever room is left.
         Row(Modifier.align(Alignment.BottomStart).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-          SpeedBadge(spec, uiState)
+          androidx.compose.runtime.DisposableEffect(Unit) {
+            onDispose {
+              onSpeedBox(null)
+              onStreetBox(null)
+            }
+          }
+          Box(Modifier.onGloballyPositioned { c -> onSpeedBox(c.boundsInRoot().takeIf { it.width > 0f && it.height > 0f }) }) {
+            SpeedBadge(spec, uiState)
+          }
           val street = listOfNotNull(uiState.currentStepRoadName?.takeIf { it.isNotBlank() }, area)
           Box(Modifier.weight(1f).padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
-            if (street.isNotEmpty()) {
+            if (street.isNotEmpty()) Box(Modifier.onGloballyPositioned { c -> onStreetBox(c.boundsInRoot()) }) {
               when {
                 spec.gta -> GtaText(street.joinToString("  |  "), 21.sp, align = TextAlign.Center)
                 spec.vi -> ViText(street.joinToString("  ·  "), 18.sp, font = Vi.sansSemiBold, align = TextAlign.Center)

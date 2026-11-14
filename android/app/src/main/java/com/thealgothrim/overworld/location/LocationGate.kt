@@ -182,6 +182,9 @@ class GateRules {
 
   private fun doubt(fix: GateFix, ref: GateFix, moved: Float, needed: Int): GateVerdict {
     doubted += fix
+    // Only the newest run counts: one stray fix kept at the front never agreed with the rest, so
+    // GPS that had really moved on was doubted for as long as the car stood (and the list grew).
+    while (doubted.size > needed) doubted.removeAt(0)
     if (doubted.size >= needed && doubted.zipWithNext().all { (a, b) -> agree(a, b) }) {
       val n = doubted.size
       // Their speed: the newest's own, else how fast the agreeing fixes moved between them.

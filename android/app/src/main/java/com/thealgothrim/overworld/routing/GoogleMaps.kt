@@ -60,7 +60,7 @@ class GoogleMaps(http: OkHttpClient) {
    */
   suspend fun directions(from: GeographicCoordinate, to: GeographicCoordinate, mode: Int = 0, avoid: Avoid = Avoid()): List<GoogleRoute> =
       withContext(Dispatchers.IO) {
-        warm()
+        if (!warm()) return@withContext emptyList()
         val body = get(ENDPOINT + URLEncoder.encode(pb(from, to, mode, if (mode == 0) avoid else Avoid()), "UTF-8")) ?: return@withContext emptyList()
         runCatching { parse(body) }.onFailure { Log.w(TAG, "couldn't read Google's routes", it) }.getOrDefault(emptyList())
       }
@@ -72,7 +72,7 @@ class GoogleMaps(http: OkHttpClient) {
    */
   suspend fun search(query: String, near: GeographicCoordinate): List<GooglePlace> =
       withContext(Dispatchers.IO) {
-        warm()
+        if (!warm()) return@withContext emptyList()
         val pb = SEARCH_TEMPLATE.replace("{QUERY}", query.replace('!', ' ').trim()).replace("{LNG}", near.lng.toString()).replace("{LAT}", near.lat.toString())
         val url = SEARCH_ENDPOINT + "&q=" + URLEncoder.encode(query, "UTF-8") + "&pb=" + URLEncoder.encode(pb, "UTF-8")
         val body = get(url) ?: return@withContext emptyList()
@@ -80,11 +80,15 @@ class GoogleMaps(http: OkHttpClient) {
       }
 
   /** Google answers better once the session has a cookie, as a browser's would. Once an hour. */
-  private fun warm() {
+  private fun warm(): Boolean {
     val now = System.currentTimeMillis()
-    if (now - warmedAt < 3_600_000) return
+    if (now - warmedAt < 3_600_000) return true
     warmedAt = now
-    get("https://www.google.com/maps?hl=en")
+    if (get("https://www.google.com/maps?hl=en") != null) return true
+    // Google can't be reached: say so now, so the caller goes to its fallback after one 5 s wait
+    // instead of two (this one and the request's own), and try the cookie again next time.
+    warmedAt = 0L
+    return false
   }
 
   private fun get(url: String): String? =

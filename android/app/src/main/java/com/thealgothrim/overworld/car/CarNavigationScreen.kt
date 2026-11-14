@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -107,6 +109,8 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
       )
 
   private var uiState: NavigationUiState? by mutableStateOf(null)
+  /** What the game HUD's template was last built for (on a trip or not); null with the HUD off. */
+  private var templateShape: Boolean? = null
   /** The car screen's density (px per dp), unscaled; set while the screen draws. */
   @Volatile private var carDensity = 1f
   private var mapState: NavigationMapState? = null
@@ -271,7 +275,13 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
             .onEach {
               uiState = it
               // Android Auto's list over the map doesn't change with each fix; the map under it does on its own.
-              if (panel == null || themedLists) invalidate()
+              if (panel != null && !themedLists) return@onEach
+              // With the game HUD the template is only Android Auto's strip, the same for a whole
+              // trip: sending it again at every fix was a round trip to Android Auto a second for
+              // nothing. Its own cards (HUD off) do change with each fix.
+              val shape = if (themeStore.carGameHud.value) it.isNavigating() else null
+              if (shape == null || shape != templateShape) invalidate()
+              templateShape = shape
             }
             .launchIn(scope)
     // The Settings list shows changes from the phone's remote, and its own toggles, at once.
@@ -390,6 +400,9 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
     val driveCamera = theme.skin.driveCamera
     val zoom = CAR_ZOOM + driveCamera.zoomOffset
     val navState = viewModel.navigationUiState.collectAsState()
+    // Only whether a trip is on is read here, not each fix: this screen's whole content was
+    // composed again at every fix, in the same frame as the map's own work.
+    val navigating by remember { derivedStateOf { uiState?.isNavigating() == true } }
     val tilt = rememberDriveTilt(driveCamera, navState)
     val cameraOptions =
         navigationCameraOptions()
@@ -410,7 +423,7 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
     val planner by viewModel.planner.collectAsState()
     // The HUD's cards are 440 dp wide at full size and shrink with the HUD on smaller screens.
     val hudScale = carHudScale(carHudInsets(surfaceArea))
-    val hudStart = if (gameHud && (uiState?.isNavigating() == true || planner.preview != null)) 440.dp * hudScale else 0.dp
+    val hudStart = if (gameHud && (navigating || planner.preview != null)) 440.dp * hudScale else 0.dp
     val padding =
         surfaceArea?.visibleArea?.let { area ->
           with(density) {
@@ -439,8 +452,8 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
       if (previewRoute == null && uiState?.isNavigating() != true && state.cameraMode == NavigationCameraMode.OVERVIEW) followCar(state)
     }
 
-    LaunchedEffect(uiState?.isNavigating(), state) {
-      if (uiState?.isNavigating() == true) {
+    LaunchedEffect(navigating, state) {
+      if (navigating) {
         // Following keeps the current zoom, which after the route preview is the whole city.
         state.cameraState.position = state.cameraState.position.copy(zoom = cameraOptions.navigationZoom)
         state.recenter(isNavigating = true)

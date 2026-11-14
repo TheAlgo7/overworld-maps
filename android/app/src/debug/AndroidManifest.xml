@@ -21,6 +21,12 @@
                 <action android:name="com.thealgothrim.overworld.DEBUG_PANEL" />
                 <action android:name="com.thealgothrim.overworld.DEBUG_REPORT" />
                 <action android:name="com.thealgothrim.overworld.DEBUG_LEVELS" />
+                <action android:name="com.thealgothrim.overworld.DEBUG_WANTED" />
+                <!-- Handled by the receiver but missing here, so plain broadcasts never arrived
+                     (the frame meter, bench, place card and demo hooks); -n reached them. -->
+                <action android:name="com.thealgothrim.overworld.DEBUG_UI" />
+                <action android:name="com.thealgothrim.overworld.DEBUG_DEMO" />
+                <action android:name="com.thealgothrim.overworld.DEBUG_TRAFFIC" />
             </intent-filter>
         </receiver>
         <!-- The car screen's map and HUD in a plain activity, for the emulator (see the class). -->

@@ -236,3 +236,35 @@ fun IconPicker(spec: SkinSpec, icons: List<GameIcon>, selected: GameIcon, onPick
     }
   }
 }
+
+/**
+ * "Overworld is free. Support it": one quiet line at the foot of Settings and You, so the way to
+ * support the app can be found without hunting (see prefs/SupportAsk). It opens the website's page
+ * in the browser; nothing is sold or unlocked in the app.
+ */
+@Composable
+fun SupportLine(spec: SkinSpec) {
+  val context = androidx.compose.ui.platform.LocalContext.current
+  Row(
+      Modifier.fillMaxWidth()
+          .padding(top = 22.dp, bottom = 6.dp)
+          .clickable {
+            runCatching {
+              context.startActivity(
+                  android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(com.thealgothrim.overworld.prefs.SupportAsk.URL))
+                      .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+              )
+            }
+          }
+          .padding(vertical = 10.dp),
+      verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+  ) {
+    com.thealgothrim.overworld.ui.skin.GameIconView(com.thealgothrim.overworld.ui.skin.GameIcon.HEART, spec.accent, Modifier.size(22.dp))
+    Spacer(Modifier.width(12.dp))
+    androidx.compose.foundation.layout.Column(Modifier.weight(1f)) {
+      com.thealgothrim.overworld.ui.skin.SkinText("Overworld is free, with no ads.", spec.body, 15.sp, spec.fg)
+      com.thealgothrim.overworld.ui.skin.SkinText("Support it and help keep it that way", spec.body, 13.sp, spec.accent)
+    }
+    com.thealgothrim.overworld.ui.skin.GameIconView(com.thealgothrim.overworld.ui.skin.GameIcon.NAVIGATE, spec.sub, Modifier.size(16.dp))
+  }
+}

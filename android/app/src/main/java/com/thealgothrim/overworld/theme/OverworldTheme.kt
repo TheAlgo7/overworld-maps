@@ -17,10 +17,16 @@ import kotlinx.coroutines.flow.asStateFlow
 
 enum class HudFont { CONDENSED, SERIF }
 
+/** The palette GTA V and Red Dead use while driving: their radar, not the pause map. */
+const val RADAR = "radar"
+
 /** Which game's interface the app wears: GTA V's menus and HUD, Red Dead's, or GTA VI's. */
 enum class Skin { GTA, RDR, GTA6 }
 
-/** A time-of-day palette of a theme's map (GTA VI's dusk and night): its own style files. */
+/**
+ * A palette of a theme's map with its own style files: GTA VI's dusk and night, or the radar GTA V
+ * and Red Dead show while driving ("radar").
+ */
 data class MapVariant(val page: Color, val land: Color, val dark: Boolean)
 
 /** One map identity. The values come from prototype/themes.js via tools/export-android.mjs. */
@@ -43,6 +49,8 @@ data class OverworldTheme(
      * route's width; 0 draws the casing as a classic outline around the line.
      */
     val routeEdge: Float,
+    /** Red Dead's route: a chalky red band with grain, no outline (ThemedLayers' chalk pattern). */
+    val routeChalk: Boolean = false,
     /** Waypoint marker shape: "diamond", "quatrefoil" (GTA V), "crossring" (RDR2) or "dot" (GTA VI). */
     val blipShape: String,
     val blipFill: Color,
@@ -57,7 +65,7 @@ data class OverworldTheme(
     val carCard: Color,
     val page: Color,
     val paperOverlay: Boolean,
-    /** Time-of-day palettes by name ("dusk", "night"); the base palette is the day. */
+    /** Other palettes by name: time of day ("dusk", "night"; the base is the day) and "radar". */
     val variants: Map<String, MapVariant>,
     /** The map raises its buildings (GTA VI); the Layers sheet can lay them flat. */
     val buildings3d: Boolean,
@@ -70,6 +78,14 @@ data class OverworldTheme(
     val v = variant?.takeIf { it in variants }
     return "styles/$id${v?.let { "-$it" }.orEmpty()}${if (car) "-car" else ""}.json"
   }
+
+  /** The map has day, dusk and night palettes (GTA VI), so Settings offers Time of day. */
+  val timeOfDay: Boolean
+    get() = variants.keys.any { it != RADAR }
+
+  /** The map turns into the game's radar on a trip (GTA V, Red Dead): see OverworldViewModel.mapVariant. */
+  val hasRadar: Boolean
+    get() = RADAR in variants
 
   /** Whether the map is dark in [variant] (light text over it, not dark). */
   fun isDark(variant: String?) = variant?.let { variants[it]?.dark } ?: dark
@@ -377,7 +393,7 @@ object StyleCache {
     for (i in 0 until layers.length()) {
       val layer = layers.getJSONObject(i)
       when (layer.optString("id")) {
-        "building-3d" -> continue
+        "building-3d", "building-3d-roof" -> continue
         "building" -> layer.remove("maxzoom")
       }
       out.put(layer)

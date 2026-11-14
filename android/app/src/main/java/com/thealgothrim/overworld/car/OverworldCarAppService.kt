@@ -18,8 +18,15 @@ import uniffi.ferrostar.GeographicCoordinate
  * FEATURE_CLUSTER for the map between the dials in cars with an instrument cluster display.
  */
 class OverworldCarAppService : CarAppService() {
-  // Personal app: accept any Android Auto host (the phone's own Android Auto, or the DHU).
-  override fun createHostValidator(): HostValidator = HostValidator.ALLOW_ALL_HOSTS_VALIDATOR
+  /**
+   * Who may drive this service. On Play, only the real Android Auto and Automotive hosts (the car
+   * library's own list of them, checked by signature): any app could otherwise bind as a "car" and
+   * be handed the trip and where the phone is. Debug builds accept any host, for test head units.
+   */
+  override fun createHostValidator(): HostValidator =
+      if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0)
+          HostValidator.Builder(applicationContext).addAllowedHosts(androidx.car.app.R.array.hosts_allowlist_sample).build()
+      else HostValidator.ALLOW_ALL_HOSTS_VALIDATOR
 
   override fun onCreateSession(sessionInfo: SessionInfo): Session =
       if (sessionInfo.displayType == SessionInfo.DISPLAY_TYPE_CLUSTER) OverworldClusterSession() else OverworldCarSession()
@@ -81,3 +88,4 @@ class OverworldCarSession : Session() {
     return true
   }
 }
+

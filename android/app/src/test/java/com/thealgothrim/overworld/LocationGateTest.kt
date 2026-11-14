@@ -169,4 +169,21 @@ class LocationGateTest {
     for (k in 0 until 10) { rules.next(fix(k.toDouble(), along, 5f)); along += 5.0 }
     assertTrue(rules.next(fix(10.0, along, 5f, right = 70.0, accuracy = 80f)) is GateVerdict.Replace)
   }
+
+  @Test
+  fun oneStrayFixDoesntStopGpsThatReallyMovedFromBeingBelieved() {
+    // Standing, GPS first throws one fix onto the crossing road and then settles 20 m up the road
+    // for good. The stray one stayed in the run being checked, so the run never agreed and the car
+    // was held at the old spot for as long as it stood.
+    val rules = GateRules()
+    var s = driveThenStop(rules, 200.0)
+    rules.next(fix(s, 222.0, 0.1f, right = 30.0, bearing = 170f))
+    s += 1.0
+    var believedAt = -1
+    for (k in 0 until 10) {
+      if (rules.next(fix(s, 220.0 + k % 2, 0.1f)) is GateVerdict.Pass && believedAt < 0) believedAt = k
+      s += 1.0
+    }
+    assertEquals("believed after 8 agreeing fixes", 7, believedAt)
+  }
 }

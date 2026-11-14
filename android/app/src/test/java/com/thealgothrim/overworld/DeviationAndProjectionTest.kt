@@ -55,6 +55,17 @@ class DeviationAndProjectionTest {
   }
 
   @Test
+  fun aVagueFixDoesntPutACarThatLeftBackOnTheRoute() {
+    val d = SustainedDeviation()
+    assertEquals(2, secondsToDetour(d, 70.0))
+    // Between tall buildings the next fix is good to 45 m: still off, not snapped back.
+    assertTrue(d.judge(70.0, 45.0, t0.plusSeconds(3)) is RouteDeviation.Deviation)
+    // A clear fix on the route ends it, and a vague one after that starts nothing.
+    assertTrue(d.judge(5.0, 5.0, t0.plusSeconds(4)) is RouteDeviation.NoDeviation)
+    assertTrue(d.judge(70.0, 45.0, t0.plusSeconds(5)) is RouteDeviation.NoDeviation)
+  }
+
+  @Test
   fun distanceToTheStepsAhead() {
     val east = listOf(GeographicCoordinate(28.5, 77.2), GeographicCoordinate(28.5, 77.21))
     // 0.0002° of latitude is about 22 m.

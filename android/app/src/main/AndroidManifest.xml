@@ -45,10 +45,7 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+            <!-- The launcher icon is one of the aliases below, not this activity (see AppIcons). -->
             <!-- A place shared from Google Maps (Share > Overworld) or any app. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -64,6 +61,58 @@
                 <data android:scheme="google.navigation" />
             </intent-filter>
         </activity>
+
+        <!-- The launcher icons, one per world (tools/make_icon.py). Exactly one is enabled; AppIcons
+             switches them when the world or Settings > Display > App icon changes. GTA V's is on to
+             begin with because a first install opens on GTA V. -->
+        <activity-alias
+            android:name=".IconGta5"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_gta5"
+            android:roundIcon="@mipmap/ic_launcher_gta5"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconRdr2"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_rdr2"
+            android:roundIcon="@mipmap/ic_launcher_rdr2"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconGta6"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_gta6"
+            android:roundIcon="@mipmap/ic_launcher_gta6"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconGta6Macca"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_gta6_macca"
+            android:roundIcon="@mipmap/ic_launcher_gta6_macca"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <service
             android:name="com.stadiamaps.ferrostar.core.service.FerrostarForegroundService"

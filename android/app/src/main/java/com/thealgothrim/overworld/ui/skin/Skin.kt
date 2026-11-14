@@ -457,6 +457,8 @@ enum class GameIcon {
   // Saved lists, Timeline, travel modes and Settings (0.6). Batches 11-12 of each world's icon chat
   // (Ongoing Apps Assets\Overworld Maps\Icon Generation) bring their art; until then, drawn in code.
   HEART, SUITCASE, LABEL, LIST, NOTE, TIMELINE, CALENDAR, BIKE, WALK, OFFLINE, DOWNLOAD, BELL, SHIELD, INFO, STATS,
+  /** You: a person (13 Nov). The player's arrow was the re-centre button's too, twice on one screen. */
+  PROFILE,
 }
 
 /**
@@ -575,6 +577,18 @@ fun DrawScope.drawGameIcon(icon: GameIcon, color: Color) {
             close()
           }
       if (icon == GameIcon.STAR_FILLED) drawPath(star, color) else drawPath(star, color, style = line)
+    }
+    GameIcon.PROFILE -> {
+      // Head and shoulders, filled, like the account picture Google puts in this spot.
+      drawCircle(color, 4.4f * u, p(12f, 8f))
+      val shoulders =
+          Path().apply {
+            moveTo(3.5f * u, 21f * u)
+            cubicTo(3.5f * u, 16f * u, 7.5f * u, 13.6f * u, 12f * u, 13.6f * u)
+            cubicTo(16.5f * u, 13.6f * u, 20.5f * u, 16f * u, 20.5f * u, 21f * u)
+            close()
+          }
+      drawPath(shoulders, color)
     }
     GameIcon.HOME -> {
       drawPath(path(3f to 11.5f, 12f to 3.5f, 21f to 11.5f), color, style = line)

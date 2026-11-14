@@ -323,7 +323,9 @@ object Mvt {
         if (byte and 0x80 == 0) return result
         shift += 7
       }
-      return result
+      // Out of bytes mid-number: a damaged tile. Returning here without moving on left the loops
+      // that read up to a length written in the tile (a feature's tags) spinning for good.
+      throw IllegalArgumentException("vector tile cut off at byte $pos")
     }
 
     fun fixed32(): Int {

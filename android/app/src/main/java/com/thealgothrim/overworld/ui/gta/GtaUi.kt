@@ -307,43 +307,6 @@ fun GtaWaypointDistance(text: String, arrowDegrees: Float, modifier: Modifier = 
   }
 }
 
-/**
- * The radar's "N": a black disc that slides along the edge of the view so it always points north
- * as the map rotates. [bearing] is read lazily so only the badge recomposes when the camera turns.
- */
-@Composable
-fun GtaNorthBadge(bearing: () -> Double, inset: Dp, top: Dp, bottom: Dp, modifier: Modifier = Modifier) {
-  BoxWithConstraints(modifier.fillMaxSize()) {
-    val density = LocalDensity.current
-    val badge = 26.dp
-    val w = with(density) { maxWidth.toPx() }
-    val h = with(density) { maxHeight.toPx() }
-    val bPx = with(density) { badge.toPx() }
-    val left = with(density) { inset.toPx() }
-    val topPx = with(density) { top.toPx() }
-    val bottomPx = with(density) { bottom.toPx() }
-    val cx = w / 2f
-    val cy = (topPx + (h - bottomPx)) / 2f
-    val halfW = w / 2f - left - bPx / 2f
-    val halfH = (h - bottomPx - topPx) / 2f - bPx / 2f
-    val rad = Math.toRadians(-bearing())
-    val dx = sin(rad).toFloat()
-    val dy = -cos(rad).toFloat()
-    val t = min(if (abs(dx) < 1e-4f) Float.MAX_VALUE else halfW / abs(dx), if (abs(dy) < 1e-4f) Float.MAX_VALUE else halfH / abs(dy))
-    val x = cx + dx * t - bPx / 2f
-    val y = cy + dy * t - bPx / 2f
-    Box(
-        Modifier.offset { IntOffset(x.roundToInt(), y.roundToInt()) }
-            .size(badge)
-            .background(Color.Black, CircleShape)
-            .border(1.dp, Color(0x55FFFFFF), CircleShape),
-        contentAlignment = Alignment.Center,
-    ) {
-      Text("N", color = Gta.White, fontFamily = GameFonts.menu, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-    }
-  }
-}
-
 // ---------------------------------------------------------------- big message
 
 /** The "mission passed" banner: a black band across the screen with big yellow Pricedown text. */

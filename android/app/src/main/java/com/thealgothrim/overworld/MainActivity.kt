@@ -19,6 +19,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import com.stadiamaps.ferrostar.core.isNavigating
 import com.thealgothrim.overworld.car.navigationDestination
 import com.thealgothrim.overworld.ui.PhoneScreen
 import com.thealgothrim.overworld.ui.skin.LocalIconSkin
@@ -124,5 +125,9 @@ class MainActivity : ComponentActivity() {
     AppModule.viewModel.mapInView(false)
     // What the Timeline has so far is kept in case Android ends the app in the background.
     AppModule.timeline.flush()
+    // A new world or icon pick shows on the launcher once the app is left: switching closes the
+    // screen the old icon opened, so never in view, and never mid-trip (the map would close).
+    if (!isChangingConfigurations && !AppModule.viewModel.navigationUiState.value.isNavigating())
+        AppModule.appIcons.apply(AppModule.themeStore.theme.value.id)
   }
 }

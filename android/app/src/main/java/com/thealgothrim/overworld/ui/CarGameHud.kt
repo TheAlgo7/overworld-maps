@@ -29,7 +29,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.MeasurePolicy
+import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.layout.layoutId
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -125,7 +130,14 @@ fun BoxScope.CarGameHud(
 
   // Nearby, Settings and End come up under the turn card at a touch. Over the speedometer they
   // widened the time card's column and pushed the limit sign aside.
-  Column(Modifier.align(Alignment.TopStart), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+  androidx.compose.runtime.DisposableEffect(Unit) {
+    onDispose {
+      CarHudBlocks.turn = null
+      CarHudBlocks.bottom = null
+      CarHudBlocks.street = null
+    }
+  }
+  Column(Modifier.align(Alignment.TopStart).onGloballyPositioned { CarHudBlocks.turn = it.boundsInRoot() }, verticalArrangement = Arrangement.spacedBy(10.dp)) {
     val cue = AppModule.viewModel.levelCueAhead(uiState, extras)
     Appear(Modifier) { TurnCard(spec, uiState, hazard, cue, Modifier) }
     actions?.let { CarMenuReveal(spec, trip = true, actions = it) }
@@ -136,7 +148,7 @@ fun BoxScope.CarGameHud(
     val speed = rememberSpeedNow(uiState)
     // The speedometer stands on the time card, like a car's speedometer over its trip computer;
     // the limit sign and + Cam stand on the card's bottom line, like everything along the bottom.
-    Row(verticalAlignment = Alignment.Bottom) {
+    Row(Modifier.onGloballyPositioned { CarHudBlocks.bottom = it.boundsInRoot() }, verticalAlignment = Alignment.Bottom) {
       Column {
         Speedometer(spec, speed, Modifier.padding(start = 6.dp, bottom = 8.dp))
         Column(
@@ -155,7 +167,7 @@ fun BoxScope.CarGameHud(
       // With no fix the street would be the last one seen: say so instead, a size down on a narrow
       // head unit (800 dp wide), where this slot beside the time card is only about 240 dp.
       if (lost) LostCard(spec, Modifier, compact = maxWidth < 460.dp)
-      else StreetLine(spec, listOfNotNull(uiState.currentStepRoadName?.takeIf { it.isNotBlank() }, area), Modifier)
+      else StreetLine(spec, listOfNotNull(uiState.currentStepRoadName?.takeIf { it.isNotBlank() }, area), Modifier.onGloballyPositioned { CarHudBlocks.street = it.boundsInRoot() })
     }
     // Keeps the street name clear of the map buttons on the right.
     Spacer(Modifier.width(96.dp))
@@ -171,8 +183,9 @@ private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardA
   val next = uiState.remainingSteps?.getOrNull(1)
   val then = next?.visualInstructions?.firstOrNull()?.primaryContent?.takeIf { next.distance < 500 }
 
-  // One card, like Google's: the turn, then "Then", then any alert, split by hairlines.
-  Column(modifier.width(IntrinsicSize.Max).widthIn(min = 300.dp, max = 440.dp).skinPanel(spec)) {
+  // One card, like Google's: the turn, then "Then", then any alert, split by hairlines. As wide as
+  // its widest row; the dividers and GTA VI's row (its square sits on the right edge) take that width.
+  WidestColumn(modifier.skinPanel(spec), min = 300.dp, max = 440.dp) {
     if (spec.vi) {
       // GTA VI: the game's own card, the move in words over the distance and the pink arrow square on the right.
       val rerouting = uiState.isCalculatingNewRoute == true
@@ -184,8 +197,9 @@ private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardA
           side = uiState.remainingSteps?.firstOrNull()?.drivingSide,
           titleSize = 30.sp,
           lineSize = 23.sp,
+          modifier = Modifier.layoutId(Stretch),
       )
-    } else Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+    } else Row(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
       Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) { content?.let { TurnArrow(it, uiState.remainingSteps?.firstOrNull()?.drivingSide, spec.fg) } }
       Spacer(Modifier.width(18.dp))
       Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -199,28 +213,78 @@ private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardA
     }
     // The flyover or underpass choice: under its turn, or before the next turn with how far.
     cue?.takeIf { uiState.isCalculatingNewRoute != true }?.let {
-      CardDivider(spec)
-      LevelCueRow(spec, it, Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp))
+      CardDivider(spec, Modifier.layoutId(Stretch))
+      LevelCueRow(spec, it, Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
     }
     then?.let {
-      CardDivider(spec)
-      Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+      CardDivider(spec, Modifier.layoutId(Stretch))
+      Row(Modifier.padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         if (spec.vi) SkinText("THEN", Vi.condensed, 19.sp, spec.sub, spacing = 0.8.sp) else SkinText("Then", spec.body, 18.sp, spec.sub)
         Spacer(Modifier.width(10.dp))
         Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) { TurnArrow(it, next?.drivingSide, spec.fg) }
       }
     }
     hazard?.let {
-      CardDivider(spec)
-      HazardRow(spec, it, Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp), textSize = 20.sp, icon = 40.dp)
+      CardDivider(spec, Modifier.layoutId(Stretch))
+      HazardRow(spec, it, Modifier.padding(horizontal = 20.dp, vertical = 14.dp), textSize = 20.sp, icon = 40.dp)
     }
   }
 }
 
+/** Marks a row of [WidestColumn] that takes the column's whole width: a divider, GTA VI's turn row. */
+private object Stretch
+
+/**
+ * A column as wide as its widest row, between [min] and [max], each row measured once. The turn card
+ * was a Column with width(IntrinsicSize.Max), which asks every row how wide it would like to be
+ * before measuring any, and that question lays a row's text out as well (a padded row is asked its
+ * height along with its width): the card's text was laid out three times over at every GPS fix,
+ * since the distance in it changes with each one. Here the rows are measured at their own width
+ * first and the widest sets the card's; only rows marked [Stretch] are measured after, at that
+ * width, and they say how wide they would like to be without laying anything out.
+ */
+@Composable
+private fun WidestColumn(modifier: Modifier, min: Dp, max: Dp, content: @Composable () -> Unit) {
+  val policy =
+      remember(min, max) {
+        MeasurePolicy { measurables, constraints ->
+          val most = max.roundToPx().coerceAtMost(constraints.maxWidth)
+          val placed = arrayOfNulls<Placeable>(measurables.size)
+          var width = min.roundToPx()
+          measurables.forEachIndexed { i, row ->
+            if (row.layoutId === Stretch) width = maxOf(width, row.maxIntrinsicWidth(Constraints.Infinity))
+            else placed[i] = row.measure(Constraints(maxWidth = most)).also { width = maxOf(width, it.width) }
+          }
+          width = width.coerceAtMost(most)
+          measurables.forEachIndexed { i, row -> if (placed[i] == null) placed[i] = row.measure(Constraints.fixedWidth(width)) }
+          layout(width, placed.sumOf { it!!.height }.coerceAtMost(constraints.maxHeight)) {
+            var y = 0
+            placed.forEach {
+              it!!.place(0, y)
+              y += it.height
+            }
+          }
+        }
+      }
+  Layout(content, modifier, policy)
+}
 /**
  * Where the car screen's drawn buttons are, in surface pixels. Android Auto hands map taps to the
  * app (see passTapsTo); the car screen checks them against these.
  */
+/**
+ * Where the car HUD's blocks sit on the screen (px), for the map's edge markers to step round:
+ * the turn card, the speed and time card, the street name. Null when not shown.
+ */
+object CarHudBlocks {
+  var turn by androidx.compose.runtime.mutableStateOf<Rect?>(null)
+  var bottom by androidx.compose.runtime.mutableStateOf<Rect?>(null)
+  var street by androidx.compose.runtime.mutableStateOf<Rect?>(null)
+
+  val all: List<Rect>
+    get() = listOfNotNull(turn, bottom, street)
+}
+
 object CarTapTargets {
   @Volatile var start: Rect? = null
   @Volatile var cancel: Rect? = null

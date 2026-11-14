@@ -5,8 +5,8 @@ car's launcher.
 The D is cut in the icon's own language: straight strokes with 45 degree corners like the
 octagonal O, in the O's silver, dimmed so it reads as part of the art. Run after make_icon.py:
   python tools/make_debug_icon.py
-Writes android/app/src/debug/res/mipmap-*/ic_launcher_{foreground,monochrome}.png, which replace the
-main ones in debug builds only.
+Writes android/app/src/debug/res/mipmap-*/ic_launcher_<icon>_{foreground,monochrome}.png for each of the
+four launcher icons, which replace the main ones in debug builds only.
 """
 from pathlib import Path
 
@@ -36,29 +36,32 @@ def d_mask(size: int) -> Image.Image:
     return m.resize((size, size), Image.LANCZOS)
 
 
-for folder in sorted(MAIN.glob("mipmap-*dpi")):
-    fg = Image.open(folder / "ic_launcher_foreground.png").convert("RGBA")
-    arr = np.asarray(fg).astype(np.float32)
-    opaque = arr[..., 3] > 250
-    # The O's silver: the mark's left half (its right half turns parchment).
-    left = opaque & (np.arange(fg.width)[None, :] < fg.width // 2)
-    silver = np.median(arr[left][:, :3], axis=0)
-    mask = np.asarray(d_mask(fg.width)).astype(np.float32) / 255 * OPACITY
+ICONS = ["gta5", "rdr2", "gta6", "gta6_macca"]  # the four launcher icons (make_icon.py)
 
-    out = arr.copy()
-    a0 = out[..., 3:4] / 255
-    a1 = mask[..., None]
-    alpha = a1 + a0 * (1 - a1)
-    out[..., :3] = np.where(alpha > 0, (silver * a1 + out[..., :3] * a0 * (1 - a1)) / np.maximum(alpha, 1e-6), out[..., :3])
-    out[..., 3:4] = alpha * 255
+for folder in sorted(MAIN.glob("mipmap-*dpi")):
     target = DEBUG / folder.name
     target.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(out.astype(np.uint8), "RGBA").save(target / "ic_launcher_foreground.png")
+    for icon in ICONS:
+        fg = Image.open(folder / f"ic_launcher_{icon}_foreground.png").convert("RGBA")
+        arr = np.asarray(fg).astype(np.float32)
+        opaque = arr[..., 3] > 250
+        # The O's own colour: its left half (GTA V's right half turns purple).
+        left = opaque & (np.arange(fg.width)[None, :] < fg.width // 2)
+        silver = np.median(arr[left][:, :3], axis=0)
+        mask = np.asarray(d_mask(fg.width)).astype(np.float32) / 255 * OPACITY
 
-    # Themed (monochrome) icons get the D too, at full strength: Android tints them one colour.
-    mono = Image.open(folder / "ic_launcher_monochrome.png").convert("RGBA")
-    m = np.asarray(mono).astype(np.float32)
-    m[..., 3] = np.maximum(m[..., 3], np.asarray(d_mask(mono.width)).astype(np.float32))
-    m[..., :3] = 255
-    Image.fromarray(m.astype(np.uint8), "RGBA").save(target / "ic_launcher_monochrome.png")
+        out = arr.copy()
+        a0 = out[..., 3:4] / 255
+        a1 = mask[..., None]
+        alpha = a1 + a0 * (1 - a1)
+        out[..., :3] = np.where(alpha > 0, (silver * a1 + out[..., :3] * a0 * (1 - a1)) / np.maximum(alpha, 1e-6), out[..., :3])
+        out[..., 3:4] = alpha * 255
+        Image.fromarray(out.astype(np.uint8), "RGBA").save(target / f"ic_launcher_{icon}_foreground.png")
+
+        # Themed (monochrome) icons get the D too, at full strength: Android tints them one colour.
+        mono = Image.open(folder / f"ic_launcher_{icon}_monochrome.png").convert("RGBA")
+        m = np.asarray(mono).astype(np.float32)
+        m[..., 3] = np.maximum(m[..., 3], np.asarray(d_mask(mono.width)).astype(np.float32))
+        m[..., :3] = 255
+        Image.fromarray(m.astype(np.uint8), "RGBA").save(target / f"ic_launcher_{icon}_monochrome.png")
     print("wrote", target.name)

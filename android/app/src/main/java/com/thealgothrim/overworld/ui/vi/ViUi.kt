@@ -10,8 +10,16 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.runtime.remember
+import androidx.compose.ui.layout.IntrinsicMeasurable
+import androidx.compose.ui.layout.IntrinsicMeasureScope
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasurePolicy
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -318,17 +326,84 @@ fun ViTurnRow(
     lineSize: TextUnit,
     modifier: Modifier = Modifier,
 ) {
-  Row(modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
-    Column(Modifier.weight(1f).padding(start = 18.dp, end = 16.dp, top = 12.dp, bottom = 13.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-      Text(title, style = TextStyle(fontFamily = Vi.sansSemiBold, fontSize = titleSize, color = Vi.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
-      if (line.isNotEmpty()) Text(line, style = TextStyle(fontFamily = Vi.sans, fontSize = lineSize, color = Vi.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-    Box(Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true).background(Vi.Pink), contentAlignment = Alignment.Center) {
-      content?.let { Box(Modifier.fillMaxSize(0.58f), contentAlignment = Alignment.Center) { TurnArrow(it, side, Vi.Ink) } }
-    }
-  }
+  // The row's height changes only when its second line comes or goes (or the type's size does),
+  // so the row keeps it between the distance's changes: see TurnRowPolicy.
+  val density = LocalDensity.current
+  val policy = remember(line.isEmpty(), titleSize, lineSize, density.density, density.fontScale) { TurnRowPolicy() }
+  Layout(
+      content = {
+        // The lines are the row's own children, with no Column or padding round them:
+        // TurnRowPolicy stacks them and keeps their margins (see there for why).
+        Text(title, style = TextStyle(fontFamily = Vi.sansSemiBold, fontSize = titleSize, color = Vi.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (line.isNotEmpty()) Text(line, style = TextStyle(fontFamily = Vi.sans, fontSize = lineSize, color = Vi.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Box(Modifier.background(Vi.Pink), contentAlignment = Alignment.Center) {
+          content?.let { Box(Modifier.fillMaxSize(0.58f), contentAlignment = Alignment.Center) { TurnArrow(it, side, Vi.Ink) } }
+        }
+      },
+      modifier = modifier.fillMaxWidth(),
+      measurePolicy = policy,
+  )
 }
 
+/**
+ * [ViTurnRow]'s layout: the text on the left inside its margins, the square on the right as tall as
+ * the row. It was a Row with height(IntrinsicSize.Min) inside a card that took its width from
+ * width(IntrinsicSize.Max), and between them every line of text was laid out several times over
+ * whenever the distance changed, which is at every GPS fix: 5 to 6 ms of layout on the car screen
+ * each second, on top of the map's own frame (traces of 14 Nov). Two things made it so: asking a
+ * row for its height before measuring it lays its text out once more, and asking anything wrapped
+ * in a padding modifier for its width works out its height too, which lays the text out again.
+ * So: the lines are one line each and as tall at any width, the row's height from the last time
+ * says how wide the square will be, the margins are added here and not by a modifier, and each line
+ * is laid out once.
+ */
+private class TurnRowPolicy : MeasurePolicy {
+  /** The row's height when last measured, px; 0 before the first time. */
+  private var rowHeight = 0
+
+  private fun Density.across() = 18.dp.roundToPx() + 16.dp.roundToPx()
+
+  private fun Density.above() = 12.dp.roundToPx()
+
+  private fun Density.upright() = above() + 13.dp.roundToPx()
+
+  private fun Density.between() = 1.dp.roundToPx()
+
+  /** The square's side: the row's height. Asked of the lines (all but the last child) only the first time. */
+  private fun Density.side(children: List<IntrinsicMeasurable>, width: Int): Int {
+    if (rowHeight > 0) return rowHeight
+    val lines = children.dropLast(1)
+    return lines.sumOf { it.minIntrinsicHeight(width) } + between() * (lines.size - 1).coerceAtLeast(0) + upright()
+  }
+
+  override fun MeasureScope.measure(measurables: List<Measurable>, constraints: Constraints): MeasureResult {
+    val reserved = side(measurables, constraints.maxWidth) + across()
+    val room = Constraints(maxWidth = if (constraints.hasBoundedWidth) (constraints.maxWidth - reserved).coerceAtLeast(0) else Constraints.Infinity)
+    val lines = measurables.dropLast(1).map { it.measure(room) }
+    val height = lines.sumOf { it.height } + between() * (lines.size - 1).coerceAtLeast(0) + upright()
+    rowHeight = height
+    val square = measurables.last().measure(Constraints.fixed(height, height))
+    val width = ((lines.maxOfOrNull { it.width } ?: 0) + across() + square.width).coerceIn(constraints.minWidth, constraints.maxWidth)
+    return layout(width, height) {
+      var y = above()
+      lines.forEach {
+        it.place(18.dp.roundToPx(), y)
+        y += it.height + between()
+      }
+      square.place(width - square.width, 0)
+    }
+  }
+
+  override fun IntrinsicMeasureScope.maxIntrinsicWidth(measurables: List<IntrinsicMeasurable>, height: Int): Int =
+      (measurables.dropLast(1).maxOfOrNull { it.maxIntrinsicWidth(Constraints.Infinity) } ?: 0) + across() + side(measurables, Constraints.Infinity)
+
+  override fun IntrinsicMeasureScope.minIntrinsicWidth(measurables: List<IntrinsicMeasurable>, height: Int): Int =
+      (measurables.dropLast(1).maxOfOrNull { it.minIntrinsicWidth(Constraints.Infinity) } ?: 0) + across() + side(measurables, Constraints.Infinity)
+
+  override fun IntrinsicMeasureScope.maxIntrinsicHeight(measurables: List<IntrinsicMeasurable>, width: Int): Int = side(measurables, width)
+
+  override fun IntrinsicMeasureScope.minIntrinsicHeight(measurables: List<IntrinsicMeasurable>, width: Int): Int = side(measurables, width)
+}
 // ---------------------------------------------------------------- bars
 
 /** Trip progress: a thin pink line on a faint track. */

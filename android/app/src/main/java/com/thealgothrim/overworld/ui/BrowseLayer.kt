@@ -89,6 +89,8 @@ fun BoxScope.BrowseLayer(
     onSettings: () -> Unit,
     onLayers: () -> Unit,
     onLocate: () -> Unit,
+    /** The map Index: every place on screen by kind (Red Dead's Index, GTA V's pause-map legend). */
+    onIndex: () -> Unit = {},
     /** You: saved lists, Timeline and history (his pick, 8 Nov: a button beside Settings). */
     onYou: () -> Unit = {},
     /** The map turns with the phone (locate tapped twice): the locate button shows the arrow. */
@@ -177,6 +179,7 @@ fun BoxScope.BrowseLayer(
       Spacer(Modifier.height(10.dp))
       Column(Modifier.align(Alignment.End), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SkinRoundButton(spec, GameIcon.LAYERS, onLayers)
+        SkinRoundButton(spec, GameIcon.LIST, onIndex)
         if (rotated) SkinRoundButton(spec, GameIcon.NORTH, onNorthUp)
       }
     }
@@ -204,11 +207,14 @@ fun BoxScope.BrowseLayer(
   }
 }
 
-/** You: the player's own marker on a map button, where Google puts your profile picture. */
+/**
+ * You: a person, where Google puts your profile picture. It was the player's own marker, but the
+ * re-centre button wears that, and the two read as one button twice (13 Nov).
+ */
 @Composable
 private fun YouButton(spec: SkinSpec, onClick: () -> Unit) {
   Box(Modifier.size(52.dp).skinPanel(spec).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-    Image(ImageBitmap.imageResource(spec.puck), contentDescription = "You", modifier = Modifier.size(30.dp), filterQuality = FilterQuality.High)
+    GameIconView(GameIcon.PROFILE, spec.fg, Modifier.size(26.dp))
   }
 }
 

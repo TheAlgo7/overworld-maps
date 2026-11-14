@@ -11,6 +11,7 @@ import androidx.compose.animation.core.TwoWayConverter
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
@@ -21,6 +22,7 @@ import com.stadiamaps.ferrostar.core.NavigationUiState
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.TimeSource
@@ -35,6 +37,7 @@ import org.maplibre.spatialk.units.Bearing
 import org.maplibre.spatialk.units.extensions.degrees
 import org.maplibre.spatialk.units.extensions.inDegrees
 import org.maplibre.spatialk.units.extensions.meters
+import uniffi.ferrostar.CourseOverGround
 import uniffi.ferrostar.GeographicCoordinate
 import uniffi.ferrostar.RouteDeviation
 import uniffi.ferrostar.UserLocation
@@ -69,6 +72,50 @@ fun rememberDisplayedPosition(
 ): DisplayedPosition? {
   val userLocation = uiState.location?.toMapLibreLocation() ?: return null
   return rememberRouteSnappedLocation(uiState, userLocation)
+}
+
+/**
+ * What Ferrostar's map view is given, so its camera follows [shown], the one glide the arrow and
+ * the route also follow. Ferrostar otherwise runs a glide of its own from the same fixes; the two
+ * were separate animations that could part (the arrow off the middle of the screen, or one standing
+ * while the other moved, which showed as the map stopping and starting). Without a route line
+ * Ferrostar passes the location straight to its camera, so on a route it is handed the gliding
+ * position each frame and no line. [northUp]: the camera is told the car faces north, so its
+ * bearing stays put while the arrow turns on the map.
+ */
+@Composable
+fun rememberCameraUiState(uiState: NavigationUiState, shown: DisplayedPosition?, northUp: Boolean): NavigationUiState {
+  val fix = uiState.location
+  val gliding = shown?.route != null && fix != null && uiState.isNavigating() && uiState.routeDeviation is RouteDeviation.NoDeviation
+  if (!gliding) {
+    return if (northUp && uiState.isNavigating()) remember(uiState) { uiState.copy(location = uiState.location?.copy(courseOverGround = CourseOverGround(0u, null))) }
+    else uiState
+  }
+  val at = shown!!.location
+  val p = at.position.value
+  val course = if (northUp) 0 else (((at.courseDegrees ?: 0.0).roundToInt() % 360) + 360) % 360
+  return uiState.copy(
+      routeGeometry = null,
+      location = fix!!.copy(coordinates = GeographicCoordinate(p.latitude, p.longitude), courseOverGround = CourseOverGround(course.toUShort(), null)),
+  )
+}
+
+/**
+ * A fix carries its course in whole degrees, so the camera [rememberCameraUiState] steers would
+ * turn a degree at a time. Called after the map view: where the camera has just been put on the
+ * arrow, its bearing is set to the route's exact direction there.
+ */
+@Composable
+fun PreciseCameraBearing(camera: org.maplibre.compose.camera.CameraState, shown: DisplayedPosition?, enabled: Boolean) {
+  if (!enabled || shown?.route == null || shown.along == null) return
+  val at = shown.location
+  val exact = at.courseDegrees ?: return
+  SideEffect {
+    val position = camera.position
+    if (position.target != at.position.value) return@SideEffect
+    val off = ((position.bearing - exact) % 360 + 540) % 360 - 180
+    if (off != 0.0 && kotlin.math.abs(off) <= 0.75) camera.position = position.copy(bearing = exact)
+  }
 }
 
 /**
@@ -123,11 +170,26 @@ private fun rememberRouteSnappedLocation(
       }
 
   LaunchedEffect(route, targetProjection.progressMeters) {
+    // The arrow only goes forward, so GPS wobble at a red light doesn't walk it back and forth.
+    // But a fix well behind it means the arrow is wrong, not the fix (the same route started again,
+    // or one bad fix that threw it ahead): it stood there, off the middle of the screen, until the
+    // car caught up. Go back to the car instead.
+    if (animatedProgress.value - targetProjection.progressMeters > SNAP_BACK_METRES) {
+      animatedProgress.snapTo(targetProjection.progressMeters)
+      return@LaunchedEffect
+    }
     val targetProgress = max(animatedProgress.value, targetProjection.progressMeters)
     if (targetProgress == animatedProgress.value) {
+      // The fix is behind the arrow (or on it): nothing to glide to. Marked on a system trace.
+      if (android.os.Trace.isEnabled()) android.os.Trace.setCounter("ow.glide.behind_m", (animatedProgress.value - targetProjection.progressMeters).toLong())
       return@LaunchedEffect
     }
 
+    val traced = android.os.Trace.isEnabled()
+    if (traced) {
+      android.os.Trace.setCounter("ow.glide.ahead_m", (targetProgress - animatedProgress.value).toLong())
+      android.os.Trace.setCounter("ow.glide.on", 1)
+    }
     animatedProgress.animateTo(
         targetValue = targetProgress,
         animationSpec =
@@ -136,6 +198,8 @@ private fun rememberRouteSnappedLocation(
                 easing = LinearEasing,
             ),
     )
+    // Reached the target with nothing newer: the arrow and the camera now stand still.
+    if (traced) android.os.Trace.setCounter("ow.glide.on", 0)
   }
 
   return remember(route, raw) {
@@ -304,6 +368,8 @@ class RoutePolyline(
   }
 }
 
+/** Farther behind the arrow than GPS wobble puts a fix: the arrow returns to it. */
+private const val SNAP_BACK_METRES = 40.0
 private const val NEAR_BEHIND_METRES = 30.0
 private const val LOST_METRES = 80.0
 

@@ -36,6 +36,9 @@ object FrameStats {
       val now = SystemClock.uptimeMillis()
       val gap = if (lastAt == 0L) 0L else now - lastAt
       lastAt = now
+      // Each gap on the system trace's timeline (a no-op unless a trace is recording), so a stutter
+      // lines up with what every thread was doing at that moment.
+      if (android.os.Trace.isEnabled()) android.os.Trace.setCounter("ow.$name.gap", gap)
       longestGapMs = maxOf(longestGapMs, gap)
       // A map at rest draws nothing; a long pause is the map standing still, not a stutter.
       if (gap in 1..IDLE_MS) {

@@ -296,36 +296,6 @@ private fun DrawScope.drawTurnIcon(c: Offset, s: Float) {
   drawPath(head, Rdr.White, style = Stroke(width = w, cap = StrokeCap.Round, join = StrokeJoin.Round))
 }
 
-// ---------------------------------------------------------------- north
-
-/** The radar's north letter: a plain "N" that slides along the view edge as the map turns. */
-@Composable
-fun RdrNorth(bearing: () -> Double, inset: Dp, top: Dp, bottom: Dp) {
-  BoxWithConstraints(Modifier.fillMaxSize()) {
-    val d = LocalDensity.current
-    val badge = with(d) { 26.dp.toPx() }
-    val w = with(d) { maxWidth.toPx() }
-    val h = with(d) { maxHeight.toPx() }
-    val left = with(d) { inset.toPx() }
-    val t = with(d) { top.toPx() }
-    val b = with(d) { bottom.toPx() }
-    val cx = w / 2f
-    val cy = (t + (h - b)) / 2f
-    val halfW = w / 2f - left - badge / 2f
-    val halfH = (h - b - t) / 2f - badge / 2f
-    val rad = Math.toRadians(-bearing())
-    val dx = sin(rad).toFloat()
-    val dy = -cos(rad).toFloat()
-    val k = min(if (abs(dx) < 1e-4f) Float.MAX_VALUE else halfW / abs(dx), if (abs(dy) < 1e-4f) Float.MAX_VALUE else halfH / abs(dy))
-    Box(
-        Modifier.offset { IntOffset((cx + dx * k - badge / 2f).roundToInt(), (cy + dy * k - badge / 2f).roundToInt()) }.size(26.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-      RdrText("N", 20.sp, color = Rdr.Grey)
-    }
-  }
-}
-
 // ---------------------------------------------------------------- big message
 
 /** Mission-complete style title across an ink band. */

@@ -246,7 +246,7 @@ private fun SettingsBody(spec: SkinSpec, theme: OverworldTheme) {
       }
     }
   }
-  if (theme.variants.isNotEmpty()) {
+  if (theme.timeOfDay) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       MapTime.entries.forEach { t ->
         val on = t == time

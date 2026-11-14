@@ -1,7 +1,7 @@
 """Builds the map sprites for the Android app.
 
 1. android/app/src/main/assets/sprites/overworld{,@2x}.{png,json}
-   Fill patterns only (Frontier's forest hatch and park stipple). Committed.
+   Fill patterns only (Frontier's forest hatch and park stipple, GTA VI's window walls). Committed.
 2. android/app/src/local/assets/sprites-local/overworld{,@2x}.{png,json}
    The same patterns plus RDR2 POI icons: the game's blip pictograms on black discs, the way the
    RDR2 map draws shops. Built from "Reference - RDR2/blips" (Rockstar's textures), so it lives in
@@ -129,6 +129,40 @@ def stipple(scale):
     return img
 
 
+def facade(scale, kind, wall, glass, slab):
+    """GTA VI's building walls, picked by height in the style (prototype/themes.js): "wall" plain
+    (houses and shops, like Rockstar's plain minimap blocks), "windows" punched windows, two bays
+    by two floors (apartments, offices), "glass" a curtain wall with floor slabs and mullions
+    (towers). MapLibre draws a wall pattern at a fixed size on screen, not in metres, so a 16 px
+    cell is two floors at the zoom the map is driven at (about 0.55 m a pixel at zoom 17)."""
+    s = 16 * scale
+    if kind == "glass":
+        img = Image.new("RGBA", (s, s), glass + (255,))
+        d = ImageDraw.Draw(img)
+        for x in range(0, s, 4 * scale):
+            d.rectangle([x, 0, x + max(1, scale // 2) - 1, s - 1], fill=slab + (150,))
+        for y in (0, 8 * scale):
+            d.rectangle([0, y, s - 1, y + scale - 1], fill=slab + (255,))
+        return img
+    img = Image.new("RGBA", (s, s), wall + (255,))
+    if kind == "windows":
+        d = ImageDraw.Draw(img)
+        for bx in (0, 8):
+            for by in (0, 8):
+                d.rectangle([(bx + 2) * scale, (by + 2) * scale, (bx + 6) * scale - 1, (by + 6) * scale - 1], fill=glass + (255,))
+    return img
+
+
+# Per time of day: the GTA VI palettes' building colour (themes.js) for the wall, a blue-grey a
+# step darker for glass, and a paler line for a tower's floor slabs.
+FACADES = {
+    "": ((0xAE, 0xAF, 0xB7), (0x80, 0x8C, 0xA3), (0xC4, 0xC8, 0xD2)),
+    "-dusk": ((0x5F, 0x65, 0x73), (0x44, 0x4B, 0x5B), (0x74, 0x7A, 0x88)),
+    "-night": ((0x41, 0x39, 0x4C), (0x2B, 0x25, 0x35), (0x55, 0x4C, 0x62)),
+}
+WINDOWS = {f"vi-{kind}{suffix}": (kind, colours) for suffix, colours in FACADES.items() for kind in ("wall", "windows", "glass")}
+
+
 def poi(blip: str, scale: int) -> Image.Image:
     size = 24 * scale
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
@@ -140,6 +174,22 @@ def poi(blip: str, scale: int) -> Image.Image:
     tinted = Image.merge("RGBA", (r.point(lambda v: v * 230 // 255), g.point(lambda v: v * 230 // 255), b.point(lambda v: v * 230 // 255), a))
     img.alpha_composite(tinted)
     return img
+
+
+ANIMALS = ROOT / "tools" / "animals"
+
+
+def animal(path: Path, scale: int) -> Image.Image:
+    """A wildlife sketch for Red Dead's map (drawn for Overworld, see tools/animals): cut to its
+    ink, in the map's own ink colour, its longest side 46 px so it reads as a small mark."""
+    img = Image.open(path).convert("RGBA")
+    img = img.crop(img.getbbox())
+    side = 46 * scale
+    k = side / max(img.size)
+    img = img.resize((max(1, round(img.width * k)), max(1, round(img.height * k))), Image.LANCZOS)
+    ink = Image.new("RGBA", img.size, (77, 71, 63, 255))
+    ink.putalpha(img.getchannel("A"))
+    return ink
 
 
 def write(out: Path, parts: dict, scale: int, suffix: str) -> None:
@@ -158,6 +208,8 @@ def write(out: Path, parts: dict, scale: int, suffix: str) -> None:
 
 for scale, suffix in [(1, ""), (2, "@2x")]:
     patterns = {"hatch": hatch(scale), "stipple": stipple(scale)}
+    patterns.update({name: facade(scale, kind, *colours) for name, (kind, colours) in WINDOWS.items()})
+    patterns.update({f"animal-{f.stem}": animal(f, scale) for f in sorted(ANIMALS.glob("*.png"))})
     write(MAIN, patterns, scale, suffix)
     local = dict(patterns)
     if BLIPS.exists():

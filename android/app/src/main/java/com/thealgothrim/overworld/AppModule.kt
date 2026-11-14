@@ -73,6 +73,7 @@ object AppModule {
   fun init(context: Context) {
     if (!::appContext.isInitialized) appContext = context.applicationContext
     GameFonts.init(appContext)
+    com.thealgothrim.overworld.traffic.TomTomUsage.init(appContext)
   }
 
   val context: Context
@@ -87,6 +88,7 @@ object AppModule {
   val httpClient: OkHttpClient by lazy {
     OkHttpClient.Builder()
         .callTimeout(Duration.ofSeconds(20))
+        .addInterceptor(com.thealgothrim.overworld.traffic.TomTomUsage)
         .addInterceptor { chain ->
           chain.proceed(chain.request().newBuilder().header("User-Agent", USER_AGENT).build())
         }
@@ -276,6 +278,9 @@ object AppModule {
   }
 
   val themeStore: ThemeStore by lazy { ThemeStore(appContext) }
+
+  /** The launcher icon: the world's, or one picked in Settings > Display > App icon. */
+  val appIcons: AppIcons by lazy { AppIcons(appContext) }
 
   val search: PlaceSearch by lazy {
     PlaceSearch(httpClient, BuildConfig.TOMTOM_KEY, google = { q, near -> if (themeStore.useGoogle.value) routes.google.search(q, near) else emptyList() })

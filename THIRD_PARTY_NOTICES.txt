@@ -55,6 +55,10 @@ Map data (c) OpenStreetMap contributors, Open Database License (ODbL),
 https://www.openstreetmap.org/copyright. Tiles: OpenFreeMap (https://openfreemap.org),
 OpenMapTiles schema. Routing: Valhalla on the FOSSGIS server. Search: Photon by komoot.
 Speed cameras: Overpass API. Live traffic (optional, your own key): TomTom.
+Contour lines (Red Dead world): Terrain Tiles on AWS Open Data, Mapzen's Terrarium format
+(https://registry.opendata.aws/terrain-tiles/). Terrain Tiles contain 3DEP, SRTM and GMTED2010
+content courtesy of the U.S. Geological Survey and ETOPO1 content courtesy of the U.S. National
+Oceanic and Atmospheric Administration. Contour method after maplibre-contour (onthegomap, BSD-3).
 
 
 ----------------------------------------------------------------------

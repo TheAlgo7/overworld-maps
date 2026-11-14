@@ -89,6 +89,19 @@ class NavPrefs(context: Context) {
     prefs.edit { putString(key, value.name) }
   }
 
+  // ------------------------------------------------------------ support (see SupportAsk)
+  /** Real trips driven to their end, counted for the one time the app asks for support. */
+  val finishedTrips: Int
+    get() = prefs.getInt("finished_trips", 0)
+
+  fun tripFinished() = prefs.edit { putInt("finished_trips", finishedTrips + 1) }
+
+  /** The support card was answered (either way): it never comes up by itself again. */
+  val supportAnswered: Boolean
+    get() = prefs.getBoolean("support_answered", false)
+
+  fun answerSupport() = prefs.edit { putBoolean("support_answered", true) }
+
   // ------------------------------------------------------------ display
   private val _units = MutableStateFlow(read("units", Units.AUTO))
   val units: StateFlow<Units> = _units.asStateFlow()
@@ -120,6 +133,11 @@ class NavPrefs(context: Context) {
   private val _volume = MutableStateFlow(read("guidance_volume", GuidanceVolume.NORMAL))
   val volume: StateFlow<GuidanceVolume> = _volume.asStateFlow()
   fun setVolume(v: GuidanceVolume) = save("guidance_volume", v, _volume)
+
+  private val _wantedFlash = flag("wanted_flash", true)
+  /** GTA's wanted flash when a speed camera is passed over the limit (ui/WantedFlash). On by default. */
+  val wantedFlash: StateFlow<Boolean> = _wantedFlash.asStateFlow()
+  fun setWantedFlash(on: Boolean) = save("wanted_flash", on, _wantedFlash)
 
   private val _northUp = flag("north_up", false)
   /** The phone's map stays north up while driving instead of turning with the road. */

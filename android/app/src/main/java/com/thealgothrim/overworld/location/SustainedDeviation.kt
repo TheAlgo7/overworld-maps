@@ -47,6 +47,9 @@ class SustainedDeviation(
   /** Seconds driven against every nearby piece of the route; null while going its way. */
   @Volatile private var wrongFor: Double? = null
   @Volatile private var lastAt: Instant? = null
+  /** The last clear verdict was "off the route" (see [judge]); for which route, by its line. */
+  @Volatile private var gone = false
+  @Volatile private var goneOn: List<GeographicCoordinate>? = null
   /** After the level check calls it, the route stays "left" until a new one comes (or this time passes). */
   @Volatile private var leftRoute: Pair<RoadLevels, Instant>? = null
 
@@ -57,8 +60,13 @@ class SustainedDeviation(
       wrongFor = null
       lastAt = null
       leftRoute = null
+      gone = false
+      goneOn = null
       return RouteDeviation.NoDeviation
     }
+    // A new route (the reroute came): whatever was said about the old one doesn't hold for it.
+    if (route.geometry !== goneOn && route.geometry != goneOn) gone = false
+    goneOn = route.geometry
     // The raw fix: the snapped one always sits on the route, facing its way.
     val fix = trip.userLocation
     val lines = trip.remainingSteps.take(3).map { it.geometry }
@@ -97,24 +105,32 @@ class SustainedDeviation(
   internal fun judge(off: Double?, accuracy: Double, at: Instant, speed: Double? = null, against: Boolean? = null): RouteDeviation {
     val previous = lastAt
     lastAt = at
-    // Too vague to tell (or no route left): no verdict, and a detour's clock keeps where it was.
-    if (off == null || accuracy > maxAccuracyMetres) return RouteDeviation.NoDeviation
+    // No route left: nothing to be off.
+    if (off == null) return RouteDeviation.NoDeviation
+    // Too vague to tell: the last clear verdict stands, and a detour's clock keeps where it was. A
+    // vague fix used to read as "on the route", so a car already off it (the new route still on
+    // its way, between tall buildings) had its arrow pulled back onto the old line for that fix.
+    if (accuracy > maxAccuracyMetres) return if (gone) RouteDeviation.Deviation(DeviationKind.CompletelyOffRoute(off)) else RouteDeviation.NoDeviation
     val step = if (previous == null) 0.0 else (Duration.between(previous, at).toMillis() / 1000.0).coerceIn(0.0, 5.0)
     // A heading means something only at speed; slower, the wrong-way clock holds where it was.
     if (against == false) wrongFor = null
     else if (against == true && speed != null && speed >= WRONG_WAY_MS) {
       val wrong = (wrongFor ?: 0.0) + step
       wrongFor = wrong
-      if (wrong >= wrongWaySeconds) return RouteDeviation.Deviation(DeviationKind.CompletelyOffRoute(off))
+      if (wrong >= wrongWaySeconds) {
+        gone = true
+        return RouteDeviation.Deviation(DeviationKind.CompletelyOffRoute(off))
+      }
     }
     if (off < nearMetres) {
       offFor = null
+      gone = false
       return RouteDeviation.NoDeviation
     }
     val moving = speed == null || speed >= MOVING_MS
     val seconds = (offFor ?: 0.0) + if (moving) step else 0.0
     offFor = seconds
-    val gone = seconds >= nearSeconds || (off >= farMetres && seconds >= farSeconds)
+    gone = seconds >= nearSeconds || (off >= farMetres && seconds >= farSeconds)
     return if (gone) RouteDeviation.Deviation(DeviationKind.CompletelyOffRoute(off)) else RouteDeviation.NoDeviation
   }
 

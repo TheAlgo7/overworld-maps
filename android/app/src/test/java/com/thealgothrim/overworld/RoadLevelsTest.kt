@@ -77,6 +77,16 @@ class RoadLevelsTest {
     assertEquals(1, flyover.oneway)
   }
 
+  /** A feature whose tag list says it is longer than the tile: reading it used to spin for good. */
+  @Test(timeout = 5_000)
+  fun aDamagedTileIsGivenUpOnNotReadForever() {
+    val name = "transportation".toByteArray()
+    val feature = byteArrayOf(0x12, 50, 0, 0)
+    val layer = byteArrayOf(0x0A, name.size.toByte()) + name + byteArrayOf(0x12, feature.size.toByte()) + feature
+    val tile = byteArrayOf(0x1A, layer.size.toByte()) + layer
+    assertTrue(runCatching { Mvt.layer(tile, "transportation") }.isFailure)
+  }
+
   @Test
   fun theServiceRouteSaysDontTakeTheFlyoverAtItsBearLeft() {
     val turn = along(beside, bearLeft)

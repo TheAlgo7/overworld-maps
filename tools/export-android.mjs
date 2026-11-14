@@ -30,7 +30,7 @@ for (const t of Object.values(THEMES)) {
       // The app draws the route itself (themed, below the labels), so drop the web route.
       delete style.sources.route;
       style.layers = style.layers.filter((l) => l.source !== "route");
-      if (style.layers.some((l) => (l.paint && l.paint["fill-pattern"]) || l.id.startsWith("poi-blips"))) {
+      if (style.layers.some((l) => (l.paint && (l.paint["fill-pattern"] || l.paint["fill-extrusion-pattern"])) || l.id.startsWith("poi-blips") || l.id.startsWith("animals-"))) {
         style.sprite = "asset://sprites/overworld";
       }
       const file = path.join(stylesDir, `${t.id}${variant ? `-${variant}` : ""}${car ? "-car" : ""}.json`);
@@ -70,6 +70,7 @@ const entries = Object.values(THEMES).map((t) => {
       routeGlow = ${r.glow ? color(r.glow) : "null"},
       routeFade = ${r.fade || 0}.0,
       routeEdge = ${r.edge || 0}f,
+      routeChalk = ${!!r.chalk},
       blipShape = ${esc(t.blip?.shape || "diamond")},
       blipFill = ${color(t.blip?.fill || h.accent)},
       blipCenter = ${color(t.blip?.center || t.marker.stroke)},

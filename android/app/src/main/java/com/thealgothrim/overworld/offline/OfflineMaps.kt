@@ -47,6 +47,14 @@ data class OfflineArea(
     get() = if (required <= 0) 0f else (done.toFloat() / required).coerceIn(0f, 1f)
 }
 
+/** The first button under a downloaded area: Pause while it downloads, Resume if it stopped short, Update once whole. */
+fun offlineAction(downloading: Boolean, complete: Boolean): String =
+    when {
+      downloading -> "Pause"
+      complete -> "Update"
+      else -> "Resume"
+    }
+
 /**
  * Offline maps, like Google's: the area on screen is downloaded into MapLibre's offline database,
  * and the map then draws there without internet, in every world (they all read the same
@@ -139,6 +147,19 @@ class OfflineMaps(private val context: Context) {
   fun pause(id: Long) {
     regions[id]?.setDownloadState(OfflineRegion.STATE_INACTIVE)
     _areas.value.firstOrNull { it.id == id }?.let { publish(it.copy(downloading = false)) }
+  }
+
+  /**
+   * Carry on a download that was paused, or cut short when the app was closed: only what is still
+   * missing is fetched. ("Update" was the only button for these, and it asks the server about
+   * every tile already saved as well.)
+   */
+  fun resume(id: Long) {
+    val r = regions[id] ?: return
+    putStyle()
+    watch(r)
+    r.setDownloadState(OfflineRegion.STATE_ACTIVE)
+    _areas.value.firstOrNull { it.id == id }?.let { publish(it.copy(downloading = true, error = null)) }
   }
 
   /** Fetch the area again from the server (OpenFreeMap updates its tiles every week). */

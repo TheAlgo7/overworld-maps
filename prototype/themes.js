@@ -55,6 +55,30 @@
             "barber", "clothes", "repair", "store", "market", "fuel", "charging", "police", "theatre", "landmark",
             "worship", "parking", "airport", "school", "gym", "toilet", "mall", "tyre"] },
       },
+      variants: {
+        // The radar while driving, not the pause map: GTA V's minimap is see-through, so it reads
+        // lighter than the pause map's near-black, with dimmer roads and blocks barely apart from
+        // the ground. Measured 13 Nov from Gaurav's screenshot 08 (city at night, tilted radar):
+        // ground #3d3e3e, blocks #3c3e40, main road #747677; out of town (09) the ground goes olive.
+        // The app uses it on a trip (OverworldViewModel.mapVariant).
+        radar: {
+          page: "#2f3131",
+          dark: true,
+          map: {
+            land: "#3a3c3c", residential: "#3a3c3c", industrial: "#3a3c3c",
+            park: "#454b42", wood: "#434940", grass: "#474d44", sand: "#4e4c46",
+            building: "#434547",
+            bridge: { lift: 4.0, face: 1.4, faceColor: "#5a5c5c", edge: "#6c6e6e", shadow: { color: "#000000", opacity: 0.45 } },
+            roads: {
+              motorway: { fill: "#7d7f80", casing: null },
+              major: { fill: "#76787a", casing: null },
+              mid: { fill: "#747677", casing: null },
+              minor: { fill: "#747677", casing: null },
+              service: { fill: "#646667", casing: null },
+            },
+          },
+        },
+      },
       // Radar arrow (radar_centre): white left half, #b3b3b3 right half, black outline. The app
       // draws Gaurav's own drawing of it (tools/blips/); these colours are the web preview's.
       // Waypoint (radar_waypoint): four pointed petals in the waypoint colour, dark ring centre.
@@ -84,20 +108,23 @@
         park: "#d5b98e", wood: "#cfb287", grass: "#d5b98e", sand: "#e3cca3",
         water: "#9e9985", waterway: "#9e9985",
         waterLine: "#8c8775", waterLineBlur: 4, waterLineOpacity: 0.85,
-        building: "#e4cfaa", buildingLine: "#40423d",
-        rail: "#40423d", railStyle: "dots", railDot: "#ebddc0",
+        building: "#e4cfaa", buildingLine: "#4d473f",
+        rail: "#4d473f", railStyle: "dots", railDot: "#ebddc0",
         roadScale: 1.1,
+        // Warm charcoal ink, measured 13 Nov from Gaurav's Red Dead Online captures (#4d473f to
+        // #554f47, captures 02, 13, 17). Town streets are solid in the game (Saint Denis, 16), so
+        // service lanes are too; only footpaths are dashed, like its trails.
         roads: {
-          motorway: { fill: "#40423d", casing: null },
-          major: { fill: "#40423d", casing: null },
-          mid: { fill: "#40423d", casing: null },
-          minor: { fill: "#46453f", casing: null },
-          service: { fill: "#55524a", casing: null, dash: [2.2, 1.4] },
+          motorway: { fill: "#4d473f", casing: null },
+          major: { fill: "#4d473f", casing: null },
+          mid: { fill: "#4d473f", casing: null },
+          minor: { fill: "#514b43", casing: null },
+          service: { fill: "#57514a", casing: null },
         },
-        trails: { color: "#40423d", dash: [1.6, 1.6] },
+        trails: { color: "#4d473f", dash: [1.6, 1.6] },
         // A paper map seen from straight above: the surveyor's bridge, the road in a band of bare
         // paper with an ink parapet line along each side (see parapetLayers).
-        bridge: { edge: "#40423d", gap: true },
+        bridge: { edge: "#4d473f", gap: true },
         patterns: { wood: "hatch", park: "stipple" }, patternsInCar: true, railDotsInCar: true,
         glow: null,
         roadLabels: false,
@@ -116,7 +143,46 @@
           place: "#40423d", placeHalo: "rgba(222,194,155,0.7)", placeFont: "Noto Sans Bold", placeSpacing: 0.22, upper: true,
           water: "#3b3d38", waterHalo: "rgba(158,153,133,0.6)", pencil: "#716454",
         },
-        route: { line: "#cc0000", casing: "#7a0e1d", glow: null },
+        // No outline: the game's route is a chalky red band inside the road (captures 23-24); the
+        // app gives it the grain (ThemedLayers' chalk pattern).
+        route: { line: "#cc0000", casing: null, glow: null, chalk: true },
+        // Towns in heavy slab capitals (BLACKWATER, RIGGS STATION), regions in huge letters spread
+        // across the map (T H E  H E A R T L A N D S): captures 02, 11, 15, 25.
+        townLabels: true,
+        // Wildlife sketches in the open country, as on the game's paper map (captures 02, 11): here
+        // what lives around Delhi, drawn for Overworld (tools/animals), by the kind of ground.
+        animals: true,
+      },
+      variants: {
+        // The radar while riding, not the pause map: the game's minimap is parchment at about 40%
+        // over the world, so on a ride it reads as a dim olive-brown with soft, wide road bands and
+        // no names. Measured 13 Nov: fill #6a6352 to #6f6550 over ground (captures 03, 21, 28),
+        // roads #48423a to #524c3d. Water is the pause map's at the same strength (derived, no
+        // capture shows water on the radar). The app uses it on a trip.
+        radar: {
+          page: "#2a251d",
+          dark: true,
+          map: {
+            land: "#6c6452", residential: "#6c6452", industrial: "#695f4f",
+            park: "#68614e", wood: "#655e4b", grass: "#68614e", sand: "#72695a",
+            water: "#57584a", waterway: "#57584a", waterLine: "#4b4c40",
+            building: "#6c6452", buildingLine: "#5a5244",
+            rail: "#45403a", railDot: "#8a806c",
+            roadScale: 1.3, roadBlur: 0.8,
+            roads: {
+              motorway: { fill: "#48423a", casing: null },
+              major: { fill: "#48423a", casing: null },
+              mid: { fill: "#4a443b", casing: null },
+              minor: { fill: "#4d473d", casing: null },
+              service: { fill: "#524c41", casing: null },
+            },
+            trails: { color: "#4d473d", dash: [1.6, 1.6] },
+            bridge: { edge: "#48423a", gap: true },
+            labels: false,
+            townLabels: false,
+            animals: false,
+          },
+        },
       },
       // blip_code_center: off-white teardrop with a ring (the app's is Gaurav's teardrop with the
       // game's ring, tools/make_pucks.py); blip_code_waypoint: red X through a ring.
@@ -149,7 +215,11 @@
         water: "#739ba2", waterway: "#739ba2",
         building: "#aeafb7", buildingLine: null,
         // Raised blocks: real heights where OpenStreetMap has them, a low default where it doesn't.
-        buildings3d: { color: "#aeafb7", opacity: 0.94, heightScale: 1, minHeight: 4 },
+        // Walls by height (OpenStreetMap's): plain under 12 m, like Rockstar's plain minimap blocks;
+        // windows to 60 m, as on the minimap's modelled buildings (the community frame comparison,
+        // Game Informer's first look); a glass curtain wall above, for towers like Miami's (and
+        // Dubai's). Roofs stay plain (see building-3d-roof). Sprites: tools/make_sprite.py.
+        buildings3d: { color: "#aeafb7", opacity: 0.94, heightScale: 1, minHeight: 4, facades: "" },
         // Flyovers seen from the minimap's 60 degree tilt: a concrete side under the deck and its
         // shadow on the ground (see bridgeLayers).
         bridge: { lift: 5.0, face: 1.7, faceColor: "#9b928c", edge: "#aaa19b", shadow: { color: "#3a3430", opacity: 0.5 } },
@@ -196,7 +266,7 @@
             park: "#5b6759", wood: "#566355", grass: "#5f6b5d", sand: "#7e7666",
             water: "#2f5867", waterway: "#2f5867",
             building: "#5d6370",
-            buildings3d: { color: "#5f6573", opacity: 0.94, heightScale: 1, minHeight: 4 },
+            buildings3d: { color: "#5f6573", opacity: 0.94, heightScale: 1, minHeight: 4, facades: "-dusk" },
             bridge: { lift: 5.0, face: 1.7, faceColor: "#4d4a45", edge: "#66634f", shadow: { color: "#1e1c1a", opacity: 0.55 } },
             light: { color: "#fff0e2", intensity: 0.38 },
             rail: "#5c5a58",
@@ -224,7 +294,7 @@
             park: "#15383b", wood: "#123133", grass: "#14363a", sand: "#3a3540",
             water: "#0d1120", waterway: "#0d1120",
             building: "#3c3546",
-            buildings3d: { color: "#41394c", opacity: 0.95, heightScale: 1, minHeight: 4 },
+            buildings3d: { color: "#41394c", opacity: 0.95, heightScale: 1, minHeight: 4, facades: "-night" },
             // Stacked ramps at night stand apart on near-black gaps (Extended Look 20:22, #160f1f
             // between the decks): dark, wider kerbs and a deeper shadow, where the day has pale kerbs.
             bridge: {
@@ -264,6 +334,7 @@
     if (!v) return theme.map;
     const m = Object.assign({}, theme.map, v.map);
     m.roads = Object.assign({}, theme.map.roads, v.map.roads);
+    if (theme.map.label) m.label = Object.assign({}, theme.map.label, v.map.label || {});
     return m;
   }
 
@@ -426,6 +497,8 @@
     for (const g of GROUPS) {
       const spec = m.roads[g.key];
       const paint = { "line-color": spec.fill, "line-width": widthExpr(g.w, scale), "line-opacity": faded ? 0.4 : 1 };
+      // Soft-edged bands (Red Dead's radar) instead of crisp ink.
+      if (m.roadBlur) paint["line-blur"] = m.roadBlur;
       if (spec.dash) paint["line-dasharray"] = spec.dash;
       out.push({
         id: `${tag}-${g.key}`, type: "line", source: "omt", "source-layer": "transportation",
@@ -488,6 +561,14 @@
       layers.push({ id: "pattern-park", type: "fill", source: "omt", "source-layer": "park", paint: { "fill-pattern": m.patterns.park } });
     }
 
+    const waterwayLayer = {
+      id: "waterway", type: "line", source: "omt", "source-layer": "waterway",
+      filter: ["!=", ["get", "brunnel"], "tunnel"],
+      paint: {
+        "line-color": m.waterway,
+        "line-width": ["interpolate", ["exponential", 1.4], ["zoom"], 10, ["match", ["get", "class"], ["river", "canal"], 1.4, 0.4], 18, ["match", ["get", "class"], ["river", "canal"], 12, 3]],
+      },
+    };
     // Shoreline sits under the water fill: the fill hides its inner half, so the
     // seams where OSM splits a river into several polygons never show.
     if (m.waterLine && (!car || !m.waterLineBlur)) {
@@ -505,14 +586,7 @@
       filter: ["!=", ["get", "brunnel"], "tunnel"],
       paint: { "fill-color": m.water },
     });
-    layers.push({
-      id: "waterway", type: "line", source: "omt", "source-layer": "waterway",
-      filter: ["!=", ["get", "brunnel"], "tunnel"],
-      paint: {
-        "line-color": m.waterway,
-        "line-width": ["interpolate", ["exponential", 1.4], ["zoom"], 10, ["match", ["get", "class"], ["river", "canal"], 1.4, 0.4], 18, ["match", ["get", "class"], ["river", "canal"], 12, 3]],
-      },
-    });
+    layers.push(waterwayLayer);
 
     layers.push({
       id: "building", type: "fill", source: "omt", "source-layer": "building", minzoom: 14,
@@ -523,6 +597,33 @@
         m.buildingLine ? { "fill-outline-color": m.buildingLine } : {}
       ),
     });
+
+    if (m.animals) {
+      // One sketch in the middle of a wood, a field, a lake: over the ground and the flat buildings, under the roads and
+      // the names, which win where they meet, and well apart from each other.
+      const polygon = ["match", ["geometry-type"], ["Polygon", "MultiPolygon"], true, false];
+      const sketch = (id, sourceLayer, filter, image) =>
+        layers.push({
+          id: `animals-${id}`, type: "symbol", source: "omt", "source-layer": sourceLayer, minzoom: 12.5, maxzoom: 17,
+          filter: ["all", polygon, filter],
+          layout: {
+            "icon-image": image,
+            "icon-size": ["interpolate", ["linear"], ["zoom"], 12.5, 0.55, 16, 1],
+            "icon-padding": car ? 110 : 70,
+          },
+          paint: { "icon-opacity": 0.72 },
+        });
+      const kind = ["coalesce", ["get", "subclass"], ["get", "class"], ""];
+      sketch("wood", "landcover", ["match", ["get", "class"], ["wood", "forest"], true, false],
+        ["match", kind, "forest", "animal-nilgai", "wood", "animal-jackal", "animal-monkey"]);
+      sketch("grass", "landcover", ["match", ["get", "class"], ["grass", "farmland", "scrub", "sand"], true, false],
+        ["match", kind, ["scrub", "heath"], "animal-boar", "farmland", "animal-crow-flying", ["meadow", "grassland"], "animal-nilgai", "park", "animal-peacock",
+          "garden", "animal-pigeons", "golf_course", "animal-kite", ["sand", "beach"], "animal-crow", "animal-dog"]);
+      sketch("park", "park", ["has", "class"], "animal-monkey");
+      sketch("water", "water", ["!=", ["get", "brunnel"], "tunnel"],
+        ["match", ["get", "class"], ["lake", "pond"], "animal-buffalo", "animal-heron"]);
+    }
+
 
     const railFilter = ["all", ["match", ["get", "class"], ["rail", "transit"], true, false], ["!=", ["get", "brunnel"], "tunnel"]];
     const dotted = m.railStyle === "dots";
@@ -624,7 +725,11 @@
         id: "building-3d", type: "fill-extrusion", source: "omt", "source-layer": "building", minzoom: 14.5,
         filter: ["!=", ["get", "hide_3d"], true],
         paint: {
-          "fill-extrusion-color": B.color,
+          // Facades paint the walls by height (and the roof, which the cap below covers).
+          ...(B.facades !== undefined
+            ? { "fill-extrusion-pattern": ["step", ["coalesce", ["get", "render_height"], 5],
+                `vi-wall${B.facades}`, 12, `vi-windows${B.facades}`, 60, `vi-glass${B.facades}`] }
+            : { "fill-extrusion-color": B.color }),
           "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 14.5, 0, 16, height],
           "fill-extrusion-base": ["interpolate", ["linear"], ["zoom"], 14.5, 0, 16, ["*", B.heightScale, ["coalesce", ["get", "render_min_height"], 0]]],
           // Solid in the car: under full opacity MapLibre draws every building twice a frame (a depth
@@ -635,6 +740,19 @@
           "fill-extrusion-vertical-gradient": true,
         },
       });
+      if (B.facades !== undefined) {
+        // A plain roof: a half-metre slab on top in the wall colour, over the patterned roof.
+        layers.push({
+          id: "building-3d-roof", type: "fill-extrusion", source: "omt", "source-layer": "building", minzoom: 14.5,
+          filter: ["!=", ["get", "hide_3d"], true],
+          paint: {
+            "fill-extrusion-color": B.color,
+            "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 14.5, 0, 16, ["+", height, 0.5]],
+            "fill-extrusion-base": ["interpolate", ["linear"], ["zoom"], 14.5, 0, 16, height],
+            "fill-extrusion-opacity": car ? 1 : B.opacity,
+          },
+        });
+      }
     }
 
     // Route: remaining part of the trip. The app updates the source while driving.
@@ -809,26 +927,33 @@
         paint: { "text-color": L.pencil || L.place, "text-halo-color": L.placeHalo, "text-halo-width": 1 },
       });
     }
+    // Red Dead's lettering (m.townLabels): neighbourhoods are its towns, in big heavy slab capitals
+    // close together; cities are its regions, huge letters spread wide and fainter.
+    const towns = custom && m.townLabels;
     layers.push({
       id: "label-place-local", type: "symbol", source: "omt", "source-layer": "place", minzoom: 12,
       filter: ["match", ["get", "class"], ["suburb", "neighbourhood", "quarter"], true, false],
       layout: {
-        "text-field": text(NAME), "text-font": [F.place], "text-max-width": 7,
-        "text-size": ["interpolate", ["linear"], ["zoom"], 12, 10.5 * labelScale, 16, (custom ? 16 : 13) * labelScale],
-        "text-letter-spacing": L.placeSpacing,
+        "text-field": text(NAME), "text-font": [towns ? F.city : F.place], "text-max-width": towns ? 9 : 7,
+        "text-size": towns
+          ? ["interpolate", ["linear"], ["zoom"], 12, 13 * labelScale, 16, 22 * labelScale]
+          : ["interpolate", ["linear"], ["zoom"], 12, 10.5 * labelScale, 16, (custom ? 16 : 13) * labelScale],
+        "text-letter-spacing": towns ? 0.08 : L.placeSpacing,
       },
-      paint: { "text-color": L.place, "text-halo-color": L.placeHalo, "text-halo-width": 1.6, "text-opacity": car ? 0.8 : 0.9 },
+      paint: { "text-color": L.place, "text-halo-color": L.placeHalo, "text-halo-width": towns ? 1.2 : 1.6, "text-opacity": car ? 0.8 : 0.9 },
     });
     layers.push({
       id: "label-place-city", type: "symbol", source: "omt", "source-layer": "place", maxzoom: 14,
       filter: ["match", ["get", "class"], ["city", "town", "village"], true, false],
       layout: {
-        "text-field": text(NAME), "text-font": [F.city], "text-max-width": 8,
-        "text-size": ["interpolate", ["linear"], ["zoom"], 5, 11, 12, (custom ? 22 : 18) * labelScale],
+        "text-field": text(NAME), "text-font": [F.city], "text-max-width": towns ? 30 : 8,
+        "text-size": towns
+          ? ["interpolate", ["linear"], ["zoom"], 5, 14, 12, 34 * labelScale]
+          : ["interpolate", ["linear"], ["zoom"], 5, 11, 12, (custom ? 22 : 18) * labelScale],
         // Region names on the RDR2 map are set with very wide spacing.
-        "text-letter-spacing": custom ? 0.6 : L.placeSpacing,
+        "text-letter-spacing": towns ? 1.1 : custom ? 0.6 : L.placeSpacing,
       },
-      paint: { "text-color": L.place, "text-halo-color": L.placeHalo, "text-halo-width": 2 },
+      paint: { "text-color": L.place, "text-halo-color": L.placeHalo, "text-halo-width": 2, "text-opacity": towns ? 0.72 : 1 },
     });
     // Label-free themes (the GTA V map shows no names) hide the layers rather than drop them:
     // the app anchors its route line under "label-water", so that layer must exist.

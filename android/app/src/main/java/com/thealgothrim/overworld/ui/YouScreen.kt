@@ -93,6 +93,7 @@ fun YouScreen(
       YouTab.TIMELINE -> TimelineTab(spec, onChoose, onShowDay)
       YouTab.HISTORY -> HistoryTab(spec, here, onChoose, onSearch)
     }
+    SupportLine(spec)
   }
 }
 

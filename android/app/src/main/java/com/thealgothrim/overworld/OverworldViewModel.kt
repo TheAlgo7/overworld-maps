@@ -28,6 +28,7 @@ import kotlinx.coroutines.async
 import com.thealgothrim.overworld.theme.Daylight
 import com.thealgothrim.overworld.theme.MapTime
 import com.thealgothrim.overworld.theme.OverworldTheme
+import com.thealgothrim.overworld.theme.RADAR
 import com.thealgothrim.overworld.traffic.CameraChime
 import com.thealgothrim.overworld.traffic.angleBetween
 import com.thealgothrim.overworld.traffic.bearing
@@ -45,6 +46,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -313,7 +315,10 @@ class OverworldViewModel :
             // A fresh start gets the full wait before it counts as lost.
             lastFixAt = maxOf(lastFixAt, SystemClock.elapsedRealtime())
             while (true) {
-              _locationOff.value = locationSwitchOff()
+              // A test drive's fixes are made up, so the phone's location switch doesn't matter to it:
+              // with location off, "No location" sat over the arrow for the whole simulated trip.
+              val simulated = _testDrive.value && navigationUiState.value.isNavigating()
+              _locationOff.value = !simulated && locationSwitchOff()
               // Location switched off: said at once, not after the wait for a fix.
               _gpsLost.value = _locationOff.value || SystemClock.elapsedRealtime() - lastFixAt > GPS_LOST_MS
               delay(2_000)
@@ -399,6 +404,7 @@ class OverworldViewModel :
               if (!announced) {
                 announced = true
                 _arrived.tryEmit(destinationName ?: "your destination")
+                if (!_testDrive.value) AppModule.prefs.tripFinished()
                 // The Timeline's stop begins here, under the trip's own name for the place.
                 navigationUiState.value.location?.coordinates?.let { AppModule.timeline.arrived(destinationName ?: "Destination", it) }
                 stopNavigation()
@@ -601,9 +607,15 @@ class OverworldViewModel :
    * in Settings. Declared after [startPoint]'s saved fix, which it reads while starting up.
    */
   val mapVariant: StateFlow<String?> =
-      combine(AppModule.themeStore.theme, AppModule.themeStore.mapTime, everyMinute()) { theme, time, _ -> variantFor(theme, time) }
+      combine(AppModule.themeStore.theme, AppModule.themeStore.mapTime, onTrip, everyMinute()) { theme, time, trip, _ -> if (trip && theme.hasRadar) RADAR else variantFor(theme, time) }
           .distinctUntilChanged()
           .stateIn(viewModelScope, SharingStarted.Eagerly, variantFor(AppModule.themeStore.theme.value, AppModule.themeStore.mapTime.value))
+
+  /**
+   * On a trip, GTA V and Red Dead turn from the pause map into the game's radar, the see-through
+   * minimap the games show while you drive or ride (Gaurav's captures, 13 Nov).
+   */
+  private val onTrip: Flow<Boolean> get() = navigationUiState.map { it.isNavigating() }.distinctUntilChanged()
 
   private val carDarkScreen = MutableStateFlow<Boolean?>(null)
   private val carDarkCluster = MutableStateFlow<Boolean?>(null)
@@ -631,20 +643,26 @@ class OverworldViewModel :
   }
 
   /** The car's day or night as the map uses it (see [setCarDark]), for the report. */
+  /** A car screen or cluster is up right now. */
+  val carConnected: Boolean
+    get() = carDark.value != null
+
   val carDarkNow: Boolean?
     get() = carDark.value
 
   /** [mapVariant] for the car screen, which keeps its own theme and time of day, and whose Auto follows the car. */
   val carMapVariant: StateFlow<String?> =
-      combine(AppModule.themeStore.carTheme, AppModule.themeStore.carMapTime, carDark, everyMinute()) { theme, time, dark, _ -> carVariantFor(theme, time, dark) }
+      combine(AppModule.themeStore.carTheme, AppModule.themeStore.carMapTime, carDark, onTrip, everyMinute()) { theme, time, dark, trip, _ ->
+            if (trip && theme.hasRadar) RADAR else carVariantFor(theme, time, dark)
+          }
           .distinctUntilChanged()
           .stateIn(viewModelScope, SharingStarted.Eagerly, carVariantFor(AppModule.themeStore.carTheme.value, AppModule.themeStore.carMapTime.value, carDark.value))
 
   private fun variantFor(theme: OverworldTheme, time: MapTime): String? =
-      if (theme.variants.isEmpty()) null else time.variant(sunPhase())
+      if (!theme.timeOfDay) null else time.variant(sunPhase())
 
   private fun carVariantFor(theme: OverworldTheme, time: MapTime, dark: Boolean?): String? =
-      if (theme.variants.isEmpty()) null else time.carVariant(dark, sunPhase())
+      if (!theme.timeOfDay) null else time.carVariant(dark, sunPhase())
 
   private fun sunPhase(): String? {
     val at = startPoint
@@ -1034,10 +1052,14 @@ class OverworldViewModel :
   private var camerasAroundFrom: GeographicCoordinate? = null
   private var camerasJob: Job? = null
 
-  /** Cameras near the car with no trip running, reloaded after every 2 km or so. */
+  /**
+   * Cameras near the car with no trip running, reloaded after every 3 km or so: each load covers
+   * 4 km around and alerts look 600 m ahead, so 3 km still leaves room, for a third fewer requests
+   * to the public camera server than every 2 km.
+   */
   private fun refreshCamerasAround(at: GeographicCoordinate) {
     val last = camerasAroundFrom
-    if ((last != null && metres(last, at) < 2_000.0) || camerasJob?.isActive == true) return
+    if ((last != null && metres(last, at) < 3_000.0) || camerasJob?.isActive == true) return
     camerasAroundFrom = at
     camerasJob = viewModelScope.launch {
       runCatching { traffic.camerasAround(at, 4_000.0) }.getOrNull()?.let { _camerasAround.value = it }
@@ -1094,6 +1116,16 @@ class OverworldViewModel :
 
   private fun beep() = CameraChime.play(AppModule.context)
 
+  private val _wantedAt = MutableStateFlow(0L)
+  /** When the car last passed a speed camera over the limit: GTA's wanted flash (ui/WantedFlash). */
+  val wantedAt: StateFlow<Long> = _wantedAt.asStateFlow()
+
+  /** Sets off the wanted flash (and notes it in the drive log). */
+  fun wanted(note: String = "debug") {
+    _wantedAt.value = System.currentTimeMillis()
+    DriveLog.note("wanted: $note")
+  }
+
   // Here, after the camera state above: init blocks run in order, and a collector started on the
   // main thread runs its first round at once.
   init {
@@ -1110,11 +1142,26 @@ class OverworldViewModel :
       // One chime per camera as it comes within 500 m, when the chime is on. A camera left more
       // than a kilometre behind can chime again (the drive back, a second lap).
       val chimed = ArrayDeque<GeographicCoordinate>()
+      // The wanted flash: once per camera, passed within 35 m at 5 km/h or more over the road's
+      // limit (the margin at which the speed turns red), on a trip, where the route knows the limit.
+      val caught = ArrayDeque<GeographicCoordinate>()
       navigationUiState.collect { state ->
         val here = state.location?.coordinates
-        if (here != null) chimed.removeAll { metres(it, here) > 1_000.0 }
+        if (here != null) {
+          chimed.removeAll { metres(it, here) > 1_000.0 }
+          caught.removeAll { metres(it, here) > 1_000.0 }
+        }
+        val near = hazardAhead(state, _extras.value, camerasOnly = true)
+        val kmh = state.location?.speed?.value?.times(3.6)
+        val limit = (state.currentAnnotation?.speed as? com.stadiamaps.ferrostar.core.annotation.Speed.Value)?.let {
+          if (it.unit.name.contains("MILE", ignoreCase = true)) it.value * 1.609 else it.value
+        }
+        if (near != null && near.distance <= 35.0 && kmh != null && limit != null && kmh >= limit + 5 && caught.none { metres(it, near.feature.at) < 50.0 }) {
+          caught.addLast(near.feature.at)
+          wanted("passed a camera at ${kmh.toInt()} km/h, limit ${limit.toInt()}")
+        }
         if (!_cameraBeep.value) return@collect
-        val camera = hazardAhead(state, _extras.value, camerasOnly = true) ?: return@collect
+        val camera = near ?: return@collect
         if (camera.distance > 500.0 || chimed.any { metres(it, camera.feature.at) < 50.0 }) return@collect
         chimed.addLast(camera.feature.at)
         beep()
@@ -1129,6 +1176,13 @@ class OverworldViewModel :
     _planner.value = PlannerState(mode = preview.mode)
   }
 
+  private val _tripPlace = MutableStateFlow<GeographicCoordinate?>(null)
+  /**
+   * Where the trip is really going: the place itself, which can sit off the road the route ends on
+   * (a building inside a campus). The waypoint marks it there, and Red Dead dashes the last bit.
+   */
+  val tripPlace: StateFlow<GeographicCoordinate?> = _tripPlace.asStateFlow()
+
   private val _tripMode = MutableStateFlow(TravelMode.CAR)
   /** How the trip being driven is made: a walk hides the speed and the car's alerts. */
   val tripMode: StateFlow<TravelMode> = _tripMode.asStateFlow()
@@ -1141,6 +1195,7 @@ class OverworldViewModel :
     if (_testDrive.value) locationProvider.enableSimulationOn(route) else locationProvider.disableSimulation()
     setDestination(place.name)
     destinationName = place.name
+    _tripPlace.value = place.coordinate
     _area.value = null
     AppModule.saved.addRecent(place)
     // Reroutes come back in the same mode; a walk turns and strays at walking distances.

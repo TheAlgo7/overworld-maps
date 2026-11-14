@@ -14,6 +14,7 @@
   <a href="#get-it"><img alt="In the car: join Play testing" src="https://img.shields.io/badge/In%20the%20car-Join%20Play%20testing-fb74a5?style=for-the-badge&logo=googleplay&logoColor=white"></a>
   <a href="https://github.com/TheAlgo7/overworld-maps/releases/latest"><img alt="On the phone: download the APK" src="https://img.shields.io/badge/On%20the%20phone-Download%20APK-2a2230?style=for-the-badge&logo=android&logoColor=white"></a>
   <a href="https://overworld.thealgothrim.com"><img alt="Website: overworld.thealgothrim.com" src="https://img.shields.io/badge/Website-overworld.thealgothrim.com-2a2230?style=for-the-badge"></a>
+  <a href="https://overworld.thealgothrim.com/fund"><img alt="Support Overworld" src="https://img.shields.io/badge/Support-Overworld-fb74a5?style=for-the-badge"></a>
 </p>
 
 <p align="center">
@@ -22,7 +23,8 @@
   <a href="#features">Features</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#build-it">Build it</a> ·
-  <a href="#known-limits">Known limits</a>
+  <a href="#known-limits">Known limits</a> ·
+  <a href="#support-overworld">Support</a>
 </p>
 
 <p align="center">
@@ -39,7 +41,7 @@ Games have spent twenty years making maps people want to look at. Car navigation
 
 It was built first for one car: a Tata Curvv with a 10.25-inch 1920x720 HARMAN screen and wireless Android Auto. It has since been driven in a Tata Nexon and a Volkswagen Virtus GT too, and tested at the screen sizes of India's popular cars, down to a 7-inch 800x480 head unit. The phone app covers everything else, down to a ride on the bike.
 
-No account, no ads, and nothing to pay: the maps, routing and search are free services, and live traffic comes from Google.
+No account, no ads, and nothing to pay: the maps, routing and search are free services, and live traffic comes from Google. It is kept going by [voluntary support](#support-overworld).
 
 <br clear="right">
 
@@ -279,7 +281,7 @@ licenses/             licence texts for the bundled fonts
 | `tools/export-android.mjs` | Writes the app's style files and `ThemeTokens.kt` from `themes.js` |
 | `tools/make_sprite.py` | Builds Red Dead's hatch and stipple patterns and the map blips |
 | `tools/make_glyphs.py` | Builds Red Dead's map-label fonts as MapLibre SDF glyphs |
-| `tools/make_icon.py` | Builds the adaptive app icon from the artwork in `tools/icon/` |
+| `tools/make_icon.py` | Builds the four launcher icons (one per world, GTA VI with and without Macca) and the Play Store icon from the artwork in `tools/icon/` |
 | `tools/make_limit_signs.py` | Cuts the speed-limit sign sheets in `tools/signs/` into app drawables |
 | `tools/make_pucks.py` | Builds the player markers from the drawings in `tools/blips/`, centred and never stretched |
 | `tools/build-install.ps1` | Builds the debug APK and installs it |
@@ -300,6 +302,15 @@ licenses/             licence texts for the bundled fonts
 - Offline maps are downloaded a framed area at a time (up to 12,000 map tiles each), not a whole state, and routing and search still need the internet.
 - Android refuses the background location service if a trip starts while the app isn't on screen. The app then keeps navigating while the phone or car screen shows it, instead of crashing.
 - Contour lines like Red Dead's paper map aren't possible from OpenFreeMap, which has no contour layer.
+
+## Support Overworld
+
+Overworld Maps is free, with no ads, no subscription and no account, and it stays that way. If it has earned its place on your dashboard, you can put something toward what it costs to run: live traffic data, new worlds, and the work toward more platforms.
+
+- **In India:** [overworld.thealgothrim.com/fund](https://overworld.thealgothrim.com/fund), any amount, by UPI or card.
+- **Anywhere else:** [buymeacoffee.com/algothrim](https://buymeacoffee.com/algothrim).
+
+It is optional and unlocks nothing: every world and every feature is the same for everyone. A star on this repository, a bug report or telling a friend who drives helps too.
 
 ## Credits
 
