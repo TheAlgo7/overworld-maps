@@ -1,6 +1,6 @@
 # Overworld Maps privacy policy
 
-Last updated 8 November 2026.
+Last updated 14 November 2026.
 
 Overworld Maps is a navigation app for Android phones and Android Auto, made by Gaurav Kumar (The Algothrim). This page says what the app does with your information. In short: it has no account, no ads and no analytics, and nothing about you is sent to the developer unless you send a problem report yourself.
 
@@ -35,7 +35,11 @@ The only notifications the app makes itself (besides the trip's own) are a remin
 
 ## Reporting a problem
 
-Settings, About, Report a problem opens your own email app with a message to gaurav@thealgothrim.com and three files attached: a summary of your settings and phone model, the drive log, and the track of the last few hours. Nothing is sent unless you press Send, and you can remove the track (where you drove) from the email first. Reports are used only to find and fix problems in the app.
+Settings, About, Report a problem opens your own email app with a message to gaurav@thealgothrim.com and three files attached: a summary of your settings and phone model, the drive log, and the track of the last few hours. Nothing is sent unless you press Send, and you can remove the track (where you drove) from the email first. Reports are used only to find and fix problems in the app. The summary includes a count of how many times this phone asked TomTom for traffic or search in the last month; the count is kept on the phone and goes nowhere else.
+
+## Supporting the app
+
+The app is free and nothing in it is sold. "Support Overworld" in Settings opens a page on the app's website in your browser, where a one-time payment can be made if you choose. The app takes no payment itself and learns nothing about one: it only remembers, on the phone, how many trips you have finished, so that it can ask once, and whether you answered. What the website does with a payment is on its own privacy page.
 
 ## Children
 
