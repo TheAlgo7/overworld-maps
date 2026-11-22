@@ -26,6 +26,24 @@
         park: "#202020", wood: "#202020", grass: "#202020", sand: "#202020",
         water: "#bcc7cd", waterway: "#bcc7cd",
         waterLine: "#d6dee1",
+        // The pause map's sea in hard terraces, measured 22 Nov along a line from the south-west
+        // coast out to sea (Screenshot_1): near-white surf, wide light bands over the shelf, then
+        // dark steps packed close down the drop-off to a flat slate deep. Real seabed depths stand
+        // in for the game's: shelf bands every few metres, the drop-off from 200 m down.
+        // Gone by z12: along some coasts the depth data has pits that would paint over the shore up
+        // close (Mumbai, 22 Nov). The shallows above 6 m stay the flat surf colour: land reclaimed from the sea (Mumbai's
+        // Coastal Road, docks) still reads as seabed in the depth data, and it is nearly all
+        // shallower than that, so no terrace paints over it.
+        depth: {
+          stepped: true, top: -6, coast: "#d8dde0", fade: [10.5, 12],
+          // Packed into the first 150 m, so the sea turns slate as close to the coast as it does in
+          // the game (Los Santos drops off fast; India's west coast shelves for 100 km).
+          stops: [
+            [-150, "#3a4b52"], [-100, "#405158"], [-70, "#475862"], [-52, "#4f636c"], [-42, "#546871"],
+            [-35, "#5b6f78"], [-29, "#637780"], [-24, "#687c85"], [-20, "#748791"], [-17, "#7c8e98"],
+            [-14.5, "#84959f"], [-12.5, "#8e9fa9"], [-11, "#98a9b1"], [-9.5, "#a4b5b9"], [-8.2, "#bdc8ce"], [-7, "#c8d1d6"],
+          ],
+        },
         building: "#424242", buildingLine: null,
         // Flyovers seen from the radar's 45 degree tilt (see bridgeLayers).
         bridge: { lift: 4.0, face: 1.4, faceColor: "#626262", edge: "#7d7d7d", shadow: { color: "#000000", opacity: 0.6 } },
@@ -108,6 +126,12 @@
         park: "#d5b98e", wood: "#cfb287", grass: "#d5b98e", sand: "#e3cca3",
         water: "#9e9985", waterway: "#9e9985",
         waterLine: "#8c8775", waterLineBlur: 4, waterLineOpacity: 0.85,
+        // Soft painted shading, measured 22 Nov off Saint Denis: a greener tint at the shore, a
+        // darker band a little way out, then the open water a shade lighter again.
+        depth: {
+          top: -1, coast: "#9b9c8e", fade: [10.5, 12],
+          stops: [[-200, "#a39e8a"], [-40, "#9d9982"], [-14, "#8f8a73"], [-6, "#958f7b"], [-2.5, "#999887"], [-1.5, "#9b9c8e"]],
+        },
         building: "#e4cfaa", buildingLine: "#4d473f",
         rail: "#4d473f", railStyle: "dots", railDot: "#ebddc0",
         roadScale: 1.1,
@@ -166,6 +190,8 @@
             land: "#6c6452", residential: "#6c6452", industrial: "#695f4f",
             park: "#68614e", wood: "#655e4b", grass: "#68614e", sand: "#72695a",
             water: "#57584a", waterway: "#57584a", waterLine: "#4b4c40",
+            // The radar's water is the pause map's at about 40%; no capture shows its shading.
+            depth: null,
             building: "#6c6452", buildingLine: "#5a5244",
             rail: "#45403a", railDot: "#8a806c",
             roadScale: 1.3, roadBlur: 0.8,
@@ -511,6 +537,31 @@
     return out;
   }
 
+  // Seabed depth: Terrain Tiles (terrarium encoding) on AWS Open Data, free and keyless. Under the sea
+  // they carry ETOPO1/GEBCO depths up to z10 only; past that they read 0, so maxzoom stays 10.
+  const DEPTH_SOURCE = {
+    type: "raster-dem", encoding: "terrarium", tileSize: 256, maxzoom: 10,
+    tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+    attribution: "Sea depth: Terrain Tiles (Mapzen, ETOPO1, GEBCO and others)",
+  };
+
+  // A colour ramp over the seabed: stops are [metres (negative, below sea level), colour], deepest
+  // first. Each colour holds from its depth up to the next stop, and the last one up to `top`;
+  // "stepped" makes hard terraces (GTA V), otherwise colours blend (GTA VI, Red Dead). Above `top`
+  // the layer is clear, so the flat water fill shows along the coast and on every lake and river:
+  // give the last stop the water's own colour and that edge can't be seen.
+  function depthRamp(stops, stepped, top) {
+    const pts = [];
+    stops.forEach(([d, c], i) => {
+      if (stepped && i > 0) pts.push([d - 0.01, stops[i - 1][1]]);
+      pts.push([d, c]);
+    });
+    pts.push([top - 0.01, stops[stops.length - 1][1]], [top, "rgba(0,0,0,0)"]);
+    const e = ["interpolate", ["linear"], ["elevation"]];
+    for (const [d, c] of pts) e.push(d, c);
+    return e;
+  }
+
   function buildStyle(theme, opts) {
     const car = !!(opts && opts.car);
     const m = paletteFor(theme, opts && opts.variant);
@@ -584,8 +635,25 @@
     layers.push({
       id: "water", type: "fill", source: "omt", "source-layer": "water",
       filter: ["!=", ["get", "brunnel"], "tunnel"],
-      paint: { "fill-color": m.water },
+      // While the depth shading shows, flat water is the coast's colour (the shallows the depth ramp
+      // leaves clear); by street zoom it is back to the theme's water.
+      paint: { "fill-color": m.depth && m.depth.coast ? ["interpolate", ["linear"], ["zoom"], m.depth.fade[0], m.depth.coast, m.depth.fade[1], m.water] : m.water },
     });
+    // Sea depth, the way the games shade their seas: light over shallow shelves, dark over deep
+    // water (GTA V's hard terraces, GTA VI's soft shelves, Red Dead's darker band offshore). Depth
+    // comes from the seabed in the free Terrain Tiles; it exists there only to z10, so the source
+    // stops at z10 and MapLibre stretches it. That coast is about 150 m soft, and nothing can clip
+    // this layer to the water, so it fades out before street zoom, where flat water takes over.
+    if (m.depth) {
+      layers.push({
+        id: "water-depth", type: "color-relief", source: "depth",
+        maxzoom: m.depth.fade[1],
+        paint: {
+          "color-relief-color": depthRamp(m.depth.stops, m.depth.stepped, m.depth.top ?? 0),
+          "color-relief-opacity": ["interpolate", ["linear"], ["zoom"], m.depth.fade[0], m.depth.opacity ?? 1, m.depth.fade[1], 0],
+        },
+      });
+    }
     layers.push(waterwayLayer);
 
     layers.push({
@@ -968,6 +1036,7 @@
       glyphs: custom ? opts.glyphs : `${OFM}/fonts/{fontstack}/{range}.pbf`,
       sources: {
         omt: { type: "vector", url: `${OFM}/planet` },
+        ...(m.depth ? { depth: DEPTH_SOURCE } : {}),
         route: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
       },
       layers,
