@@ -65,6 +65,7 @@
     // The pause map's sea depth and shore rim belong to the pause map, not the minimap.
     depth: null,
     waterLine: null,
+    hillshade: null,
   };
   // Golden hour: the minimap dims and warms; roads keep their lead over the ground.
   const VI_MINIMAP_DUSK = {
@@ -338,6 +339,8 @@
         water: "#8ff3ff", waterway: "#8ff3ff",
         waterLine: "#c9fbe9",
         depth: { bands: [[10, "#82f0fd"], [20, "#78ecfc"], [50, "#71e8fb"], [200, "#6ae3f8"]] },
+        // Hills lit from the north-west: deeper green in the shade, warm cream on the lit side.
+        hillshade: { strength: 0.35, shadow: "rgba(38, 104, 78, 0.55)", highlight: "rgba(255, 255, 238, 0.5)", accent: "rgba(38, 104, 78, 0.3)" },
         building: "#dce5f4", buildingLine: null,
         // Raised buildings, pale blue; the light shades their walls a darker blue.
         buildings3d: { color: "#c8d8f0", opacity: 0.96, heightScale: 1, minHeight: 4, facades: "" },
@@ -375,6 +378,7 @@
             water: "#2e3069", waterway: "#2e3069",
             waterLine: "#353c7f",
             depth: { bands: [[10, "#2a2d63"], [20, "#282b5e"], [50, "#26265a"], [200, "#232455"]] },
+            hillshade: { strength: 0.35, shadow: "rgba(0, 12, 20, 0.6)", highlight: "rgba(70, 150, 150, 0.22)", accent: "rgba(0, 12, 20, 0.35)" },
             building: "#343764",
             buildings3d: { color: "#414a7a", opacity: 0.96, heightScale: 1, minHeight: 4, facades: "-night" },
             bridge: { lift: 5.0, face: 1.7, faceColor: "#4a4d70", edge: "#9a9cb0", shadow: { color: "#05061a", opacity: 0.6 } },
@@ -600,6 +604,14 @@
     attribution: "Sea depth © Open Waters: Seascape (not for navigation)",
   };
 
+  // Land elevation for hill shading: Terrain Tiles on AWS Open Data (terrarium), free and keyless,
+  // land detail to z15 (SRTM, 3DEP, GMTED).
+  const HILLS_SOURCE = {
+    type: "raster-dem", encoding: "terrarium", tileSize: 256, maxzoom: 15,
+    tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+    attribution: "Hills: Terrain Tiles (Mapzen; SRTM, USGS)",
+  };
+
   // Depth bands as [shallowest metres of the band, colour], shallow first. Areas shallower than the
   // first band stay clear, so the flat water fill shows along the coast and on every lake and river.
   // The bands fade out by z13: off India the data is GEBCO's 450 m grid, which close up turns into
@@ -663,6 +675,22 @@
         paint: { "fill-pattern": m.patterns.wood },
       });
       layers.push({ id: "pattern-park", type: "fill", source: "omt", "source-layer": "park", paint: { "fill-pattern": m.patterns.park } });
+    }
+
+    // Soft light and shade on the hills, like the "Visit Leonida" poster's relief (the in-game pause
+    // map captures read flat; Gaurav chose it, 22 Nov). Same Terrain Tiles as Red Dead's contours.
+    // Phone only until its cost in the car is measured.
+    if (m.hillshade && !car) {
+      layers.push({
+        id: "hillshade", type: "hillshade", source: "hills",
+        paint: {
+          "hillshade-exaggeration": m.hillshade.strength,
+          "hillshade-shadow-color": m.hillshade.shadow,
+          "hillshade-highlight-color": m.hillshade.highlight,
+          "hillshade-accent-color": m.hillshade.accent || m.hillshade.shadow,
+          "hillshade-illumination-direction": 315,
+        },
+      });
     }
 
     const waterwayLayer = {
@@ -1078,6 +1106,7 @@
       sources: {
         omt: { type: "vector", url: `${OFM}/planet` },
         ...(m.depth ? { seabed: SEABED_SOURCE } : {}),
+        ...(m.hillshade && !car ? { hills: HILLS_SOURCE } : {}),
         route: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
       },
       layers,
