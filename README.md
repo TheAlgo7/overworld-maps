@@ -65,7 +65,7 @@ The APK and the Play copy are signed differently, so uninstall one before instal
   <img src="docs/readme/world-gta5.webp" alt="Drive the dark city: the GTA V world on the car screen and the phone" width="100%">
 </picture>
 
-**GTA V.** The pause map: near-black land, flat grey roads, ice-pale water, no labels, the game's shop blips, a flat waypoint-purple route, a scale bar and the area name in the corner. The radar's gentle tilt while driving. GTA menus and HUD.
+**GTA V.** The pause map: near-black land, flat grey roads, ice-pale water that darkens where the sea gets deep, no labels, the game's shop blips, a flat waypoint-purple route, a scale bar and the area name in the corner. The radar's gentle tilt while driving. GTA menus and HUD.
 
 <picture>
   <source media="(max-width: 600px)" srcset="docs/readme/world-rdr2-mobile.webp">
@@ -79,7 +79,7 @@ The APK and the Play copy are signed differently, so uninstall one before instal
   <img src="docs/readme/world-gta6.webp" alt="It follows the sun: the GTA VI world at night on the car screen and by day on the phone" width="100%">
 </picture>
 
-**GTA VI.** The minimap from Rockstar's 2026 Extended Look: a steep 3D view close in, pale warm-grey ground, broad roads with lane dashes, raised and shaded buildings, flyovers standing over the roads below, grey-teal water, no names, and a pink route that fades in just ahead of the marker. It follows the sun: pale by day, warm at golden hour, violet slate at night. Rounded dark-glass HUD.
+**GTA VI.** Two maps, as in the game, matched to the launch release. The pause map: soft green land, white roads, a bright cyan sea that deepens offshore, periwinkle buildings standing in 3D, gentle hill shading, place pins, and the game's big grey place names (cities and districts in tall condensed capitals, neighbourhoods smaller). Before sunrise it turns to dark teal land, indigo water and slate buildings. On a phone trip it switches to the minimap: a steep 3D view close in, grey ground, lane dashes, flyovers standing over the roads below, and a pink route that fades in just ahead of the marker. The car keeps the pause map. Menus in the game's silver and violet.
 
 <picture>
   <source media="(max-width: 600px)" srcset="docs/readme/phone-mobile.webp">
@@ -90,7 +90,8 @@ The APK and the Play copy are signed differently, so uninstall one before instal
 
 ## Features
 
-- **The car screen comes first.** The HUD owns the left of the Android Auto screen and Android Auto keeps the right: the turn card with "Then" and road alerts, the time card with the speedometer and the speed-limit sign, the street name along the bottom. It scales to every head unit and to split screen beside Spotify.
+- **The car screen comes first.** The game's map fills the Android Auto screen, and Android Auto's own cards carry the turn, "Then", lanes and time to go, in each world's colours with its own turn tiles (purple for GTA V, red for Red Dead, pink for GTA VI). Your speed, the speed-limit sign and camera alerts sit above the time card. It scales to every head unit and to split screen beside Spotify.
+- **Pick the route's colour.** Each world's own route, or the game's other one: yellow in GTA V, yellow or blue in Red Dead, cyan in GTA VI, with the destination marker to match.
 - **Google's routes, the game's look.** Trips follow Google Maps' own route, with its traffic, closures and time to go, laid onto the game map. One switch turns Google off and uses only open data.
 - **Every light, every camera.** Traffic lights on the route, speed cameras ahead, accidents, road works and closures along the way, and speed-limit signs for each world that turn red at 5 km/h over.
 - **Flyovers you drive under.** Bridges stand over the roads they cross, and the route runs under a flyover you pass beneath and over one you drive on.
@@ -102,11 +103,11 @@ The APK and the Play copy are signed differently, so uninstall one before instal
 
 ### On the car screen
 
-- **Any car screen.** The HUD is drawn for the Curvv's wide screen and scales down to fit smaller head units and the map's half of a split screen, so nothing overlaps. Switching between full screen and split screen glides instead of jumping.
+- **Any car screen.** Everything is sized for the Curvv's wide screen and scales down to smaller head units and the map's half of a split screen, so nothing overlaps. North rides the edge of the screen (N, S, E and W in Red Dead), and a destination off the screen waits on the edge in its own marker. Switching between full screen and split screen glides instead of jumping.
 - **Map buttons in the game's style.** Sound, zoom and the route overview are round buttons drawn in each world's look, in place of Android Auto's grey ones. They appear with a touch and leave with Android Auto's own buttons, so the map stays clear while driving. Dragging follows the finger, a flick glides on and a pinch zooms where your fingers are. Drag, pinch or zoom the map and a **re-centre** button stays until you tap it: your own marker in the route's colour, and the camera glides back onto the car in under half a second.
 - **A camera like each game's, zoomed like Google's.** Each world has its own tilt (steep 3D for GTA VI, gentle for GTA V, flat for Red Dead). The map pulls back on a fast straight road and comes in before a turn. Your marker sits low and right of centre, pointing straight up the road, and is drawn where the car is now, not a GPS fix behind. Between fixes the camera and the marker keep moving along the route instead of stopping to wait for the next one.
-- **Menus in the game's look.** Everything of Overworld's sits in one column on the left, like Google's one card. Settings, Saved, Nearby and search results open as panels in the world's own style over the live map, not as Android Auto's plain full-screen lists (those are one switch away). While driving, Nearby, Settings and End come up with a touch and leave with Android Auto's own buttons.
-- **Settings in the car, kept apart from the phone's.** The theme, GTA VI's time of day, place icons, traffic, 3D buildings, the game HUD, the camera beep and + Cam all switch from the car screen, and the car remembers its own: GTA VI in the car while the phone stays on GTA V. Each switch lights up in the world's colour while it's on, and a drag on the screen scrolls the list, not the map behind it.
+- **Android Auto's own menus, with the world's icons.** Search, Nearby, Saved and Settings open as Android Auto's lists, with each world's icons on the buttons and rows. While driving, Nearby, Settings and End come up with a touch and leave with Android Auto's own buttons. Just arrived, the card names the place.
+- **Settings in the car, kept apart from the phone's.** The theme, GTA VI's time of day, place icons, traffic, 3D buildings, the camera beep and + Cam all switch from the car screen, and the car remembers its own: GTA VI in the car while the phone stays on GTA V. Each switch lights up in the world's colour while it's on, and a drag on the screen scrolls the list, not the map behind it.
 - **Day and night with the car.** In the car, GTA VI's Auto follows what the car says (its light sensor or headlights), from the main screen; the instrument cluster, which can stay dark all day, no longer decides it.
 - **The map between the dials.** In cars with an instrument cluster display (the Curvv's "map view"), the route and the arrow show there too, low on the screen so most of it is road ahead.
 - **Free drive.** With no trip the car map still follows you heading-up and glides between GPS fixes, with your speed, the area name and camera alerts, like Google Maps' free drive. Parked for a few minutes, a compact "Where to?" card comes back with search, Home, Work and your last places, each one tap away.
@@ -145,7 +146,8 @@ The APK and the Play copy are signed differently, so uninstall one before instal
 
 ```mermaid
 flowchart LR
-  app["Overworld app<br/>Kotlin + Compose"] --> car["Android Auto<br/>game HUD on the map surface"]
+  app["Overworld app<br/>Kotlin + Compose"] --> car["Android Auto<br/>game map + Android Auto's cards"]
+  app -- "sea depth, hills" --> extra["Seascape (Open Waters)<br/>AWS Terrain Tiles"]
   app -- "vector tiles" --> ofm["OpenFreeMap<br/>OpenStreetMap data"]
   app -- "route, traffic time, places" --> google["Google Maps<br/>web endpoints, no key"]
   app -- "map matching, traffic lights, flyovers" --> valhalla["Valhalla<br/>FOSSGIS server"]
@@ -157,7 +159,7 @@ flowchart LR
 - **One theme source.** `prototype/themes.js` holds every palette and layer rule. `node tools/export-android.mjs` writes the app's MapLibre style JSON and `ThemeTokens.kt` from it, so the web prototype and the app can't drift apart.
 - **Map:** MapLibre Native through MapLibre Compose, using the OpenGL build (the Vulkan build failed to compile its shaders on a Galaxy S24 Ultra, and only the background drew).
 - **Navigation:** [Ferrostar](https://github.com/stadiamaps/ferrostar) 0.57 follows the route and reroutes. Routes come through our own route provider (`routing/OverworldRoutes.kt`): Google Maps' driving route, asked the way its website asks, then laid onto OpenStreetMap's roads by Valhalla's map matching (`trace_route`), so the turn instructions, lanes and speed limits are OpenStreetMap's while the road chosen is Google's. When Google can't help (stops on the way, a very long trip, a refusal, or a road OpenStreetMap doesn't have), Valhalla plans the route itself. The method is [Vela Maps'](https://github.com/PimpinPumpkin/Vela). India drives on the left and gets metric prompts.
-- **Car:** a navigation `CarAppService`. The game HUD is drawn with Compose on the map surface in place of Android Auto's own cards, and taps on the drawn buttons are passed through to the app.
+- **Car:** a navigation `CarAppService`. The map surface draws only the map and driving information (the route, the marker, speed, the limit sign and alerts). The turn, lanes and time to go are Android Auto's own navigation cards, coloured per world, as Android Auto's quality rules ask. Test builds keep the old drawn game HUD behind a switch, for footage.
 - **Traffic on our own line:** Google's jams come measured along its route, which is the route we drive. Without Google, TomTom rebuilds our route from supporting points and returns its traffic sections, so the colours sit on the line we draw either way.
 - **Flyovers:** the styles draw bridges above other roads by OpenStreetMap's level with a shadow below, and mark where they start (`bridges-start`). The app draws the route under that mark, and draws again on top the stretches Valhalla's `trace_attributes` says are on a bridge.
 - **Flyover calls and the level check:** `routing/VectorTiles.kt` reads OpenFreeMap's own zoom-14 tiles along the route (a small vector-tile reader, roads only) and `routing/RoadLevels.kt` walks the route every 5 m: which stretches are on a bridge or in a tunnel, which flyovers or underpasses run beside it, and where each splits from the route, found by following the other road back until the two meet. `location/LevelCheck.kt` compares each GPS fix with the route and with those roads beside it, with the barometer's climb or drop as a second witness, and starts the reroute on the road the car is on.
@@ -314,7 +316,7 @@ It is optional and unlocks nothing: every world and every feature is the same fo
 
 ## Credits
 
-Map data © OpenStreetMap contributors (ODbL). Tiles: OpenFreeMap, OpenMapTiles schema. Routes, traffic and places: Google Maps, asked the way [Vela Maps](https://github.com/PimpinPumpkin/Vela) (GPL-3.0) asks it. Map matching, routing and traffic lights: Valhalla on the FOSSGIS server. Speed cameras: Overpass API. Live traffic (optional): TomTom. Search: Photon by komoot. Navigation: Ferrostar by Stadia Maps (BSD 3-Clause). Turn arrows: Mapbox Directions Icons (CC0). Fonts: Barlow, Barlow Condensed, Inter, IM FELL English, Passion One, Crimson Text, Merriweather, Raleway (SIL Open Font License) and Homemade Apple (Apache 2.0). Details in `THIRD_PARTY_NOTICES.txt` and `licenses/`.
+Map data © OpenStreetMap contributors (ODbL). Tiles: OpenFreeMap, OpenMapTiles schema. Sea depth: Seascape by Open Waters (CC BY 4.0). Hills and Red Dead's contours: AWS Terrain Tiles (Mapzen, with their sources' credits). Routes, traffic and places: Google Maps, asked the way [Vela Maps](https://github.com/PimpinPumpkin/Vela) (GPL-3.0) asks it. Map matching, routing and traffic lights: Valhalla on the FOSSGIS server. Speed cameras: Overpass API. Live traffic (optional): TomTom. Search: Photon by komoot. Navigation: Ferrostar by Stadia Maps (BSD 3-Clause). Turn arrows: Mapbox Directions Icons (CC0). Fonts: Barlow, Barlow Condensed, Inter, IM FELL English, Passion One, Crimson Text, Merriweather, Raleway (SIL Open Font License) and Homemade Apple (Apache 2.0). Details in `THIRD_PARTY_NOTICES.txt` and `licenses/`.
 
 Overworld Maps is a fan project. It is not affiliated with or endorsed by Rockstar Games or Take-Two Interactive. Grand Theft Auto and Red Dead Redemption are their trademarks, named here only to say which game each look is modelled on.
 
