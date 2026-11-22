@@ -689,8 +689,9 @@
 
     // Soft light and shade on the hills, like the "Visit Leonida" poster's relief (the in-game pause
     // map captures read flat; Gaurav chose it, 22 Nov). Same Terrain Tiles as Red Dead's contours.
-    // Phone only until its cost in the car is measured.
-    if (m.hillshade && !car) {
+    // The car too: on the DHU (S24 Ultra, 23 Nov) GTA VI's car map drew 58-59 fps with no stutters
+    // and 11-13 ms CPU a frame with it, the same as without.
+    if (m.hillshade) {
       layers.push({
         id: "hillshade", type: "hillshade", source: "hills",
         paint: {
@@ -1143,7 +1144,7 @@
       sources: {
         omt: { type: "vector", url: `${OFM}/planet` },
         ...(m.depth ? { seabed: SEABED_SOURCE } : {}),
-        ...(m.hillshade && !car ? { hills: HILLS_SOURCE } : {}),
+        ...(m.hillshade ? { hills: HILLS_SOURCE } : {}),
         route: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
       },
       layers,
