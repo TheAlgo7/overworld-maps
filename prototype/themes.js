@@ -348,7 +348,7 @@
         // Raised buildings in periwinkle, clearly darker than the blocks they stand on (23 Nov, the
         // Ocean Beach map frame: buildings about a quarter darker than the ground, #8197B5 against
         // #CDCDD6 in that darker video grade); the light shades their walls deeper still.
-        buildings3d: { color: "#a6badf", opacity: 0.96, heightScale: 1, minHeight: 4, facades: "" },
+        buildings3d: { color: "#a6badf", opacity: 0.96, heightScale: 1, minHeight: 4, facades: "-map" },
         bridge: { lift: 5.0, face: 1.7, faceColor: "#c4cde0", edge: "#e1e6f1", shadow: { color: "#8c97b4", opacity: 0.35 } },
         light: { color: "#ffffff", intensity: 0.5 },
         rail: "#c9cfdd",
@@ -389,7 +389,7 @@
             depth: { bands: [[10, "#2a2d63"], [20, "#282b5e"], [50, "#26265a"], [200, "#232455"]] },
             hillshade: { strength: 0.35, shadow: "rgba(0, 12, 20, 0.6)", highlight: "rgba(70, 150, 150, 0.22)", accent: "rgba(0, 12, 20, 0.35)" },
             building: "#343764",
-            buildings3d: { color: "#414a7a", opacity: 0.96, heightScale: 1, minHeight: 4, facades: "-night" },
+            buildings3d: { color: "#414a7a", opacity: 0.96, heightScale: 1, minHeight: 4, facades: "-map-night" },
             bridge: { lift: 5.0, face: 1.7, faceColor: "#4a4d70", edge: "#9a9cb0", shadow: { color: "#05061a", opacity: 0.6 } },
             light: { color: "#c9cdf0", intensity: 0.3 },
             rail: "#5d6080",
