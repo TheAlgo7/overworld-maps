@@ -98,6 +98,29 @@ VI_POIS = {
 }
 
 
+# GTA VI's blips as the game draws them since its launch (19 Nov 2026), from GTABase's icon glossary
+# (Gaurav's research folder, copied to "Reference - GTA VI/gtabase", gitignored like every game
+# file): personal builds only. They win over the generated set and the pre-launch sheet; kinds the
+# game has no blip for (food, bars, medical and the rest) keep those.
+VI_REAL = ROOT / "Reference - GTA VI" / "gtabase"
+VI_REAL_POIS = {
+    "vi-fuel": "gas-station",
+    "vi-charging": "ev-charging",
+    "vi-clothes": "clothing-store",
+    "vi-barber": "barber",
+    "vi-store": "grocery",
+    "vi-market": "grocery",
+    "vi-gym": "gym",
+    "vi-bank": "atm",
+    "vi-repair": "paynspray",
+    "vi-tyre": "modshop-car",
+}
+
+
+def vi_real(name: str, size: int) -> Image.Image:
+    return Image.open(VI_REAL / f"{name}.png").convert("RGBA").resize((size, size), Image.LANCZOS)
+
+
 def vi(cell: tuple, scale: int) -> Image.Image:
     size = 22 * scale
     r, c = cell
@@ -221,6 +244,8 @@ for scale, suffix in [(1, ""), (2, "@2x")]:
     # Each at its game's blip size, so a generated icon matches the blips it stands beside.
     for game, prefix, size in [("gta5", "gta-", 22), ("rdr2", "poi-", 24), ("gta6", "vi-", 22)]:
         local.update(generated(game, prefix, size, scale))
+    if VI_REAL.exists():
+        local.update({name: vi_real(icon, 22 * scale) for name, icon in VI_REAL_POIS.items()})
     if len(local) > len(patterns):
         write(LOCAL, local, scale, suffix)
 
@@ -256,6 +281,9 @@ for game in ["gta5", "rdr2", "gta6"]:
         img = art(game, f"my_{kind}", 96, margin=0.04)
         if img is not None:
             saved[f"{game}-{kind}"] = img
+# GTA VI's real safehouse blip (the teal house) for Home, over the generated one.
+if (VI_REAL / "safehouse.png").exists():
+    saved["gta6-home"] = vi_real("safehouse", 96)
 if saved:
     SAVED.mkdir(parents=True, exist_ok=True)
     for name, img in saved.items():
