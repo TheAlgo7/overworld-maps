@@ -34,6 +34,13 @@ android {
         buildConfigField "boolean", "CAR_GAME_HUD", "false"
     }
 
+    // The instrumented tests install with location (and every other runtime permission) granted, so
+    // a run never starts on the car's "Allow location" screen because an earlier run uninstalled the
+    // app and took its permissions with it (23 Nov).
+    installation {
+        installOptions += ["-g"]
+    }
+
     // Google Play upload key (uploadStoreFile, uploadStorePassword, uploadKeyAlias, uploadKeyPassword
     // in local.properties). Play re-signs releases with its own key. Without these, release builds
     // come out unsigned.

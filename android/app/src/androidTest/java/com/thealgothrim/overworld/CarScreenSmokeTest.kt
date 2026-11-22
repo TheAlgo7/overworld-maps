@@ -32,11 +32,19 @@ class CarScreenSmokeTest {
     @Suppress("UNCHECKED_CAST") return result as T
   }
 
+  /** A failed check mustn't leave its trip running into the next test. */
+  @org.junit.After
+  fun endTrip() {
+    main { AppModule.viewModel.stopNavigation(); AppModule.viewModel.setTestDrive(false) }
+  }
+
   @Test
   fun carScreenShowsThemedTrip() {
     val appContext = instrumentation.targetContext
     AppModule.init(appContext)
     val store = AppModule.themeStore
+    // Km chosen in Settings: on Auto the emulator's US region would mean miles.
+    main { AppModule.prefs.setUnits(com.thealgothrim.overworld.prefs.Units.KM) }
     main {
       store.select("gta5")
       store.selectCar("gta5")
@@ -55,7 +63,8 @@ class CarScreenSmokeTest {
     val idle = main { screen.onGetTemplate() } as NavigationTemplate
     val message = idle.navigationInfo as MessageInfo
     assertEquals("Set a waypoint", message.title.toString())
-    assertTrue("idle card doesn't name the world: ${message.text}", message.text.toString().contains("GTA V"))
+    // The world's name is already on the map (0.6.3 car look), so the card only says how to pick.
+    assertEquals("Search, or pick from Saved or Nearby", message.text.toString())
     // Nothing on the car screen sends the driver to the phone (Play's Android Auto review, rule VI-1).
     assertTrue("car idle text mentions the phone: ${message.text}", message.text?.toString()?.contains("phone") != true)
     val titles = idle.actionStrip!!.actions.map { it.title.toString() }
@@ -115,7 +124,7 @@ class CarScreenSmokeTest {
     val withCam = main { screen.onGetTemplate() } as NavigationTemplate
     assertEquals(listOf("End", "Nearby", "Settings", "+ Cam"), withCam.actionStrip!!.actions.map { it.title.toString() })
     main { store.setCarCamButton(false) }
-    // Metric on the dashboard whatever the phone's language (the emulator is en-US).
+    // Km in Settings means km on the dashboard, whatever the phone's language (the emulator is en-US).
     val unit = routing.currentDistance!!.displayUnit
     assertTrue("turn card not metric: $unit", unit == androidx.car.app.model.Distance.UNIT_METERS || unit == androidx.car.app.model.Distance.UNIT_KILOMETERS)
     android.util.Log.i(

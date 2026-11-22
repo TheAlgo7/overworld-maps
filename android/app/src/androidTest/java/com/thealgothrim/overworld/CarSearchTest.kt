@@ -35,6 +35,16 @@ class CarSearchTest {
     assertTrue(what, main(check))
   }
 
+  /** Km, as in Settings (on Auto the emulator's US region would mean miles), and no trip left over. */
+  @org.junit.Before
+  fun setUp() {
+    AppModule.init(instrumentation.targetContext)
+    main {
+      AppModule.prefs.setUnits(com.thealgothrim.overworld.prefs.Units.KM)
+      AppModule.viewModel.stopNavigation()
+    }
+  }
+
   @Test
   fun searchOnTheCarScreenFindsPlacesAndPlusCodes() {
     val context = instrumentation.targetContext

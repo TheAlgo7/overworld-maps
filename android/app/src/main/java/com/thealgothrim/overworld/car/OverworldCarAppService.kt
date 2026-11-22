@@ -71,7 +71,11 @@ class OverworldCarSession : Session() {
    * Before this it was dropped: only the request that opened the app was followed.
    */
   override fun onNewIntent(intent: Intent) {
-    if (navigateTo(intent)) carContext.getCarService(ScreenManager::class.java).popToRoot()
+    if (!navigateTo(intent)) return
+    val screens = carContext.getCarService(ScreenManager::class.java)
+    // Back to the map for the new trip, unless the "Allow location" screen is up: the trip can't
+    // guide without location, and that screen closes itself once it's allowed.
+    if (screens.top !is CarLocationScreen) screens.popToRoot()
   }
 
   /** Starts a trip to the place in a navigation intent (a geo: or google.navigation: link). */
