@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeJoin
@@ -272,16 +273,27 @@ private fun RouteLayers(
       // 23-24; at the closest zoom it blends to #c45b4b on parchment). Square ends, so the route's
       // pieces meet without overlapping into a darker spot.
       // In the route's colour: red, or the yellow or blue picked in Settings > Route colour.
-      val chalk = remember(theme.routeLine) { chalkPattern(theme.routeLine) }
-      sources.forEachIndexed { i, source ->
-        LineLayer(
-            id = "$id-line-$i",
-            source = source,
-            pattern = image(chalk),
-            width = lineWidth,
-            cap = const(LineCap.Butt),
-            join = const(LineJoin.Round),
-        )
+      // One layer per colour the world offers, each with its own fixed texture; Settings only shows
+      // one and hides the rest. Changing the texture of a live layer mid-trip left the car screen
+      // with no route, or one that came and went, and new layers per colour crashed on the shared
+      // route source (DHU, 23 Nov).
+      val lines = remember(theme.id) {
+        com.thealgothrim.overworld.theme.ThemeStore.routeLines(theme.id).let { if (theme.routeLine in it) it else it + theme.routeLine }
+      }
+      lines.forEachIndexed { k, colour ->
+        val chalk = remember(colour) { chalkPattern(colour) }
+        val pattern = image(chalk)
+        sources.forEachIndexed { i, source ->
+          LineLayer(
+              id = "$id-line-$i-c$k",
+              source = source,
+              pattern = pattern,
+              width = lineWidth,
+              cap = const(LineCap.Butt),
+              join = const(LineJoin.Round),
+              visible = colour == theme.routeLine,
+          )
+        }
       }
     } else {
       sources.forEachIndexed { i, source ->

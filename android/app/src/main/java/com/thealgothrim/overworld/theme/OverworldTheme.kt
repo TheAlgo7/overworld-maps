@@ -414,6 +414,10 @@ class ThemeStore(context: Context) {
     /** Ids before the 2026-09-28 rename. */
     private val LEGACY = mapOf("metro" to "gta5", "frontier" to "rdr2", "vice" to "gta6")
 
+    /** Every route line colour a world offers: its own first, then the Settings choices. */
+    fun routeLines(id: String): List<Color> =
+        listOf(byId(id).routeLine) + ROUTE_COLOURS[id].orEmpty().mapNotNull { it.line }
+
     fun byId(id: String?): OverworldTheme {
       val key = LEGACY[id] ?: id
       return THEMES.firstOrNull { it.id == key } ?: THEMES.first()

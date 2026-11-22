@@ -315,6 +315,11 @@ class DebugDriveReceiver : BroadcastReceiver() {
             AppModule.themeStore.setCarMapTime(it)
           }
         }
+        // --ei route N: the phone theme's route colour, as Settings > Route colour (0 = the world's own).
+        if (intent.hasExtra("route")) {
+          val store = AppModule.themeStore
+          store.setRouteColour(store.theme.value, intent.getIntExtra("route", 0))
+        }
         // --es car_dark true|false|none: the car's day or night as Android Auto would report it,
         // for the car preview on an emulator (Auto in the car follows it; see MapTime.carVariant).
         intent.getStringExtra("car_dark")?.let { vm.setCarDark(it.toBooleanStrictOrNull()) }
