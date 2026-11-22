@@ -41,17 +41,18 @@ import com.thealgothrim.overworld.ui.vi.ViPrompts
  * page scrolling under it, and the Back prompt in the corner. Settings and You both use it.
  */
 @Composable
-fun PauseMenuFrame(theme: OverworldTheme, title: String, onClose: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+fun PauseMenuFrame(theme: OverworldTheme, title: String, onClose: () -> Unit, violet: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
   val scrim =
       when (theme.skin) {
         Skin.GTA -> Color(0xEB000000)
-        // GTA VI's menu has no solid header, so the map's own controls mustn't show through.
-        Skin.GTA6 -> Color(0xFA141320)
+        // GTA VI's menus are solid: the pause menu's slate, or Settings' violet ([violet]).
+        Skin.GTA6 -> com.thealgothrim.overworld.ui.vi.Vi.Slate
         Skin.RDR -> Color(0xF0080706)
       }
   Box(
       Modifier.fillMaxSize()
           .background(scrim)
+          .then(if (violet && theme.skin == Skin.GTA6) Modifier.background(com.thealgothrim.overworld.ui.vi.Vi.Violet) else Modifier)
           .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
           .windowInsetsPadding(WindowInsets.safeDrawing)
   ) {

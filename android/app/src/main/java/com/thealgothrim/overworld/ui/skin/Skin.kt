@@ -279,7 +279,7 @@ fun SkinPrimaryButton(spec: SkinSpec, label: String, onClick: () -> Unit, modifi
           .then(
               when (spec.skin) {
                 Skin.GTA -> Modifier.background(spec.accent)
-                Skin.GTA6 -> Modifier.clip(RoundedCornerShape(12.dp)).background(spec.accent)
+                Skin.GTA6 -> Modifier.clip(RoundedCornerShape(Vi.corner)).background(spec.accent)
                 Skin.RDR -> Modifier.background(spec.accent).border(1.5.dp, Rdr.White.copy(alpha = 0.8f))
               }
           )
@@ -304,7 +304,7 @@ fun SkinSecondaryButton(spec: SkinSpec, label: String, onClick: () -> Unit, modi
           .then(
               when (spec.skin) {
                 Skin.GTA -> Modifier.background(Color(0x26FFFFFF)).border(1.dp, spec.fg.copy(alpha = 0.25f))
-                Skin.GTA6 -> Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0x1FFFFFFF)).border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(12.dp))
+                Skin.GTA6 -> Modifier.clip(RoundedCornerShape(Vi.corner)).background(Color(0x1FFFFFFF)).border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(Vi.corner))
                 Skin.RDR -> Modifier.background(Color(0x33000000)).border(1.dp, spec.fg.copy(alpha = 0.6f))
               }
           )
@@ -365,16 +365,16 @@ fun SkinRow(
     highlighted: Boolean = false,
     trailing: String? = null,
 ) {
-  val fg = if (highlighted && spec.gta) Color.Black else spec.fg
-  val sub = if (highlighted && spec.gta) Color(0xFF555555) else spec.sub
+  val fg = when { highlighted && spec.gta -> Color.Black; highlighted && spec.vi -> Vi.OnSilver; else -> spec.fg }
+  val sub = when { highlighted && spec.gta -> Color(0xFF555555); highlighted && spec.vi -> Vi.OnSilver.copy(alpha = 0.7f); else -> spec.sub }
   Row(
       Modifier.fillMaxWidth()
           .heightIn(min = 56.dp)
           .then(
               when {
                 highlighted && spec.gta -> Modifier.background(Gta.RowSelected)
-                highlighted && spec.vi ->
-                    Modifier.background(Vi.GlassRaised).drawBehind { drawRect(Vi.Pink, size = Size(3.dp.toPx(), size.height)) }
+                // GTA VI: the pause menu's silver bar.
+                highlighted && spec.vi -> Modifier.background(Vi.Silver)
                 highlighted -> Modifier.background(Color(0x40000000)).border(1.5.dp, Rdr.White.copy(alpha = 0.9f))
                 else -> Modifier
               }
@@ -384,7 +384,7 @@ fun SkinRow(
       verticalAlignment = Alignment.CenterVertically,
   ) {
     icon?.let {
-      GameIconView(it, if (highlighted && spec.gta) Color.Black else spec.sub, Modifier.size(22.dp))
+      GameIconView(it, if (highlighted && (spec.gta || spec.vi)) fg else spec.sub, Modifier.size(22.dp))
       Spacer(Modifier.width(14.dp))
     }
     Column(Modifier.weight(1f)) {
@@ -404,8 +404,7 @@ fun SkinDivider(spec: SkinSpec, modifier: Modifier = Modifier) {
   Canvas(modifier.fillMaxWidth().height(if (spec.rdr) 9.dp else 1.dp)) {
     val y = size.height / 2f
     if (spec.vi) {
-      val inset = 14.dp.toPx()
-      drawLine(Color(0x1FFFFFFF), Offset(inset, y), Offset(size.width - inset, y), strokeWidth = 1.dp.toPx())
+      drawLine(Vi.Hairline, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
     } else if (spec.gta) {
       drawLine(Color(0x33FFFFFF), Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
     } else {
@@ -427,7 +426,7 @@ fun SkinChip(spec: SkinSpec, label: String, icon: GameIcon, onClick: () -> Unit)
           .then(
               when (spec.skin) {
                 Skin.GTA -> Modifier.shadow(6.dp, RoundedCornerShape(0.dp), clip = false).background(spec.panel)
-                Skin.GTA6 -> Modifier.viGlass(corner = 19.dp)
+                Skin.GTA6 -> Modifier.viGlass()
                 Skin.RDR -> Modifier.shadow(6.dp, RoundedCornerShape(2.dp), clip = false).background(spec.panel).border(1.dp, Rdr.Grey.copy(alpha = 0.5f))
               }
           )

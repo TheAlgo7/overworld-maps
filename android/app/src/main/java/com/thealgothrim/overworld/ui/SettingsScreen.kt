@@ -140,7 +140,7 @@ fun SettingsScreen(
 
   fun open(url: String) = runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 
-  PauseMenuFrame(theme, "Settings", onClose) {
+  PauseMenuFrame(theme, "Settings", onClose, violet = true) {
     // A newer Overworld is out: above the tabs, so it's seen whichever tab is open.
     update?.let { u ->
       Rows(theme.skin, listOf(Setting("Update available", "A newer Overworld is out. Tap to get it.", u.label) { AppModule.updates.open(u) }), selected, ::tap)

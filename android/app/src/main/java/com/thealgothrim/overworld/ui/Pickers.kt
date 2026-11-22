@@ -123,12 +123,13 @@ private fun GameTab(spec: SkinSpec, label: String, on: Boolean, onClick: () -> U
           Text(label.uppercase(), color = if (on) Color.Black else Gta.White, fontFamily = spec.title, fontSize = 14.sp, maxLines = 1)
         }
     spec.vi -> {
-      val shape = RoundedCornerShape(10.dp)
+      // The game's Settings tabs: slanted boxes, a faint fill and edge, the open one solid white.
+      val shape = ViSlant
       Box(
-          tab.clip(shape).background(if (on) Vi.Pink else Vi.Glass).border(1.dp, if (on) Vi.Pink else Vi.Hairline, shape).clickable(onClick = onClick).padding(horizontal = 12.dp),
+          tab.clip(shape).background(if (on) Color(0xFFF4F3F6) else Color(0x1AFFFFFF)).border(1.dp, if (on) Color(0xFFF4F3F6) else Color(0x40FFFFFF), shape).clickable(onClick = onClick).padding(horizontal = 14.dp),
           contentAlignment = Alignment.Center,
       ) {
-        Text(label.uppercase(), color = if (on) Vi.Ink else Vi.White, fontFamily = Vi.condensed, fontSize = 16.sp, letterSpacing = 0.8.sp, maxLines = 1)
+        Text(label.uppercase(), color = if (on) Vi.OnSilver else Vi.White, fontFamily = Vi.condensedBold, fontSize = 17.sp, letterSpacing = 0.6.sp, maxLines = 1)
       }
     }
     else ->
@@ -138,19 +139,27 @@ private fun GameTab(spec: SkinSpec, label: String, on: Boolean, onClick: () -> U
   }
 }
 
-/** A group's title: GTA V's black subheader bar, GTA VI's grey capitals, Red Dead's engraved rule. */
+/** GTA VI's slanted tab: a box leaning right, like the tabs along the top of the game's Settings. */
+private val ViSlant =
+    androidx.compose.foundation.shape.GenericShape { size, _ ->
+      val lean = size.height * 0.18f
+      moveTo(lean, 0f); lineTo(size.width, 0f); lineTo(size.width - lean, size.height); lineTo(0f, size.height); close()
+    }
+
+/** A group's title: GTA V's black subheader bar, GTA VI's big white capitals, Red Dead's engraved rule. */
 @Composable
 fun SkinSectionTitle(spec: SkinSpec, title: String) {
   when (spec.skin) {
     Skin.GTA -> Box(Modifier.padding(top = 10.dp)) { GtaMenuSubheader(title) }
+    // Big white condensed capitals, like Settings' "VISUAL EFFECTS".
     Skin.GTA6 ->
         Text(
             title.uppercase(),
-            color = Vi.Sub,
-            fontFamily = Vi.condensed,
-            fontSize = 15.sp,
-            letterSpacing = 1.2.sp,
-            modifier = Modifier.padding(start = 4.dp, top = 16.dp, bottom = 4.dp),
+            color = Vi.White,
+            fontFamily = Vi.condensedBold,
+            fontSize = 24.sp,
+            letterSpacing = 0.4.sp,
+            modifier = Modifier.padding(start = 4.dp, top = 22.dp, bottom = 6.dp),
         )
     Skin.RDR ->
         Column(Modifier.padding(top = 14.dp)) {

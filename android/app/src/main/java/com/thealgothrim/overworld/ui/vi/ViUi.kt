@@ -86,15 +86,30 @@ object Vi {
   val PinkDeep = Color(0xFF9E3D66)
   val Mint = Color(0xFF4BE3C4)
   val Red = Color(0xFFFF4D6D)
-  /** Panels: dark slate glass, like the mission HUD's counter boxes. */
-  val Glass = Color(0xDB1C1B26)
+  /**
+   * Panels: the slate of the game's map cards and menus (measured from the PS5 captures, 22 Nov:
+   * the place card #262634, the pause and Game menus #20212C), nearly solid.
+   */
+  val Glass = Color(0xF2262634)
+  /** The pause menu's own panel. */
+  val Slate = Color(0xFF20212C)
   /** The selected row and other raised pieces. */
-  val GlassRaised = Color(0xF02B2A38)
-  val Hairline = Color(0x24FFFFFF)
+  val GlassRaised = Color(0xF8303140)
+  val Hairline = Color(0x1AFFFFFF)
+  /** Text on the silver selection bar. */
+  val OnSilver = Color(0xFF24232C)
+  /**
+   * The selected row: a bar of white that holds for most of the row, then greys out to the right
+   * (the pause menu's Map row: #E7E7E7, #DEDEDE at 60%, #A9A8AD, #6E6F76 at the end).
+   */
+  val Silver = Brush.horizontalGradient(0f to Color(0xFFE9E9EC), 0.55f to Color(0xFFDEDEDF), 0.8f to Color(0xFFA9A8AD), 1f to Color(0xFF6E6F76))
+  /** Settings sits on violet: #744374 at the top, #5F3D66, #4A2F56 at the bottom. */
+  val Violet = Brush.verticalGradient(0f to Color(0xFF744374), 0.45f to Color(0xFF5F3D66), 1f to Color(0xFF4A2F56))
   /** Text and arrows on pink. */
   val Ink = Color(0xFF17121B)
 
-  val corner = 14.dp
+  /** Small corners like the minimap's frame; the menus themselves are square. */
+  val corner = 6.dp
 
   /** Inter: the minimap's distance and the phone's notifications are set in a grotesk like it. */
   val sans =
@@ -167,12 +182,12 @@ fun ViText(
 
 // ---------------------------------------------------------------- menu
 
-/** The pause menu's title: condensed capitals with a short pink rule under them. */
+/** The menu's title as the game sets it ("SETTINGS", "GAME"): big white condensed capitals. */
 @Composable
 fun ViMenuHeader(title: String, subtitle: String, count: String) {
   Column(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
-    ViText(title.uppercase(), 40.sp, font = Vi.condensedBold, outline = 0.dp, spacing = 1.sp)
-    Box(Modifier.padding(top = 2.dp, bottom = 8.dp).width(54.dp).height(3.dp).background(Vi.Pink, RoundedCornerShape(2.dp)))
+    ViText(title.uppercase(), 42.sp, font = Vi.condensedBold, outline = 0.dp, spacing = 0.5.sp)
+    Spacer(Modifier.height(6.dp))
     Row(Modifier.fillMaxWidth()) {
       Text(subtitle.uppercase(), color = Vi.Sub, fontFamily = Vi.condensed, fontSize = 15.sp, letterSpacing = 1.sp, modifier = Modifier.weight(1f))
       Text(count, color = Vi.Sub, fontFamily = Vi.condensed, fontSize = 15.sp, letterSpacing = 1.sp)
@@ -180,7 +195,11 @@ fun ViMenuHeader(title: String, subtitle: String, count: String) {
   }
 }
 
-/** A menu row: glass, the selected one raised with a pink edge, values in condensed capitals. */
+/**
+ * A menu row as the game draws them: flat on the menu's background with a hairline under it; the
+ * selected one is the silver bar with dark text. Values sit on the right ("‹ HIGH ›" when picked);
+ * on/off settings use the pink switch with its word beside it.
+ */
 @Composable
 fun ViMenuRow(
     label: String,
@@ -190,57 +209,59 @@ fun ViMenuRow(
     checked: Boolean? = null,
     labelColor: Color? = null,
 ) {
-  val shape = RoundedCornerShape(10.dp)
-  Row(
-      Modifier.fillMaxWidth()
-          .padding(vertical = 3.dp)
-          .height(48.dp)
-          .clip(shape)
-          .background(if (selected) Vi.GlassRaised else Vi.Glass)
-          .border(1.dp, if (selected) Vi.Pink.copy(alpha = 0.55f) else Vi.Hairline, shape)
-          .clickable(onClick = onClick),
-      verticalAlignment = Alignment.CenterVertically,
-  ) {
-    Box(Modifier.width(4.dp).fillMaxHeight().background(if (selected) Vi.Pink else Color.Transparent))
-    Spacer(Modifier.width(12.dp))
-    Text(
-        label,
-        color = labelColor ?: Vi.White,
-        fontFamily = Vi.sansMedium,
-        fontSize = 16.sp,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.weight(1f),
-    )
-    value?.let {
+  val ink = if (selected) Vi.OnSilver else Vi.White
+  Column(Modifier.fillMaxWidth()) {
+    Row(
+        Modifier.fillMaxWidth()
+            .height(52.dp)
+            .then(if (selected) Modifier.background(Vi.Silver) else Modifier)
+            .clickable(onClick = onClick)
+            .padding(start = 16.dp, end = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
       Text(
-          if (selected) "‹  ${it.uppercase()}  ›" else it.uppercase(),
-          color = if (selected) Vi.White else Vi.Sub,
-          fontFamily = Vi.condensed,
+          label,
+          color = labelColor ?: ink,
+          fontFamily = Vi.sans,
           fontSize = 17.sp,
-          letterSpacing = 0.6.sp,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
-          modifier = Modifier.widthIn(max = 190.dp),
+          modifier = Modifier.weight(1f),
       )
+      value?.let {
+        Text(
+            if (selected) "‹  $it  ›" else it,
+            color = if (selected) Vi.OnSilver else Vi.Sub,
+            fontFamily = Vi.sans,
+            fontSize = 16.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 190.dp),
+        )
+      }
+      checked?.let {
+        Text(if (it) "On" else "Off", color = if (selected) Vi.OnSilver else Vi.Sub, fontFamily = Vi.sans, fontSize = 16.sp)
+        Spacer(Modifier.width(10.dp))
+        ViSwitch(it)
+      }
     }
-    checked?.let { ViCheck(it) }
-    Spacer(Modifier.width(14.dp))
+    Box(Modifier.fillMaxWidth().height(1.dp).background(Vi.Hairline))
   }
 }
 
-/** A rounded check box: pink with a dark tick when on. */
+/** The game's switch: a pink pill with a white knob when on, an outlined grey one when off. */
 @Composable
-fun ViCheck(checked: Boolean, modifier: Modifier = Modifier) {
-  Canvas(modifier.size(22.dp)) {
-    val s = size.width
-    val r = androidx.compose.ui.geometry.CornerRadius(s * 0.28f)
-    if (checked) {
+fun ViSwitch(on: Boolean, modifier: Modifier = Modifier) {
+  Canvas(modifier.size(width = 40.dp, height = 24.dp)) {
+    val r = androidx.compose.ui.geometry.CornerRadius(size.height / 2f)
+    val knob = size.height * 0.36f
+    if (on) {
       drawRoundRect(Vi.Pink, cornerRadius = r)
-      val tick = Path().apply { moveTo(s * 0.24f, s * 0.53f); lineTo(s * 0.43f, s * 0.71f); lineTo(s * 0.77f, s * 0.31f) }
-      drawPath(tick, Vi.Ink, style = Stroke(width = s * 0.13f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+      drawCircle(Color.White, knob, Offset(size.width - size.height / 2f, size.height / 2f))
     } else {
-      drawRoundRect(Vi.Sub, cornerRadius = r, style = Stroke(width = s * 0.09f))
+      drawRoundRect(Color(0x33FFFFFF), cornerRadius = r)
+      drawRoundRect(Vi.Sub, cornerRadius = r, style = Stroke(width = 1.5.dp.toPx()))
+      drawCircle(Vi.Sub, knob, Offset(size.height / 2f, size.height / 2f))
     }
   }
 }
@@ -257,21 +278,25 @@ fun ViDescription(text: String, color: Color = Vi.White) {
 
 data class ViPrompt(val key: String, val label: String, val onClick: () -> Unit)
 
-/** Interaction prompts, bottom right: a white round key with the label in condensed capitals. */
+/**
+ * Interaction prompts, bottom right, the way the map screen lists them ("RECENTER ⓛ"): the label in
+ * condensed capitals, then the key in a white ring. A faint shadow keeps them readable over a map.
+ */
 @Composable
 fun ViPrompts(prompts: List<ViPrompt>, modifier: Modifier = Modifier) {
-  Row(
-      modifier.viGlass(corner = 22.dp).padding(horizontal = 10.dp, vertical = 6.dp),
-      horizontalArrangement = Arrangement.spacedBy(10.dp),
-      verticalAlignment = Alignment.CenterVertically,
+  // A slate backing, so rows scrolling under the prompt never run into it.
+  Column(
+      modifier.background(Vi.Slate.copy(alpha = 0.92f), RoundedCornerShape(Vi.corner)).padding(horizontal = 8.dp, vertical = 4.dp),
+      horizontalAlignment = Alignment.End,
+      verticalArrangement = Arrangement.spacedBy(6.dp),
   ) {
     prompts.forEach { p ->
       Row(Modifier.clickable(onClick = p.onClick).padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(26.dp).background(Vi.White, RoundedCornerShape(13.dp)), contentAlignment = Alignment.Center) {
-          Text(p.key, color = Vi.Ink, fontFamily = Vi.sansSemiBold, fontSize = 13.sp)
+        ViText(p.label.uppercase(), 19.sp, font = Vi.condensedBold, outline = 1.dp, spacing = 0.6.sp)
+        Spacer(Modifier.width(10.dp))
+        Box(Modifier.size(26.dp).border(2.dp, Vi.White, RoundedCornerShape(13.dp)), contentAlignment = Alignment.Center) {
+          Text(p.key, color = Vi.White, fontFamily = Vi.sansSemiBold, fontSize = 12.sp)
         }
-        Spacer(Modifier.width(8.dp))
-        Text(p.label.uppercase(), color = Vi.White, fontFamily = Vi.condensed, fontSize = 17.sp, letterSpacing = 0.8.sp)
       }
     }
   }
