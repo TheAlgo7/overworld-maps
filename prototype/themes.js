@@ -341,9 +341,11 @@
         depth: { bands: [[10, "#82f0fd"], [20, "#78ecfc"], [50, "#71e8fb"], [200, "#6ae3f8"]] },
         // Hills lit from the north-west: deeper green in the shade, warm cream on the lit side.
         hillshade: { strength: 0.35, shadow: "rgba(38, 104, 78, 0.55)", highlight: "rgba(255, 255, 238, 0.5)", accent: "rgba(38, 104, 78, 0.3)" },
-        building: "#dce5f4", buildingLine: null,
-        // Raised buildings, pale blue; the light shades their walls a darker blue.
-        buildings3d: { color: "#c8d8f0", opacity: 0.96, heightScale: 1, minHeight: 4, facades: "" },
+        building: "#c3d0ea", buildingLine: null,
+        // Raised buildings in periwinkle, clearly darker than the blocks they stand on (23 Nov, the
+        // Ocean Beach map frame: buildings about a quarter darker than the ground, #8197B5 against
+        // #CDCDD6 in that darker video grade); the light shades their walls deeper still.
+        buildings3d: { color: "#a6badf", opacity: 0.96, heightScale: 1, minHeight: 4, facades: "" },
         bridge: { lift: 5.0, face: 1.7, faceColor: "#c4cde0", edge: "#e1e6f1", shadow: { color: "#8c97b4", opacity: 0.35 } },
         light: { color: "#ffffff", intensity: 0.5 },
         rail: "#c9cfdd",
