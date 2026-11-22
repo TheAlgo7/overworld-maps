@@ -84,10 +84,21 @@ VI_SHEET = {"food": (0, 0), "clothes": (0, 1), "barber": (0, 4), "store": (1, 0)
             "fastfood": (2, 0), "fuel": (3, 3), "my_home": (3, 4), "airport": (4, 2)}
 
 
+def finished(path: Path) -> bool:
+    """A finished blip, used as drawn: a "-v3" or later edit (the GTA VI launch-style redraws)."""
+    version = re.search(r"-v(\d+)\.png$", path.name)
+    return bool(version) and int(version.group(1)) >= 3
+
+
 def original(game: str, name: str) -> Path | None:
     """The latest edit of an icon: "63-shopping-mall-v2.png" over "63-shopping-mall.png"."""
     number = next((n for n, v in NAMES.items() if v == name), None)
     folder = SOURCES[game]
+    # A finished GTA VI blip (v3 and up: the launch-style redraws, 23 Nov) wins over the sheet.
+    if game == "gta6" and number is not None and folder.exists():
+        done = [f for f in folder.glob(f"{number:02d}-*.png") if finished(f)]
+        if done:
+            return max(done, key=lambda f: int(re.search(r"-v(\d+)\.png$", f.name).group(1)))
     if game == "gta6" and name in VI_SHEET:
         r, c = VI_SHEET[name]
         cut = folder.parent / "blips" / f"r{r}c{c}.png"
@@ -179,7 +190,7 @@ def art(game: str, name: str, size: int, margin: float = 0.06, panel: bool = Fal
     icon = Image.open(path).convert("RGBA")
     if panel and name in PLAIN.get(game, ()):
         icon = plain(icon, game in DARK_INK)
-    elif game == "gta6" and next(n for n, v in NAMES.items() if v == name) not in BUTTON_NUMBERS:
+    elif game == "gta6" and next(n for n, v in NAMES.items() if v == name) not in BUTTON_NUMBERS and not finished(path):
         icon = vi_tile(icon, name, path.parent.name == "blips")
     box = icon.getchannel("A").point(lambda a: 255 if a > 8 else 0).getbbox()
     if box:

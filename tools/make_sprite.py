@@ -121,6 +121,30 @@ def vi_real(name: str, size: int) -> Image.Image:
     return Image.open(VI_REAL / f"{name}.png").convert("RGBA").resize((size, size), Image.LANCZOS)
 
 
+def pin(tile: Image.Image) -> Image.Image:
+    """GTA VI's pause-map pin: the tile with a short point under its middle, in the tile's own rim
+    and fill (the launch map's shop and gym pins, 23 Nov). Bare pictograms with no tile (the
+    barber's scissors, the ATM) stand as they are, on the same canvas so they anchor alike."""
+    w, h = tile.size
+    out = Image.new("RGBA", (w, int(h * 1.28)), (0, 0, 0, 0))
+    has_tile = tile.getpixel((int(w * 0.12), h // 2))[3] > 200 and tile.getpixel((w // 2, int(h * 0.88)))[3] > 200
+    if has_tile:
+        d = ImageDraw.Draw(out)
+        # Up the middle column from the bottom: the first solid pixel is the rim, the first clearly
+        # lighter one after it the tile's fill.
+        col = [tile.getpixel((w // 2, y)) for y in range(h - 1, h // 2, -1)]
+        solid = [c for c in col if c[3] > 220]
+        rim = min(solid[:6], key=lambda c: sum(c[:3]))
+        fill = next((c for c in solid[3:] if sum(c[:3]) > sum(rim[:3]) + 150), solid[-1])
+        tip = out.height - 1
+        d.polygon([(w * 0.30, h - 4), (w * 0.70, h - 4), (w / 2, tip)], fill=rim)
+        out.alpha_composite(tile, (0, 0))
+        d.polygon([(w * 0.40, h - 7), (w * 0.60, h - 7), (w / 2, tip - h * 0.14)], fill=fill)
+    else:
+        out.alpha_composite(tile, (0, 0))
+    return out
+
+
 def vi(cell: tuple, scale: int) -> Image.Image:
     size = 22 * scale
     r, c = cell
@@ -246,6 +270,8 @@ for scale, suffix in [(1, ""), (2, "@2x")]:
         local.update(generated(game, prefix, size, scale))
     if VI_REAL.exists():
         local.update({name: vi_real(icon, 22 * scale) for name, icon in VI_REAL_POIS.items()})
+    # Pins of every GTA VI place icon for the pause map ("vi-pin-<kind>").
+    local.update({f"vi-pin-{name[3:]}": pin(img) for name, img in list(local.items()) if name.startswith("vi-") and name[3:] in ART_POIS})
     if len(local) > len(patterns):
         write(LOCAL, local, scale, suffix)
 

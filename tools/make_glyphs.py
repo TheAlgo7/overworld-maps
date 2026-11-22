@@ -7,7 +7,8 @@ cutoff 0.25, metrics top = glyph top minus the font's ascender.
 Run: python tools/make_glyphs.py   (needs Pillow, numpy, scipy, fonttools)
 Fonts (SIL Open Font License) go in tools/fonts/, from github.com/google/fonts/tree/main/ofl:
 raleway/Raleway[wght].ttf, merriweather/Merriweather[opsz,wdth,wght].ttf,
-crimsontext/CrimsonText-BoldItalic.ttf, homemadeapple/HomemadeApple-Regular.ttf
+crimsontext/CrimsonText-BoldItalic.ttf, homemadeapple/HomemadeApple-Regular.ttf;
+barlow-condensed-bold.ttf and inter-medium.ttf are copies of android/app/src/main/res/font/
 """
 from pathlib import Path
 
@@ -25,6 +26,10 @@ STACKS = {
     "MerriweatherBlack": ("merriweather.ttf", "Black"),
     "CrimsonBoldItalic": ("crimson-bolditalic.ttf", None),
     "HomemadeApple": ("homemade-apple.ttf", None),
+    # GTA VI's pause map names: Barlow Condensed Bold for regions, Inter Medium for areas (the app's own
+    # fonts in res/font, also OFL).
+    "BarlowCondensedBold": ("barlow-condensed-bold.ttf", None),
+    "InterMedium": ("inter-medium.ttf", None),
 }
 RANGES = [(0, 255), (256, 511), (8192, 8447)]
 

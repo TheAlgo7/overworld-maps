@@ -220,6 +220,13 @@ private fun DisplayTab(theme: OverworldTheme, spec: SkinSpec, selected: String?,
     val now = (variant ?: "day").replaceFirstChar { it.uppercase() }
     LabeledChoices(spec, if (mapTime == com.thealgothrim.overworld.theme.MapTime.AUTO) "Time of day: by the sun, $now now" else "Time of day", com.thealgothrim.overworld.theme.MapTime.entries, mapTime, { it.label }) { store.setMapTime(it) }
   }
+  // The route's colour: the world's main one first, then the others its game draws.
+  val routeNames = store.routeColours(theme)
+  if (routeNames.size > 1) {
+    store.routeColourChanged.collectAsState().value
+    Gap(10)
+    LabeledChoices(spec, "Route colour", routeNames.indices.toList(), store.routeColourOf(theme), { routeNames[it] }) { store.setRouteColour(theme, it) }
+  }
   LabeledChoices(spec, "Distance units", Units.entries, units, { if (it == Units.AUTO) "Auto (${if (it.miles) "mi" else "km"})" else it.label }) { AppModule.prefs.setUnits(it) }
   // The launcher icon, as pictures like the worlds (his ask, 13 Nov): it follows the world unless
   // one is picked by hand; GTA VI has two, plain and with Macca the Gator.

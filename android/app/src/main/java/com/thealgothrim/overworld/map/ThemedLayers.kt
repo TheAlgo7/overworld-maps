@@ -271,7 +271,8 @@ private fun RouteLayers(
       // Red Dead: chalky red flecks with the map showing through, like the game's (captures 01,
       // 23-24; at the closest zoom it blends to #c45b4b on parchment). Square ends, so the route's
       // pieces meet without overlapping into a darker spot.
-      val chalk = remember { chalkPattern() }
+      // In the route's colour: red, or the yellow or blue picked in Settings > Route colour.
+      val chalk = remember(theme.routeLine) { chalkPattern(theme.routeLine) }
       sources.forEachIndexed { i, source ->
         LineLayer(
             id = "$id-line-$i",
@@ -335,11 +336,16 @@ private fun RouteLayers(
 }
 
 /**
- * Red Dead's route texture: the game's red (COLOR_RED #CC0000) in flecks of different strength,
+ * Red Dead's route texture: the route's colour (the game's red, COLOR_RED #CC0000, or its yellow
+ * or blue from Settings > Route colour) in flecks of different strength,
  * a little lighter and darker in places, thinning out at both edges. MapLibre scales a line
  * pattern to the line's width, so it reads the same at every zoom.
  */
-private fun chalkPattern(): ImageBitmap {
+private fun chalkPattern(base: Color): ImageBitmap {
+  val r0 = (base.red * 255).toInt()
+  val g0 = (base.green * 255).toInt()
+  val b0 = (base.blue * 255).toInt()
+  fun mix(c: Int, to: Int, f: Float) = (c + (to - c) * f).toInt().coerceIn(0, 255)
   val w = 64
   val h = 16
   val rnd = java.util.Random(23)
@@ -350,9 +356,10 @@ private fun chalkPattern(): ImageBitmap {
         val n = rnd.nextFloat()
         val (r, g, b) =
             when {
-              n < 0.12f -> Triple(0xDA, 0x3A, 0x2E)
-              n > 0.9f -> Triple(0xA8, 0x08, 0x08)
-              else -> Triple(0xCC, 0x00, 0x00)
+              // A few lighter and darker flecks of the route's colour (for red: about #D82E2E, #A80000).
+              n < 0.12f -> Triple(mix(r0, 255, 0.18f), mix(g0, 255, 0.18f), mix(b0, 255, 0.18f))
+              n > 0.9f -> Triple(mix(r0, 0, 0.18f), mix(g0, 0, 0.18f), mix(b0, 0, 0.18f))
+              else -> Triple(r0, g0, b0)
             }
         // 55-100% strength, about 78% on average, sparser towards both edges: over the road's dark
         // ink a weaker red read as maroon, where the game's route reads red (capture 01).
@@ -521,7 +528,8 @@ fun ThemedDestination(at: GeographicCoordinate, theme: OverworldTheme, car: Bool
           remember(at) { GeoJsonData.Features(FeatureCollection(Feature(geometry = Point(at.lng, at.lat), properties = buildJsonObject {}))) }
       )
   val painter =
-      remember(theme.id) {
+      // Keyed on the colours too: the route colour setting recolours the marker.
+      remember(theme.id, theme.blipShape, theme.blipFill, theme.blipStroke) {
         when (theme.blipShape) {
           "quatrefoil" -> QuatrefoilPainter(theme.blipFill, theme.blipCenter, theme.blipStroke)
           "crossring" -> CrossRingPainter(theme.blipFill, theme.blipStroke)

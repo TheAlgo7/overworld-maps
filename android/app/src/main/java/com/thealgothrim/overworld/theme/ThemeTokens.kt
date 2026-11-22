@@ -96,7 +96,7 @@ val THEMES: List<OverworldTheme> = listOf(
       carCard = Color(0xFF7A2D52),
       page = Color(0xFFE7E9F4),
       paperOverlay = false,
-      variants = mapOf("night" to MapVariant(page = Color(0xFF10132E), land = Color(0xFF0B3B3D), dark = true), "radar" to MapVariant(page = Color(0xFFBCB4AF), land = Color(0xFFBEB6B1), dark = false), "radar-dusk" to MapVariant(page = Color(0xFF6E6C68), land = Color(0xFF6F6D69), dark = true), "radar-night" to MapVariant(page = Color(0xFF1F1E2A), land = Color(0xFF312C38), dark = true)),
+      variants = mapOf("night" to MapVariant(page = Color(0xFF10132E), land = Color(0xFF0B3B3D), dark = true), "radar" to MapVariant(page = Color(0xFFBCB4AF), land = Color(0xFFBEB6B1), dark = false), "radar-dusk" to MapVariant(page = Color(0xFF6E6C68), land = Color(0xFF6F6D69), dark = true), "radar-night" to MapVariant(page = Color(0xFF1F1E2A), land = Color(0xFF29263E), dark = true)),
       buildings3d = true,
       seaDepth = true,
   ),

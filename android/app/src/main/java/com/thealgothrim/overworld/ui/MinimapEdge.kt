@@ -82,11 +82,12 @@ fun MinimapEdge(
 ) {
   val skin = theme.skin
   val waypoint =
-      remember(theme.id) {
-        when (skin) {
-          Skin.GTA -> QuatrefoilPainter(theme.blipFill, theme.blipCenter, theme.blipStroke)
-          Skin.RDR -> CrossRingPainter(theme.blipFill, theme.blipStroke)
-          Skin.GTA6 -> null
+      // The world's waypoint in the route's colour (Settings > Route colour), by its marker shape.
+      remember(theme.id, theme.blipShape, theme.blipFill, theme.blipStroke) {
+        when (theme.blipShape) {
+          "quatrefoil" -> QuatrefoilPainter(theme.blipFill, theme.blipCenter, theme.blipStroke)
+          "crossring" -> CrossRingPainter(theme.blipFill, theme.blipStroke)
+          else -> null
         }
       }
   val px = LocalDensity.current.density
@@ -202,10 +203,11 @@ fun MinimapEdge(
       if (!onMap) {
         val at = border(bearing(position.target, target) - position.bearing)
         when (skin) {
-          Skin.GTA6 -> EdgeDisc(at, WAYPOINT_SIZE, Vi.Pink, Color(0xFF2A0F1C))
-          else -> {
+          else ->
+            if (waypoint == null) EdgeDisc(at, WAYPOINT_SIZE, theme.blipFill, theme.blipStroke)
+            else {
             val size = if (skin == Skin.RDR) 24.dp else 22.dp
-            Image(waypoint!!, contentDescription = null, modifier = Modifier.offset(at.x - size / 2, at.y - size / 2).size(size))
+            Image(waypoint, contentDescription = null, modifier = Modifier.offset(at.x - size / 2, at.y - size / 2).size(size))
           }
         }
       }

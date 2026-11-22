@@ -185,11 +185,47 @@ enum class MapTime(val label: String) {
  */
 class ThemeStore(context: Context) {
   private val prefs = context.getSharedPreferences("overworld", Context.MODE_PRIVATE)
-  private val _theme = MutableStateFlow(byId(prefs.getString(KEY, null)))
+  /**
+   * The route's colour per world: the main one, or the others each game draws (measured 23 Nov):
+   * GTA V's yellow mission route with its yellow destination disc, Red Dead's yellow objective and
+   * blue routes with its ring-and-cross marker in that colour, GTA VI's cyan for a destination you
+   * set yourself. Applies to the phone and the car.
+   */
+  private fun routeChoice(id: String): Int = prefs.getInt("$KEY_ROUTE_COLOUR$id", 0)
+
+  private fun styled(t: OverworldTheme): OverworldTheme {
+    val alt = ROUTE_COLOURS[t.id]?.getOrNull(routeChoice(t.id))?.takeIf { it.line != null } ?: return t
+    return t.copy(
+        // The edge: the colour's own, else the line's where the world's edge is its line (GTA V),
+        // else the world's (Red Dead's none).
+        routeLine = alt.line!!,
+        routeCasing = alt.casing ?: if (t.routeCasing == t.routeLine) alt.line else t.routeCasing,
+        blipShape = alt.shape ?: t.blipShape, blipFill = alt.line, blipCenter = alt.center ?: alt.line,
+        blipStroke = alt.stroke ?: t.blipStroke,
+    )
+  }
+
+  /** The route colours [theme] offers, first the main one; empty when it has only one. */
+  fun routeColours(theme: OverworldTheme): List<String> = ROUTE_COLOURS[theme.id]?.map { it.name }.orEmpty()
+
+  private val _routeColour = MutableStateFlow(0)
+  /** Bumps when a route colour changes, so Settings reads [routeColourOf] again. */
+  val routeColourChanged: StateFlow<Int> = _routeColour.asStateFlow()
+
+  fun routeColourOf(theme: OverworldTheme): Int = routeChoice(theme.id)
+
+  fun setRouteColour(theme: OverworldTheme, choice: Int) {
+    prefs.edit { putInt("$KEY_ROUTE_COLOUR${theme.id}", choice) }
+    _routeColour.value++
+    _theme.value = styled(byId(_theme.value.id))
+    _carTheme.value = styled(byId(_carTheme.value.id))
+  }
+
+  private val _theme = MutableStateFlow(styled(byId(prefs.getString(KEY, null))))
   val theme: StateFlow<OverworldTheme> = _theme.asStateFlow()
 
   fun select(id: String) {
-    _theme.value = byId(id)
+    _theme.value = styled(byId(id))
     prefs.edit { putString(KEY, id) }
   }
 
@@ -201,12 +237,12 @@ class ThemeStore(context: Context) {
   // A theme picked on the phone carries over to the car as before. A first install starts the car on
   // GTA VI, the theme with both a day and a night map, so the car screen follows the car's day and
   // night from the start (Android for Cars rule MR-1); GTA V's map is always dark, Red Dead's always paper.
-  private val _carTheme = MutableStateFlow(byId(prefs.getString(KEY_CAR_THEME, null) ?: prefs.getString(KEY, null) ?: CAR_FIRST_THEME))
+  private val _carTheme = MutableStateFlow(styled(byId(prefs.getString(KEY_CAR_THEME, null) ?: prefs.getString(KEY, null) ?: CAR_FIRST_THEME)))
   /** The car screen's theme (and its instrument cluster's). */
   val carTheme: StateFlow<OverworldTheme> = _carTheme.asStateFlow()
 
   fun selectCar(id: String) {
-    _carTheme.value = byId(id)
+    _carTheme.value = styled(byId(id))
     prefs.edit { putString(KEY_CAR_THEME, id) }
   }
 
@@ -349,6 +385,28 @@ class ThemeStore(context: Context) {
     private const val KEY_GOOGLE = "use_google"
     private const val KEY_MAP_TIME = "map_time"
     private const val KEY_CAR_THEME = "car_theme"
+    private const val KEY_ROUTE_COLOUR = "route_colour_"
+
+    /** One route colour: null [line] keeps the theme's own. Blip parts default to the line. */
+    private data class RouteColour(
+        val name: String,
+        val line: Color? = null,
+        val casing: Color? = null,
+        val shape: String? = null,
+        val center: Color? = null,
+        val stroke: Color? = null,
+    )
+
+    private val ROUTE_COLOURS =
+        mapOf(
+            // GTA V's mission route and destination: yellow, a yellow disc in a thin dark ring.
+            "gta5" to listOf(RouteColour("Purple"), RouteColour("Yellow", Color(0xFFF0C84F), shape = "dot", stroke = Color(0xFF462E08))),
+            // Red Dead's objective yellow (COLOR_YELLOW, #FFF291 on screen) and its HUD blue, with
+            // the same ring-and-cross marker as the red waypoint.
+            "rdr2" to listOf(RouteColour("Red"), RouteColour("Yellow", Color(0xFFFEF390)), RouteColour("Blue", Color(0xFF57AADC))),
+            // GTA VI: cyan for a destination you set yourself (core #5ACCBE, edge #7AE7E6).
+            "gta6" to listOf(RouteColour("Pink"), RouteColour("Cyan", Color(0xFF5ACCBE), Color(0xFF7AE7E6))),
+        )
     private const val KEY_CAR_MAP_TIME = "car_map_time"
     /** The car's theme on a first install (see _carTheme). */
     private const val CAR_FIRST_THEME = "gta6"

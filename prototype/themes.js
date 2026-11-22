@@ -66,6 +66,8 @@
     depth: null,
     waterLine: null,
     hillshade: null,
+    viNames: null,
+    fonts: null,
   };
   // Golden hour: the minimap dims and warms; roads keep their lead over the ground.
   const VI_MINIMAP_DUSK = {
@@ -90,16 +92,17 @@
     laneDashes: null,
     laneStripes: { color: "#898c85", groups: ["motorway", "major"], share: 0.14 },
   };
-  // Night: violet slate ground and roads, near-black navy water, deep teal grass and parks (the
-  // game's own driving footage at night: #13363a beside roads that match these). Roads a little
+  // Night: navy-violet ground, grey-violet roads, slate-blue buildings, teal grass and open land,
+  // near-black navy water. Ground, buildings and greens corrected 23 Nov from a 4K night drive at
+  // launch (ground #28253D, buildings #354256 to #484D66, open land #244B4B to #295055). Roads a little
   // lighter and greyer since the launch footage (22 Nov: #53545e to #605961 at night, in Gaurav's
   // research folder), so they read against the ground on a dark car screen.
   const VI_MINIMAP_NIGHT = {
-    land: "#312c38", residential: "#312c38", industrial: "#2e2a36",
-    park: "#15383b", wood: "#123133", grass: "#14363a", sand: "#3a3540",
+    land: "#29263e", residential: "#29263e", industrial: "#28253c",
+    park: "#26504f", wood: "#22474a", grass: "#264e51", sand: "#3a3540",
     water: "#0d1120", waterway: "#0d1120",
-    building: "#3c3546",
-    buildings3d: { color: "#41394c", opacity: 0.95, heightScale: 1, minHeight: 4, facades: "-night" },
+    building: "#363f55",
+    buildings3d: { color: "#404a63", opacity: 0.95, heightScale: 1, minHeight: 4, facades: "-night" },
     // Stacked ramps at night stand apart on near-black gaps (Extended Look 20:22, #160f1f
     // between the decks): dark, wider kerbs and a deeper shadow, where the day has pale kerbs.
     bridge: {
@@ -366,7 +369,11 @@
           water: "#2f7f8f", waterHalo: "#8ff3ff",
         },
         route: VI_MINIMAP.route,
-        pois: VI_MINIMAP.pois,
+        // Bundled glyphs on Android for the place names (tools/make_glyphs.py).
+        fonts: { place: "InterMedium", city: "BarlowCondensedBold", water: "InterMedium" },
+        // The pause map's places are pins (a tile with a point under it); the minimap's are tiles.
+        pois: { ...VI_MINIMAP.pois, prefix: "vi-pin-", pins: true },
+        viNames: { region: "#8d92a3", area: "#838997" },
       },
       variants: {
         // Before sunrise (the 6:35 am capture). No dusk of its own: the light map holds until the
@@ -394,6 +401,7 @@
               service: { fill: "#76788c", casing: null },
             },
             label: { road: "#e4e5ee", roadHalo: "#131632", place: "#e4e5ee", placeHalo: "#131632", water: "#b9bbe6", waterHalo: "#2e3069" },
+            viNames: { region: "#6a6b7f", area: "#7d8194" },
           },
         },
         radar: { page: "#bcb4af", dark: false, map: VI_MINIMAP },
@@ -1034,6 +1042,8 @@
         "icon-size": (P.size || 0.95) * (car ? 1.15 : 1),
         "symbol-sort-key": ["step", ["coalesce", ["get", "rank"], 99], 0, 6, 1, 16, 2, 31, 3],
         "icon-padding": 4,
+        // GTA VI's pause map draws its places as pins standing on the spot (P.pins); tiles elsewhere.
+        ...(P.pins ? { "icon-anchor": "bottom" } : {}),
       };
       const minzoom = P.minzoom || 15.5;
       // The most important places first (OpenStreetMap's rank, about 240 of Connaught Place's),
@@ -1099,6 +1109,31 @@
     if (m.labels === false) {
       // Text labels only: the map's blips stay, like the game's pause map.
       for (const l of layers.slice(firstLabel)) if (!l.id.startsWith("poi-blips")) l.layout = Object.assign({}, l.layout, { visibility: "none" });
+    }
+    // GTA VI's pause map names its places (m.viNames), copied from the launch captures (23 Nov):
+    // regions in huge condensed capitals ("MARIANA COUNTY", #6A6B7F at night), areas in a plain grey
+    // grotesk ("Ocean Beach", #838997 by day), no outline. Here cities and towns are the regions,
+    // suburbs and neighbourhoods the areas. Phone only: the car maps carry no names.
+    if (m.viNames && !car) {
+      const N = m.viNames;
+      layers.push({
+        id: "label-vi-area", type: "symbol", source: "omt", "source-layer": "place", minzoom: 12,
+        filter: ["match", ["get", "class"], ["suburb", "neighbourhood", "quarter", "island"], true, false],
+        layout: {
+          "text-field": NAME, "text-font": [custom ? "InterMedium" : "Noto Sans Regular"], "text-max-width": 8,
+          "text-size": ["interpolate", ["linear"], ["zoom"], 12, 13, 16, 19],
+        },
+        paint: { "text-color": N.area },
+      });
+      layers.push({
+        id: "label-vi-region", type: "symbol", source: "omt", "source-layer": "place", minzoom: 5, maxzoom: 13,
+        filter: ["match", ["get", "class"], ["city", "town"], true, false],
+        layout: {
+          "text-field": ["upcase", NAME], "text-font": [custom ? "BarlowCondensedBold" : "Noto Sans Bold"], "text-max-width": 14,
+          "text-size": ["interpolate", ["linear"], ["zoom"], 5, 16, 9, 28, 12, 40], "text-letter-spacing": 0.02,
+        },
+        paint: { "text-color": N.region },
+      });
     }
 
     const style = {
