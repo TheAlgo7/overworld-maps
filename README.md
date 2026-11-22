@@ -79,7 +79,7 @@ The APK and the Play copy are signed differently, so uninstall one before instal
   <img src="docs/readme/world-gta6.webp" alt="It follows the sun: the GTA VI world at night on the car screen and by day on the phone" width="100%">
 </picture>
 
-**GTA VI.** Two maps, as in the game, matched to the launch release. The pause map: soft green land, white roads, a bright cyan sea that deepens offshore, periwinkle buildings standing in 3D, gentle hill shading, place pins, and the game's big grey place names (cities and districts in tall condensed capitals, neighbourhoods smaller). Before sunrise it turns to dark teal land, indigo water and slate buildings. On a phone trip it switches to the minimap: a steep 3D view close in, grey ground, lane dashes, flyovers standing over the roads below, and a pink route that fades in just ahead of the marker. The car keeps the pause map. Menus in the game's silver and violet.
+**GTA VI.** Two maps, as in the game, matched to the launch release. The pause map: soft green land, white roads, a bright cyan sea that deepens offshore, periwinkle buildings standing in 3D, gentle hill shading, place pins, and the game's big grey place names (cities and districts in tall condensed capitals, neighbourhoods smaller). As the sun sets it turns warm and dim, and before sunrise it's dark teal land, indigo water and slate buildings. On a phone trip it switches to the minimap: a steep 3D view close in, grey ground, lane dashes, flyovers standing over the roads below, and a pink route that fades in just ahead of the marker. The car keeps the pause map. Menus in the game's silver and violet.
 
 <picture>
   <source media="(max-width: 600px)" srcset="docs/readme/phone-mobile.webp">
