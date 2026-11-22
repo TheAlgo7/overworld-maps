@@ -221,14 +221,18 @@ internal fun ToggleRow(spec: SkinSpec, title: String, subtitle: String, checked:
   }
 }
 
-/** The OpenStreetMap credit, fixed in place (MapLibre's own (i) button moved around). */
+/**
+ * The map's credits, fixed in place (MapLibre's own (i) button moved around): OpenStreetMap, and
+ * Open Waters where the sea is shaded by depth (its CC BY 4.0 asks for the credit on the map).
+ */
 @Composable
 fun MapCredit(spec: SkinSpec, modifier: Modifier = Modifier) {
-  // White over GTA V's dark map; dark over Red Dead's paper and GTA VI's pale daytime map.
+  // White over a dark map (GTA V, the radars, GTA VI at night), dark over a light one.
   val variant by AppModule.viewModel.mapVariant.collectAsState()
-  val light = when (spec.skin) { Skin.GTA -> true; Skin.RDR -> false; Skin.GTA6 -> variant != null }
+  val theme by AppModule.themeStore.theme.collectAsState()
+  val light = theme.isDark(variant)
   Text(
-      "© OpenStreetMap",
+      if (theme.seaDepth) "© OpenStreetMap · Open Waters" else "© OpenStreetMap",
       color = if (light) Color.White.copy(alpha = 0.55f) else Rdr.OffBlack.copy(alpha = 0.55f),
       fontSize = 10.sp,
       modifier = modifier.padding(horizontal = 4.dp),

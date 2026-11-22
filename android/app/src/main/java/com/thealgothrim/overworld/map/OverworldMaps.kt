@@ -266,10 +266,11 @@ fun OverworldCarMap(
     }
     }
     }
-    // OpenStreetMap attribution stays readable on the car screen too, tucked in the map's own corner.
+    // OpenStreetMap attribution stays readable on the car screen too, tucked in the map's own corner,
+    // with Open Waters where the sea is shaded by its depth data (CC BY 4.0).
     val creditVariant by AppModule.viewModel.carMapVariant.collectAsState()
     Text(
-        text = "© OpenStreetMap contributors",
+        text = if (theme.seaDepth) "© OpenStreetMap contributors · Open Waters" else "© OpenStreetMap contributors",
         color = if (theme.isDark(creditVariant)) Color.White.copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.6f),
         fontSize = 10.sp,
         modifier = Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 6.dp),
@@ -469,7 +470,7 @@ private fun OverworldLayers(
   // Red Dead's contour lines, from real ground heights (Contours.kt), fainter on the radar.
   if (theme.skin == Skin.RDR) {
     val variant by (if (car) AppModule.viewModel.carMapVariant else AppModule.viewModel.mapVariant).collectAsState()
-    ContourLayer(camera, radar = variant == com.thealgothrim.overworld.theme.RADAR, car = car)
+    ContourLayer(camera, radar = com.thealgothrim.overworld.theme.isRadar(variant), car = car)
   }
   val trip = state.routeGeometry?.takeIf { state.isNavigating() && it.size >= 2 }
   val route = shown?.route

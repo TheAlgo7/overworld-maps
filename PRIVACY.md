@@ -23,6 +23,7 @@ To draw the map and plan routes, the app asks these services over encrypted conn
 | TomTom | The route, or the area around it | Traffic, incidents and travel times |
 | OpenFreeMap | The map tiles for the area on screen, along a planned route, and for any area you download in Settings > Offline | Drawing the map (online and offline), and finding the flyovers and underpasses on and beside the route |
 | Terrain Tiles on AWS (s3.amazonaws.com) | Elevation tiles for the area on screen, in the Red Dead world | Drawing its contour lines |
+| Open Waters: Seascape (tiles.openwaters.io) | Sea depth tiles for the area on screen, and for any area you download in Settings > Offline, in the GTA V and GTA VI worlds | Shading the sea by depth |
 | Photon by komoot, again | Where a Timeline stop or your parked car is | Naming the place (a street, area or city) |
 
 These services handle requests under their own privacy policies. The developer has no access to what they log.

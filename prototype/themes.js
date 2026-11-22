@@ -10,6 +10,113 @@
 
   // Palettes follow the September 2026 design research (GTA V, Red Dead 2, GTA VI).
   // A personal build: named after the games. Rename before any public release.
+  // GTA VI's minimap, measured 2026-10-09 from Rockstar's official "An Extended Look" (the 4K download
+  // from rockstargames.com/VI): a sat-nav style minimap lit by the time of day. Pale warm-grey
+  // ground and broad lighter roads, raised cool-grey buildings, grey-teal water, no names, and one
+  // pink route and waypoint (#FB74A5, the same in every frame). At golden hour the same map goes dim
+  // and warm; at night it turns violet slate over near-black water. Since the launch (22 Nov) it is
+  // GTA VI's radar, the look on a phone trip; the pause map is the theme's own palette.
+  const VI_MINIMAP = {
+    land: "#beb6b1", residential: "#beb6b1", industrial: "#b9b4b0",
+    park: "#8e9c8b", wood: "#879784", grass: "#93a190", sand: "#cec3b4",
+    water: "#739ba2", waterway: "#739ba2",
+    building: "#aeafb7", buildingLine: null,
+    // Raised blocks: real heights where OpenStreetMap has them, a low default where it doesn't.
+    // Walls by height (OpenStreetMap's): plain under 12 m, like Rockstar's plain minimap blocks;
+    // windows to 60 m, as on the minimap's modelled buildings (the community frame comparison,
+    // Game Informer's first look); a glass curtain wall above, for towers like Miami's (and
+    // Dubai's). Roofs stay plain (see building-3d-roof). Sprites: tools/make_sprite.py.
+    buildings3d: { color: "#aeafb7", opacity: 0.94, heightScale: 1, minHeight: 4, facades: "" },
+    // Flyovers seen from the minimap's 60 degree tilt: a concrete side under the deck and its
+    // shadow on the ground (see bridgeLayers).
+    bridge: { lift: 5.0, face: 1.7, faceColor: "#9b928c", edge: "#aaa19b", shadow: { color: "#3a3430", opacity: 0.5 } },
+    light: { color: "#ffffff", intensity: 0.5 },
+    rail: "#a3a0a0",
+    // Roads are wide surfaces, a shade lighter than the ground, with no outlines.
+    roadScale: 1.6,
+    roads: {
+      motorway: { fill: "#d4cbc6", casing: null },
+      major: { fill: "#d2c9c4", casing: null },
+      mid: { fill: "#cfc7c2", casing: null },
+      minor: { fill: "#ccc4bf", casing: null },
+      service: { fill: "#c6beb9", casing: null },
+    },
+    // White dashed lane dividers along highways, like the minimap's multi-lane decks.
+    laneDashes: { color: "#ebe5e1", groups: ["motorway", "major"] },
+    glow: null,
+    labels: false,
+    label: {
+      road: "#3a3640", roadHalo: "#d2c9c4", roadFont: "Noto Sans Regular",
+      place: "#2e2a33", placeHalo: "#beb6b1", placeFont: "Noto Sans Bold", placeSpacing: 0.08, upper: true,
+      water: "#2f5560", waterHalo: "#739ba2",
+    },
+    // A flat pink ribbon (#FB74A5) with a thin brighter pink edge each side (#FFA5D4, about a
+    // tenth of its width), the same by day, at golden hour and at night; it fades in just
+    // ahead of the arrow.
+    route: { line: "#fb74a5", casing: "#ffa5d4", edge: 0.1, glow: null, fade: 130 },
+    // Shops and services as GTA VI's blips: pale rounded squares with a slate rim (red for
+    // medical), Gaurav's generated set (tools/make_icons.py), or the sheet he saved
+    // (tools/cut_vi_blips.py) where a build has only that; personal builds only. Every kind the
+    // set has an icon for, except bus stops and shops OpenStreetMap doesn't classify.
+    pois: { prefix: "vi-", minzoom: 15.2, size: 0.85,
+      only: ["cafe", "fastfood", "food", "bar", "hospital", "doctor", "pharmacy", "bank", "post", "hotel", "train", "barber",
+        "clothes", "repair", "store", "market", "fuel", "charging", "police", "theatre", "landmark", "worship", "parking",
+        "airport", "school", "gym", "toilet", "mall", "tyre"] },
+    // The pause map's sea depth and shore rim belong to the pause map, not the minimap.
+    depth: null,
+    waterLine: null,
+  };
+  // Golden hour: the minimap dims and warms; roads keep their lead over the ground.
+  const VI_MINIMAP_DUSK = {
+    land: "#6f6d69", residential: "#6f6d69", industrial: "#6b6a68",
+    park: "#5b6759", wood: "#566355", grass: "#5f6b5d", sand: "#7e7666",
+    water: "#2f5867", waterway: "#2f5867",
+    building: "#5d6370",
+    buildings3d: { color: "#5f6573", opacity: 0.94, heightScale: 1, minHeight: 4, facades: "-dusk" },
+    bridge: { lift: 5.0, face: 1.7, faceColor: "#4d4a45", edge: "#66634f", shadow: { color: "#1e1c1a", opacity: 0.55 } },
+    light: { color: "#fff0e2", intensity: 0.38 },
+    rail: "#5c5a58",
+    roads: {
+      motorway: { fill: "#857f6e", casing: null },
+      major: { fill: "#83806f", casing: null },
+      mid: { fill: "#7f7c72", casing: null },
+      minor: { fill: "#7b7a74", casing: null },
+      service: { fill: "#74736e", casing: null },
+    },
+    // Golden hour shows the highways' lanes: warm lanes between pale grey stripes down the
+    // middle and along both edges of each carriageway (Extended Look 12:41 and 12:57, lanes
+    // #756f63, stripes #787a77, a stripe about half a lane wide), not white dashes.
+    laneDashes: null,
+    laneStripes: { color: "#898c85", groups: ["motorway", "major"], share: 0.14 },
+  };
+  // Night: violet slate ground and roads, near-black navy water, deep teal grass and parks (the
+  // game's own driving footage at night: #13363a beside roads that match these). Roads a little
+  // lighter and greyer since the launch footage (22 Nov: #53545e to #605961 at night, in Gaurav's
+  // research folder), so they read against the ground on a dark car screen.
+  const VI_MINIMAP_NIGHT = {
+    land: "#312c38", residential: "#312c38", industrial: "#2e2a36",
+    park: "#15383b", wood: "#123133", grass: "#14363a", sand: "#3a3540",
+    water: "#0d1120", waterway: "#0d1120",
+    building: "#3c3546",
+    buildings3d: { color: "#41394c", opacity: 0.95, heightScale: 1, minHeight: 4, facades: "-night" },
+    // Stacked ramps at night stand apart on near-black gaps (Extended Look 20:22, #160f1f
+    // between the decks): dark, wider kerbs and a deeper shadow, where the day has pale kerbs.
+    bridge: {
+      lift: 5.0, face: 1.7, faceColor: "#1a1421", edge: "#17101f", edgeWidth: [1.1, 2.8, 4.8],
+      shadow: { color: "#120c18", opacity: 0.75 },
+    },
+    light: { color: "#ddd4ee", intensity: 0.3 },
+    rail: "#4a4552",
+    roads: {
+      motorway: { fill: "#5a5862", casing: null },
+      major: { fill: "#58565f", casing: null },
+      mid: { fill: "#54525c", casing: null },
+      minor: { fill: "#504e58", casing: null },
+      service: { fill: "#48464f", casing: null },
+    },
+    laneDashes: { color: "#625b6e", groups: ["motorway", "major"] },
+  };
+
   const THEMES = {
     // GTA V. Colours measured 2026-09-28 from Gaurav's screenshots of the game's pause map
     // ("Game" style) and in-game radar: near-black land, flat grey roads with no outlines,
@@ -209,123 +316,83 @@
       overlay: "paper",
     },
 
-    // GTA VI. Measured 2026-10-09 from Rockstar's official "An Extended Look" (the 4K download
-    // from rockstargames.com/VI): a sat-nav style minimap lit by the time of day. Pale warm-grey
-    // ground and broad lighter roads, raised cool-grey buildings, grey-teal water, no names, and
-    // one pink route and waypoint (#FB74A5, the same in every frame). At golden hour the same map
-    // goes dim and warm; at night it turns violet slate over near-black water. The app picks the
-    // palette from the sun ("variants" below).
+    // GTA VI, since the launch on 19 Nov 2026: the pause map, measured 22 Nov from real PS5
+    // captures (Gaurav's research folder: the map at 2:45 pm and at 6:35 am). By day, mint-green
+    // land, soft lavender-white blocks, wide pure-white streets, pale blue raised buildings and a
+    // bright cyan sea over paler shallow shelves; before sunrise, navy blocks, lavender-grey
+    // streets, slate buildings, teal-green land and an indigo sea. On a phone trip it turns into the
+    // minimap ("radar", by time of day), the way GTA V and Red Dead do; the car keeps the pause map.
     gta6: {
       id: "gta6",
       skin: "gta6",
       name: "GTA VI",
-      blurb: "Pale sat-nav streets, raised buildings, one pink route. The Leonida minimap, turning violet at night.",
-      page: "#bcb4af",
+      blurb: "Mint land, white streets, a cyan sea and one pink route. The Leonida map, indigo at night.",
+      page: "#e7e9f4",
       dark: false,
       map: {
-        land: "#beb6b1", residential: "#beb6b1", industrial: "#b9b4b0",
-        park: "#8e9c8b", wood: "#879784", grass: "#93a190", sand: "#cec3b4",
-        water: "#739ba2", waterway: "#739ba2",
-        building: "#aeafb7", buildingLine: null,
-        // Raised blocks: real heights where OpenStreetMap has them, a low default where it doesn't.
-        // Walls by height (OpenStreetMap's): plain under 12 m, like Rockstar's plain minimap blocks;
-        // windows to 60 m, as on the minimap's modelled buildings (the community frame comparison,
-        // Game Informer's first look); a glass curtain wall above, for towers like Miami's (and
-        // Dubai's). Roofs stay plain (see building-3d-roof). Sprites: tools/make_sprite.py.
-        buildings3d: { color: "#aeafb7", opacity: 0.94, heightScale: 1, minHeight: 4, facades: "" },
-        // Flyovers seen from the minimap's 60 degree tilt: a concrete side under the deck and its
-        // shadow on the ground (see bridgeLayers).
-        bridge: { lift: 5.0, face: 1.7, faceColor: "#9b928c", edge: "#aaa19b", shadow: { color: "#3a3430", opacity: 0.5 } },
+        // Land outside the towns is green on the pause map; town blocks are pale lavender.
+        land: "#94d1a7", residential: "#e7e9f4", industrial: "#e3e6f2",
+        park: "#8ccfa2", wood: "#86ca9c", grass: "#94d1a7", sand: "#ffffd8",
+        // The sea: a pale cyan shelf along every shore (also lakes and rivers), a mint fringe at the
+        // sand, deep cyan further out (#8ff3ff to #97fefe, #c0fbe8 to #dbfde2, #6feafc to #75ecfc).
+        water: "#8ff3ff", waterway: "#8ff3ff",
+        waterLine: "#c9fbe9",
+        depth: { bands: [[10, "#82f0fd"], [20, "#78ecfc"], [50, "#71e8fb"], [200, "#6ae3f8"]] },
+        building: "#dce5f4", buildingLine: null,
+        // Raised buildings, pale blue; the light shades their walls a darker blue.
+        buildings3d: { color: "#c8d8f0", opacity: 0.96, heightScale: 1, minHeight: 4, facades: "" },
+        bridge: { lift: 5.0, face: 1.7, faceColor: "#c4cde0", edge: "#e1e6f1", shadow: { color: "#8c97b4", opacity: 0.35 } },
         light: { color: "#ffffff", intensity: 0.5 },
-        rail: "#a3a0a0",
-        // Roads are wide surfaces, a shade lighter than the ground, with no outlines.
+        rail: "#c9cfdd",
         roadScale: 1.6,
         roads: {
-          motorway: { fill: "#d4cbc6", casing: null },
-          major: { fill: "#d2c9c4", casing: null },
-          mid: { fill: "#cfc7c2", casing: null },
-          minor: { fill: "#ccc4bf", casing: null },
-          service: { fill: "#c6beb9", casing: null },
+          motorway: { fill: "#ffffff", casing: null },
+          major: { fill: "#fefffb", casing: null },
+          mid: { fill: "#fcfdf8", casing: null },
+          minor: { fill: "#fbfcf6", casing: null },
+          service: { fill: "#f3f5f7", casing: null },
         },
-        // White dashed lane dividers along highways, like the minimap's multi-lane decks.
-        laneDashes: { color: "#ebe5e1", groups: ["motorway", "major"] },
+        laneDashes: null,
         glow: null,
         labels: false,
         label: {
-          road: "#3a3640", roadHalo: "#d2c9c4", roadFont: "Noto Sans Regular",
-          place: "#2e2a33", placeHalo: "#beb6b1", placeFont: "Noto Sans Bold", placeSpacing: 0.08, upper: true,
-          water: "#2f5560", waterHalo: "#739ba2",
+          road: "#5a6075", roadHalo: "#ffffff", roadFont: "Noto Sans Regular",
+          place: "#3d4257", placeHalo: "#e7e9f4", placeFont: "Noto Sans Bold", placeSpacing: 0.08, upper: true,
+          water: "#2f7f8f", waterHalo: "#8ff3ff",
         },
-        // A flat pink ribbon (#FB74A5) with a thin brighter pink edge each side (#FFA5D4, about a
-        // tenth of its width), the same by day, at golden hour and at night; it fades in just
-        // ahead of the arrow.
-        route: { line: "#fb74a5", casing: "#ffa5d4", edge: 0.1, glow: null, fade: 130 },
-        // Shops and services as GTA VI's blips: pale rounded squares with a slate rim (red for
-        // medical), Gaurav's generated set (tools/make_icons.py), or the sheet he saved
-        // (tools/cut_vi_blips.py) where a build has only that; personal builds only. Every kind the
-        // set has an icon for, except bus stops and shops OpenStreetMap doesn't classify.
-        pois: { prefix: "vi-", minzoom: 15.2, size: 0.85,
-          only: ["cafe", "fastfood", "food", "bar", "hospital", "doctor", "pharmacy", "bank", "post", "hotel", "train", "barber",
-            "clothes", "repair", "store", "market", "fuel", "charging", "police", "theatre", "landmark", "worship", "parking",
-            "airport", "school", "gym", "toilet", "mall", "tyre"] },
+        route: VI_MINIMAP.route,
+        pois: VI_MINIMAP.pois,
       },
       variants: {
-        // Golden hour: the minimap dims and warms; roads keep their lead over the ground.
-        dusk: {
-          page: "#6e6c68",
-          dark: true,
-          map: {
-            land: "#6f6d69", residential: "#6f6d69", industrial: "#6b6a68",
-            park: "#5b6759", wood: "#566355", grass: "#5f6b5d", sand: "#7e7666",
-            water: "#2f5867", waterway: "#2f5867",
-            building: "#5d6370",
-            buildings3d: { color: "#5f6573", opacity: 0.94, heightScale: 1, minHeight: 4, facades: "-dusk" },
-            bridge: { lift: 5.0, face: 1.7, faceColor: "#4d4a45", edge: "#66634f", shadow: { color: "#1e1c1a", opacity: 0.55 } },
-            light: { color: "#fff0e2", intensity: 0.38 },
-            rail: "#5c5a58",
-            roads: {
-              motorway: { fill: "#857f6e", casing: null },
-              major: { fill: "#83806f", casing: null },
-              mid: { fill: "#7f7c72", casing: null },
-              minor: { fill: "#7b7a74", casing: null },
-              service: { fill: "#74736e", casing: null },
-            },
-            // Golden hour shows the highways' lanes: warm lanes between pale grey stripes down the
-            // middle and along both edges of each carriageway (Extended Look 12:41 and 12:57, lanes
-            // #756f63, stripes #787a77, a stripe about half a lane wide), not white dashes.
-            laneDashes: null,
-            laneStripes: { color: "#898c85", groups: ["motorway", "major"], share: 0.14 },
-          },
-        },
-        // Night: violet slate ground and roads, near-black navy water, deep teal grass and parks
-        // (the game's own driving footage at night: #13363a beside roads that match these).
+        // Before sunrise (the 6:35 am capture). No dusk of its own: the light map holds until the
+        // sun is 4 degrees down, then this.
         night: {
-          page: "#1f1e2a",
+          page: "#10132e",
           dark: true,
           map: {
-            land: "#312c38", residential: "#312c38", industrial: "#2e2a36",
-            park: "#15383b", wood: "#123133", grass: "#14363a", sand: "#3a3540",
-            water: "#0d1120", waterway: "#0d1120",
-            building: "#3c3546",
-            buildings3d: { color: "#41394c", opacity: 0.95, heightScale: 1, minHeight: 4, facades: "-night" },
-            // Stacked ramps at night stand apart on near-black gaps (Extended Look 20:22, #160f1f
-            // between the decks): dark, wider kerbs and a deeper shadow, where the day has pale kerbs.
-            bridge: {
-              lift: 5.0, face: 1.7, faceColor: "#1a1421", edge: "#17101f", edgeWidth: [1.1, 2.8, 4.8],
-              shadow: { color: "#120c18", opacity: 0.75 },
-            },
-            light: { color: "#ddd4ee", intensity: 0.3 },
-            rail: "#4a4552",
+            land: "#0b3b3d", residential: "#131632", industrial: "#121633",
+            park: "#004542", wood: "#003d3b", grass: "#0b3b3d", sand: "#332f2a",
+            water: "#2e3069", waterway: "#2e3069",
+            waterLine: "#353c7f",
+            depth: { bands: [[10, "#2a2d63"], [20, "#282b5e"], [50, "#26265a"], [200, "#232455"]] },
+            building: "#343764",
+            buildings3d: { color: "#414a7a", opacity: 0.96, heightScale: 1, minHeight: 4, facades: "-night" },
+            bridge: { lift: 5.0, face: 1.7, faceColor: "#4a4d70", edge: "#9a9cb0", shadow: { color: "#05061a", opacity: 0.6 } },
+            light: { color: "#c9cdf0", intensity: 0.3 },
+            rail: "#5d6080",
             roads: {
-              motorway: { fill: "#4c4556", casing: null },
-              major: { fill: "#4a4353", casing: null },
-              mid: { fill: "#46404f", casing: null },
-              minor: { fill: "#433d4b", casing: null },
-              service: { fill: "#3d3845", casing: null },
+              motorway: { fill: "#8d8fa2", casing: null },
+              major: { fill: "#8a8ca0", casing: null },
+              mid: { fill: "#87899c", casing: null },
+              minor: { fill: "#838598", casing: null },
+              service: { fill: "#76788c", casing: null },
             },
-            laneDashes: { color: "#625b6e", groups: ["motorway", "major"] },
+            label: { road: "#e4e5ee", roadHalo: "#131632", place: "#e4e5ee", placeHalo: "#131632", water: "#b9bbe6", waterHalo: "#2e3069" },
           },
         },
+        radar: { page: "#bcb4af", dark: false, map: VI_MINIMAP },
+        "radar-dusk": { page: "#6e6c68", dark: true, map: { ...VI_MINIMAP, ...VI_MINIMAP_DUSK } },
+        "radar-night": { page: "#1f1e2a", dark: true, map: { ...VI_MINIMAP, ...VI_MINIMAP_NIGHT } },
       },
       // The official minimap's player: a white arrow on a dark disc with a black rim, flat on the
       // screen (the app draws Gaurav's drawing of it, tools/blips/). Waypoint: a pink dot.
@@ -535,13 +602,16 @@
 
   // Depth bands as [shallowest metres of the band, colour], shallow first. Areas shallower than the
   // first band stay clear, so the flat water fill shows along the coast and on every lake and river.
+  // The bands fade out by z13: off India the data is GEBCO's 450 m grid, which close up turns into
+  // big angular shards (emulator, 22 Nov), so up close the sea is plain water.
+  const DEPTH_FADE = [11.5, 13];
   function depthLayer(d) {
     const fill = ["step", ["get", "drval1"], d.bands[0][1]];
     for (const [m, c] of d.bands.slice(1)) fill.push(m, c);
     return {
-      id: "water-depth", type: "fill", source: "seabed", "source-layer": "depare",
+      id: "water-depth", type: "fill", source: "seabed", "source-layer": "depare", maxzoom: DEPTH_FADE[1],
       filter: ["all", ["==", ["get", "sys"], "m"], [">=", ["get", "drval1"], d.bands[0][0]]],
-      paint: { "fill-color": fill, ...(d.opacity ? { "fill-opacity": d.opacity } : {}) },
+      paint: { "fill-color": fill, "fill-opacity": ["interpolate", ["linear"], ["zoom"], DEPTH_FADE[0], 1, DEPTH_FADE[1], 0] },
     };
   }
 

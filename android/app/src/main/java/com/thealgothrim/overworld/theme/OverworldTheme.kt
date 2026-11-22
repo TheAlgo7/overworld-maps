@@ -20,6 +20,9 @@ enum class HudFont { CONDENSED, SERIF }
 /** The palette GTA V and Red Dead use while driving: their radar, not the pause map. */
 const val RADAR = "radar"
 
+/** A radar palette: GTA V's and Red Dead's "radar", or one of GTA VI's ("radar-dusk", "radar-night"). */
+fun isRadar(variant: String?): Boolean = variant == RADAR || variant?.startsWith("$RADAR-") == true
+
 /** Which game's interface the app wears: GTA V's menus and HUD, Red Dead's, or GTA VI's. */
 enum class Skin { GTA, RDR, GTA6 }
 
@@ -69,6 +72,8 @@ data class OverworldTheme(
     val variants: Map<String, MapVariant>,
     /** The map raises its buildings (GTA VI); the Layers sheet can lay them flat. */
     val buildings3d: Boolean,
+    /** The sea is shaded by depth from Open Waters' Seascape, which the map credit names. */
+    val seaDepth: Boolean = false,
 ) {
   /**
    * The phone style, or the calmer car cut (wider roads, no texture or glow, fewer labels), in the
@@ -81,11 +86,18 @@ data class OverworldTheme(
 
   /** The map has day, dusk and night palettes (GTA VI), so Settings offers Time of day. */
   val timeOfDay: Boolean
-    get() = variants.keys.any { it != RADAR }
+    get() = variants.keys.any { !isRadar(it) }
 
-  /** The map turns into the game's radar on a trip (GTA V, Red Dead): see OverworldViewModel.mapVariant. */
+  /** The map turns into the game's radar on a trip: see OverworldViewModel.mapVariant. */
   val hasRadar: Boolean
     get() = RADAR in variants
+
+  /**
+   * The radar for a phone trip when the time of day says [timeVariant] ("dusk", "night", null for
+   * day): GTA VI keeps a minimap for each ("radar-dusk", "radar-night"); GTA V and Red Dead have one.
+   */
+  fun radarFor(timeVariant: String?): String =
+      timeVariant?.let { "$RADAR-$it" }?.takeIf { it in variants } ?: RADAR
 
   /** Whether the map is dark in [variant] (light text over it, not dark). */
   fun isDark(variant: String?) = variant?.let { variants[it]?.dark } ?: dark

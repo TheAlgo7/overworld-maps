@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.asAndroidPath
+import com.thealgothrim.overworld.theme.RADAR
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.ClipOp
@@ -282,14 +283,20 @@ fun ViPrompts(prompts: List<ViPrompt>, modifier: Modifier = Modifier) {
  * The light across GTA VI's minimap, measured in Rockstar's frames (top band against the band by
  * the player): by day the far side of the map sits about a tenth darker; at golden hour it's lit
  * warm instead and the near side falls into shade; at night the map is flat. Drawn over the map,
- * under the HUD. [variant]: the palette's time of day ("dusk", "night"; null is day).
+ * under the HUD. [variant]: the map's palette. Only the minimap ("radar", "radar-dusk") is lit
+ * this way; the pause map is flat.
  */
 @Composable
 fun ViMapLight(variant: String?) {
-  if (variant == "night") return
+  val dusk =
+      when (variant) {
+        RADAR -> false
+        "$RADAR-dusk" -> true
+        else -> return
+      }
   Canvas(Modifier.fillMaxSize()) {
     val brush =
-        if (variant == "dusk")
+        if (dusk)
             Brush.verticalGradient(
                 0f to Color(0x1FFFF0E2),
                 0.42f to Color.Transparent,

@@ -59,6 +59,10 @@ Contour lines (Red Dead world): Terrain Tiles on AWS Open Data, Mapzen's Terrari
 (https://registry.opendata.aws/terrain-tiles/). Terrain Tiles contain 3DEP, SRTM and GMTED2010
 content courtesy of the U.S. Geological Survey and ETOPO1 content courtesy of the U.S. National
 Oceanic and Atmospheric Administration. Contour method after maplibre-contour (onthegomap, BSD-3).
+Sea depth shading (GTA V and GTA VI worlds): (c) Open Waters: Seascape
+<https://openwaters.io/charts/seascape>, tile compilation licensed CC BY 4.0, built from GEBCO
+and regional bathymetry under each source's own open terms (listed on that page). Shown as
+map decoration only: not for navigational use.
 
 
 ----------------------------------------------------------------------

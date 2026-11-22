@@ -187,7 +187,7 @@ fun SettingsScreen(
                 Setting("Open-source licences", "The open map data, fonts and libraries Overworld is built on, and their licences. Tap again to open them.", confirm = true) { open(NOTICES_URL) },
                 Setting(
                     "Map data and credits",
-                    "Map data © OpenStreetMap contributors (ODbL), tiles by OpenFreeMap, routing by Valhalla (FOSSGIS), search by TomTom and Photon (komoot), traffic lights from Valhalla and speed cameras from Overpass, Red Dead's contour lines from Terrain Tiles (Mapzen, on AWS; SRTM, USGS), navigation by Ferrostar (Stadia Maps)." +
+                    "Map data © OpenStreetMap contributors (ODbL), tiles by OpenFreeMap, routing by Valhalla (FOSSGIS), search by TomTom and Photon (komoot), traffic lights from Valhalla and speed cameras from Overpass, Red Dead's contour lines from Terrain Tiles (Mapzen, on AWS; SRTM, USGS), sea depth from Open Waters: Seascape (CC BY 4.0, not for navigation), navigation by Ferrostar (Stadia Maps)." +
                         if (live) " Live traffic by TomTom." else " Live traffic is off: add a free TomTom key (tomtomKey in local.properties) for traffic, incidents and live travel times.",
                 ) {},
                 Setting("Website", "overworld.thealgothrim.com: guides, the worlds, what's new. Tap again to open it.", confirm = true) { open(SITE_URL) },

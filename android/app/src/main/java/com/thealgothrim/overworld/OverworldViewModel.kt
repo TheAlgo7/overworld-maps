@@ -607,13 +607,16 @@ class OverworldViewModel :
    * in Settings. Declared after [startPoint]'s saved fix, which it reads while starting up.
    */
   val mapVariant: StateFlow<String?> =
-      combine(AppModule.themeStore.theme, AppModule.themeStore.mapTime, onTrip, everyMinute()) { theme, time, trip, _ -> if (trip && theme.hasRadar) RADAR else variantFor(theme, time) }
+      combine(AppModule.themeStore.theme, AppModule.themeStore.mapTime, onTrip, everyMinute()) { theme, time, trip, _ ->
+            if (trip && theme.hasRadar) theme.radarFor(variantFor(theme, time)) else variantFor(theme, time)
+          }
           .distinctUntilChanged()
           .stateIn(viewModelScope, SharingStarted.Eagerly, variantFor(AppModule.themeStore.theme.value, AppModule.themeStore.mapTime.value))
 
   /**
-   * On a trip, GTA V and Red Dead turn from the pause map into the game's radar, the see-through
-   * minimap the games show while you drive or ride (Gaurav's captures, 13 Nov).
+   * On a trip, the phone's map turns from the pause map into the game's radar, the see-through
+   * minimap the games show while you drive or ride (Gaurav's captures, 13 Nov; GTA VI's since its
+   * launch, 22 Nov, by time of day).
    */
   private val onTrip: Flow<Boolean> get() = navigationUiState.map { it.isNavigating() }.distinctUntilChanged()
 
