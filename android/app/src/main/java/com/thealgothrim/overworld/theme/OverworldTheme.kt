@@ -147,14 +147,21 @@ enum class MapTime(val label: String) {
       }
 
   /**
-   * The car screen's palette. There Auto follows the car itself, the day and night Android Auto
-   * reports from the car's light sensor or headlights (the same switch that recolours Android Auto's
-   * own cards): the day map when the car says day, the night map when it says night, as Android for
-   * Cars rule MR-1 asks of every map by default. Dusk is mid-grey, neither, so in the car it shows
-   * only when held. [carDark] is null until a car has reported; Auto follows the sun till then.
+   * The car screen's palette. There Auto follows the car's headlights, the day and night Android
+   * Auto reports from the light switch or light sensor (the same switch that recolours its own
+   * cards): the night map the moment the car says night, as Android for Cars rule MR-1 asks of
+   * every map. With the lights off it's the sun's: dusk while the sun is setting, else the day map
+   * (Gaurav, 21 Nov: "dusk stays with time of day like sun"). [carDark] is null until a car has
+   * reported; Auto follows the sun till then.
    */
   fun carVariant(carDark: Boolean?, bySun: String?): String? =
-      if (this == AUTO && carDark != null) (if (carDark) "night" else null) else variant(bySun)
+      if (this == AUTO && carDark != null) {
+        when {
+          carDark -> "night"
+          bySun == "dusk" -> "dusk"
+          else -> null
+        }
+      } else variant(bySun)
 
   fun next() = entries[(ordinal + 1) % entries.size]
 }
@@ -196,14 +203,25 @@ class ThemeStore(context: Context) {
     selectCar(THEMES[(i + 1) % THEMES.size].id)
   }
 
-  private val _carGameHud = MutableStateFlow(prefs.getBoolean(KEY_CAR_HUD, true))
   /**
-   * Car screen style while navigating. true: our own game HUD drawn on the map (Android Auto's
-   * turn and ETA cards are not sent). false: Android Auto's standard cards, themed where allowed.
+   * Whether this build may draw the old game HUD and Overworld's own lists on the car screen. Play
+   * builds can't: Android Auto's rule NF-2 keeps the turn, lanes and arrival time in its own cards,
+   * and the map for the map and the drive's own information (the speed, the limit, cameras and
+   * hazards ahead). Play flagged 0.5.10's HUD on 18 Nov 2026. Test builds keep both, off unless
+   * switched on, for footage of the old look.
+   */
+  val carGameHudAllowed: Boolean = com.thealgothrim.overworld.BuildConfig.CAR_GAME_HUD
+
+  private val _carGameHud = MutableStateFlow(carGameHudAllowed && prefs.getBoolean(KEY_CAR_HUD, false))
+  /**
+   * Car screen style while navigating. true (test builds only): the old game HUD drawn on the map,
+   * Android Auto's turn and ETA cards not sent. false: Android Auto's cards in the world's colour
+   * with its own turn arrows, and the speed, limit sign and alerts drawn on the map in the game's art.
    */
   val carGameHud: StateFlow<Boolean> = _carGameHud.asStateFlow()
 
   fun setCarGameHud(on: Boolean) {
+    if (!carGameHudAllowed) return
     _carGameHud.value = on
     prefs.edit { putBoolean(KEY_CAR_HUD, on) }
   }
@@ -217,14 +235,16 @@ class ThemeStore(context: Context) {
     prefs.edit { putBoolean(KEY_CAR_CAM, on) }
   }
 
-  private val _carThemedLists = MutableStateFlow(prefs.getBoolean(KEY_CAR_LISTS, true))
+  private val _carThemedLists = MutableStateFlow(carGameHudAllowed && prefs.getBoolean(KEY_CAR_LISTS, false))
   /**
-   * The car's Settings, Saved and Nearby drawn by Overworld in the theme, over the map. Off: Android
-   * Auto's own plain lists beside the map (the kind Play's Android Auto review expects).
+   * The car's Settings, Saved and Nearby drawn by Overworld in the theme, over the map (test builds
+   * only, see [carGameHudAllowed]). Off: Android Auto's own lists beside the map, with the world's
+   * icons on their rows.
    */
   val carThemedLists: StateFlow<Boolean> = _carThemedLists.asStateFlow()
 
   fun setCarThemedLists(on: Boolean) {
+    if (!carGameHudAllowed) return
     _carThemedLists.value = on
     prefs.edit { putBoolean(KEY_CAR_LISTS, on) }
   }
@@ -288,8 +308,10 @@ class ThemeStore(context: Context) {
             signals = prefs.getBoolean("car_detail_signals", phone.signals),
             incidents = prefs.getBoolean("car_detail_incidents", phone.incidents),
             buildings3d = prefs.getBoolean("car_detail_buildings3d", phone.buildings3d),
-            // Before the car had its own details, its place icons were this one switch.
-            placeIcons = prefs.getBoolean("detail_car_place_icons", true),
+            // Off until the driver turns them on: the car map starts as plain as Google's (Play
+            // review 19 Nov; Gaurav 21 Nov). A new key, so every car starts off: the old one
+            // ("detail_car_place_icons") was saved as on whenever any other car detail changed.
+            placeIcons = prefs.getBoolean("car_detail_place_icons", false),
         )
       }
   )
@@ -303,7 +325,7 @@ class ThemeStore(context: Context) {
       putBoolean("car_detail_signals", d.signals)
       putBoolean("car_detail_incidents", d.incidents)
       putBoolean("car_detail_buildings3d", d.buildings3d)
-      putBoolean("detail_car_place_icons", d.placeIcons)
+      putBoolean("car_detail_place_icons", d.placeIcons)
     }
   }
 

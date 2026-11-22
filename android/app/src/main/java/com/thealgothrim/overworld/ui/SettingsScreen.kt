@@ -327,13 +327,14 @@ private fun VehicleTab(theme: OverworldTheme, spec: SkinSpec, selected: String?,
   SkinSectionTitle(spec, "Android Auto")
   Rows(
       theme.skin,
-      listOf(
+      listOfNotNull(
+          // The old game HUD exists only in test builds; Play builds keep Android Auto's own cards.
           Setting(
               "Car screen",
               if (carGameHud) "Android Auto shows the game HUD: turn, time and street drawn in the theme." else "Android Auto shows its own turn and ETA cards, in the theme's colour.",
               if (carGameHud) "Game HUD" else "Android Auto",
-          ) { store.setCarGameHud(!carGameHud) },
-          Setting("+ Cam on the car screen", "A button on the car's map for marking a speed camera as you pass it. It shows for a few seconds after you touch the screen, then hides again.", onOff(carCamButton)) {
+          ) { store.setCarGameHud(!carGameHud) }.takeIf { store.carGameHudAllowed },
+          Setting("+ Cam on the car screen", "A button on the car screen for marking a speed camera as you pass it, up top with End and Nearby on a trip.", onOff(carCamButton)) {
             store.setCarCamButton(!carCamButton)
           },
           Setting(

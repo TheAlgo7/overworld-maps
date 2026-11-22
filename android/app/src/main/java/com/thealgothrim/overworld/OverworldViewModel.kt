@@ -650,10 +650,14 @@ class OverworldViewModel :
   val carDarkNow: Boolean?
     get() = carDark.value
 
-  /** [mapVariant] for the car screen, which keeps its own theme and time of day, and whose Auto follows the car. */
+  /**
+   * [mapVariant] for the car screen, which keeps its own theme and time of day, and whose Auto
+   * follows the car. No radar on a trip here: on the big screen the radar's grey GTA V and dim
+   * Red Dead read as washed out next to the pause map he matched (Gaurav, 21 Nov).
+   */
   val carMapVariant: StateFlow<String?> =
-      combine(AppModule.themeStore.carTheme, AppModule.themeStore.carMapTime, carDark, onTrip, everyMinute()) { theme, time, dark, trip, _ ->
-            if (trip && theme.hasRadar) RADAR else carVariantFor(theme, time, dark)
+      combine(AppModule.themeStore.carTheme, AppModule.themeStore.carMapTime, carDark, everyMinute()) { theme, time, dark, _ ->
+            carVariantFor(theme, time, dark)
           }
           .distinctUntilChanged()
           .stateIn(viewModelScope, SharingStarted.Eagerly, carVariantFor(AppModule.themeStore.carTheme.value, AppModule.themeStore.carMapTime.value, carDark.value))

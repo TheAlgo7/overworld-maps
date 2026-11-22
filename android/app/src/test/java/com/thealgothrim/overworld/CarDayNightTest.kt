@@ -11,13 +11,13 @@ import org.junit.Test
  */
 class CarDayNightTest {
   @Test
-  fun autoFollowsTheCarNotTheSun() {
+  fun autoFollowsTheHeadlights() {
+    // Lights on: night at once, whatever the sun.
     assertEquals("night", MapTime.AUTO.carVariant(carDark = true, bySun = null))
     assertEquals("night", MapTime.AUTO.carVariant(carDark = true, bySun = "dusk"))
-    // The car says day: the day map, even with the sun down (the car's sensor wins) or at dusk,
-    // whose mid-grey map is neither light nor dark.
+    // Lights off: light, even with the sun down (the car's switch wins); dusk while the sun sets.
     assertNull(MapTime.AUTO.carVariant(carDark = false, bySun = "night"))
-    assertNull(MapTime.AUTO.carVariant(carDark = false, bySun = "dusk"))
+    assertEquals("dusk", MapTime.AUTO.carVariant(carDark = false, bySun = "dusk"))
     assertNull(MapTime.AUTO.carVariant(carDark = false, bySun = null))
   }
 

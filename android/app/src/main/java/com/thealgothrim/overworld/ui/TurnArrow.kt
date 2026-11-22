@@ -40,6 +40,18 @@ fun TurnArrow(content: VisualInstructionContent, side: DrivingSide?, tint: Color
 
 private class Arrow(val content: VisualInstructionContent, val mirrored: Boolean)
 
+/**
+ * The drawing [TurnArrow] would show for [content] (a drawable id) and whether it's mirrored, for
+ * the same arrow on Android Auto's own turn card (car/CarArrows). Null when there's no turn to draw.
+ */
+internal fun turnArrowDrawing(context: Context, content: VisualInstructionContent, side: DrivingSide?): Pair<Int, Boolean>? {
+  val arrow = content.drawnArrow(context, side)
+  val type = arrow.content.maneuverType ?: return null
+  val name = listOfNotNull(type.name, arrow.content.maneuverModifier?.name).joinToString("_").lowercase(Locale.ROOT)
+  val res = context.resources.getIdentifier("direction_$name", "drawable", context.packageName)
+  return if (res == 0) null else res to arrow.mirrored
+}
+
 private fun VisualInstructionContent.drawnArrow(context: Context, side: DrivingSide?): Arrow {
   fun drawn(type: ManeuverType, mod: ManeuverModifier?): Boolean {
     val name = listOfNotNull(type.name, mod?.name).joinToString("_").lowercase(Locale.ROOT)

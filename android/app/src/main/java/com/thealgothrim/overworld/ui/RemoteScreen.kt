@@ -300,18 +300,24 @@ private fun CarScreenSettings(spec: SkinSpec, theme: OverworldTheme) {
         SkinDivider(spec)
         ToggleRow(spec, "3D buildings", "Off lays them flat.", checked = details.buildings3d) { store.setCarDetails(details.copy(buildings3d = !details.buildings3d)) }
       }
-      SkinDivider(spec)
-      ToggleRow(spec, "Game HUD", "Turn, time and street in the game's style. Off uses Android Auto's cards.", checked = gameHud) { store.setCarGameHud(!gameHud) }
+      // The old game HUD and Overworld's own car lists exist only in test builds; Play builds keep
+      // Android Auto's own cards and lists (its rule NF-2).
+      if (store.carGameHudAllowed) {
+        SkinDivider(spec)
+        ToggleRow(spec, "Game HUD", "Turn, time and street in the game's style. Off uses Android Auto's cards.", checked = gameHud) { store.setCarGameHud(!gameHud) }
+      }
       SkinDivider(spec)
       ToggleRow(spec, "Camera beep", "Two notes as a speed camera comes within 500 m.", checked = beep) { AppModule.viewModel.setCameraBeep(!beep) }
       SkinDivider(spec)
-      ToggleRow(spec, "+ Cam button", "Mark a speed camera as you pass it.", checked = camButton) { store.setCarCamButton(!camButton) }
-      SkinDivider(spec)
-      ToggleRow(
-          spec, "Themed car lists",
-          "Settings, Saved and Nearby in the game's look over the map. Off uses Android Auto's plain lists.",
-          checked = themedLists,
-      ) { store.setCarThemedLists(!themedLists) }
+      ToggleRow(spec, "+ Cam button", "On a trip, a button up top marks a speed camera as you pass it.", checked = camButton) { store.setCarCamButton(!camButton) }
+      if (store.carGameHudAllowed) {
+        SkinDivider(spec)
+        ToggleRow(
+            spec, "Themed car lists",
+            "Settings, Saved and Nearby in the game's look over the map. Off uses Android Auto's plain lists.",
+            checked = themedLists,
+        ) { store.setCarThemedLists(!themedLists) }
+      }
     }
   }
 }

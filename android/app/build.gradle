@@ -21,12 +21,17 @@ android {
         // The Car App Library needs 29 (Android 10).
         minSdk 29
         targetSdk 36
-        versionCode 25
-        versionName "0.6.2"
+        versionCode 26
+        versionName "0.6.3"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         // Live traffic (TomTom free tier). Put tomtomKey=... in local.properties.
         buildConfigField "String", "TOMTOM_KEY", "\"${publicBuild ? "" : props.getProperty("tomtomKey", "")}\""
+        // Whether the car screen may draw the old game HUD and Overworld's own lists over the map.
+        // Release builds can't: Android Auto's rule NF-2 keeps the turn, lanes and arrival time in
+        // its own cards (Play flagged 0.5.10 for the HUD on 18 Nov 2026). Test builds keep it, off
+        // unless switched on, for footage of the old look.
+        buildConfigField "boolean", "CAR_GAME_HUD", "false"
     }
 
     // Google Play upload key (uploadStoreFile, uploadStorePassword, uploadKeyAlias, uploadKeyPassword
@@ -48,6 +53,7 @@ android {
         // USB never means uninstalling the app in the car.
         debug {
             applicationIdSuffix ".debug"
+            buildConfigField "boolean", "CAR_GAME_HUD", "true"
         }
         release {
             minifyEnabled false

@@ -153,7 +153,7 @@ fun rememberSpeedNow(uiState: NavigationUiState): SpeedNow {
 }
 
 /** The red of each game's over-limit sign ring, for the speed too. */
-private fun SkinSpec.overRed(): Color = when (skin) { Skin.GTA -> Color(0xFFE8262B); Skin.GTA6 -> Color(0xFFF92F45); Skin.RDR -> Color(0xFFCC0000) }
+internal fun SkinSpec.overRed(): Color = when (skin) { Skin.GTA -> Color(0xFFE8262B); Skin.GTA6 -> Color(0xFFF92F45); Skin.RDR -> Color(0xFFCC0000) }
 
 private fun SkinSpec.hudWhite(): Color = when (skin) { Skin.GTA -> Gta.White; Skin.GTA6 -> Vi.White; Skin.RDR -> Rdr.White }
 

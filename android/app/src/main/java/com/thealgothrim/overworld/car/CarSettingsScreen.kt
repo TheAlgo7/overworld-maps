@@ -75,9 +75,14 @@ internal fun carSettingsTemplate(withBack: Boolean): ListTemplate {
 
   val driving =
       ItemList.Builder()
-          .addItem(toggle("Game HUD", "Turn, time and street in the game's style. Off uses Android Auto's cards.", store.carGameHud.value) { store.setCarGameHud(it) })
+          .apply {
+            // The old game HUD exists only in test builds (Play builds keep Android Auto's cards).
+            if (store.carGameHudAllowed) {
+              addItem(toggle("Game HUD", "Turn, time and street in the game's style. Off uses Android Auto's cards.", store.carGameHud.value) { store.setCarGameHud(it) })
+            }
+          }
           .addItem(toggle("Camera beep", "Two notes as a speed camera comes within 500 m.", viewModel.cameraBeep.value) { viewModel.setCameraBeep(it) })
-          .addItem(toggle("+ Cam button", "Mark a speed camera as you pass it.", store.carCamButton.value) { store.setCarCamButton(it) })
+          .addItem(toggle("+ Cam button", "On a trip, a button up top marks a speed camera as you pass it.", store.carCamButton.value) { store.setCarCamButton(it) })
           .build()
 
   return ListTemplate.Builder()

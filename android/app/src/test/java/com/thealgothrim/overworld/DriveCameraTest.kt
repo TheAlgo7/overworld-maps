@@ -45,10 +45,11 @@ class DriveCameraTest {
   }
 
   @Test
-  fun eachGameHasItsOwnTilt() {
+  fun eachGameLeansBackLikeGoogleMaps() {
+    // GTA VI's steep minimap; GTA V and Red Dead nearly as steep (21 Nov), Red Dead no longer flat.
     assertEquals(60.0, Skin.GTA6.driveCamera.tilt, 0.0)
-    assertEquals(45.0, Skin.GTA.driveCamera.tilt, 0.0)
-    assertEquals(0.0, Skin.RDR.driveCamera.tilt, 0.0)
+    assertEquals(55.0, Skin.GTA.driveCamera.tilt, 0.0)
+    assertEquals(55.0, Skin.RDR.driveCamera.tilt, 0.0)
   }
 
   @Test

@@ -64,17 +64,20 @@ internal fun previewOrStop(carContext: CarContext, place: Place) {
   }
 }
 
-private fun Screen.placeRows(places: List<Place>, empty: String = "Nothing found"): ItemList = placeRows(places, empty) { preview(it) }
+private fun Screen.placeRows(places: List<Place>, empty: String = "Nothing found", icon: GameIcon = GameIcon.PIN): ItemList = placeRows(places, empty, icon) { preview(it) }
 
-private fun placeRows(places: List<Place>, empty: String, onPick: (Place) -> Unit): ItemList {
+/** The places as Android Auto rows, each with the world's [icon] (a pin, a fuel pump...). */
+private fun placeRows(places: List<Place>, empty: String, icon: GameIcon = GameIcon.PIN, onPick: (Place) -> Unit): ItemList {
   val here = AppModule.viewModel.currentCoordinate ?: AppModule.viewModel.startPoint
   val list = ItemList.Builder().setNoItemsMessage(empty)
+  val image = carIcon(icon)
   places.take(MAX_ROWS).forEach { place ->
     // Along a trip: "On the way · 2.4 km ahead" or "+3 min", not the straight-line distance.
     val away = place.note ?: formatDistance(metres(here, place.coordinate))
     list.addItem(
         Row.Builder()
             .setTitle(place.name)
+            .setImage(image)
             .addText(listOf(away, place.detail).filter { it.isNotBlank() }.joinToString("  ·  "))
             .setOnClickListener { onPick(place) }
             .build()
@@ -130,7 +133,7 @@ class CarSearchScreen(carContext: CarContext, private val resultsOnMap: Boolean 
         .setShowKeyboardByDefault(true)
         .apply {
           if (shown == null) setLoading(true)
-          else setItemList(placeRows(shown, empty = if (query.isBlank()) "Places you visit show here" else "Nothing found"))
+          else setItemList(placeRows(shown, empty = if (query.isBlank()) "Places you visit show here" else "Nothing found", icon = if (results == null) GameIcon.RECENT else GameIcon.PIN))
         }
         .build()
   }
@@ -155,7 +158,7 @@ internal fun nearbyListTemplate(kind: Nearby, places: List<Place>?, withBack: Bo
     ListTemplate.Builder()
         .setTitle(kind.label)
         .apply { if (withBack) setHeaderAction(Action.BACK) }
-        .apply { places?.let { setSingleList(placeRows(it, "Nothing found", onPick)) } ?: setLoading(true) }
+        .apply { places?.let { setSingleList(placeRows(it, "Nothing found", kind.icon, onPick)) } ?: setLoading(true) }
         .build()
 
 /** The closest places of one kind, nearest first. */

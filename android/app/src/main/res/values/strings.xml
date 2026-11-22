@@ -8,5 +8,6 @@
     <string name="start">Start</string>
     <string name="cancel">Cancel</string>
     <!-- Never send the driver to the phone from the car screen (Android for Cars rule VI-1). -->
-    <string name="car_idle_hint">Tap Search or Nearby to find a place</string>
+    <string name="car_idle_title">Set a waypoint</string>
+    <string name="car_idle_hint">Search, or pick from Saved or Nearby</string>
 </resources>

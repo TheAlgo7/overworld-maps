@@ -93,6 +93,10 @@ class DebugDriveReceiver : BroadcastReceiver() {
         intent.getStringExtra("mode")?.let { m -> runCatching { com.thealgothrim.overworld.routing.TravelMode.valueOf(m.uppercase()) }.getOrNull()?.let { AppModule.prefs.setMode(it) } }
         intent.getStringExtra("units")?.let { u -> runCatching { com.thealgothrim.overworld.prefs.Units.valueOf(u.uppercase()) }.getOrNull()?.let { AppModule.prefs.setUnits(it) } }
         intent.getStringExtra("engine")?.let { e -> runCatching { com.thealgothrim.overworld.prefs.EngineType.valueOf(e.uppercase()) }.getOrNull()?.let { AppModule.prefs.setEngine(it) } }
+        // --ez hud true|false: the old game HUD on the car screen (and --ez lists for its own lists),
+        // for footage of the old look; Play builds always use Android Auto's cards.
+        if (intent.hasExtra("hud")) AppModule.themeStore.setCarGameHud(intent.getBooleanExtra("hud", false))
+        if (intent.hasExtra("lists")) AppModule.themeStore.setCarThemedLists(intent.getBooleanExtra("lists", false))
         // --ef to_lat --ef to_lng [--es to_name X] [--ez preview true]: a place card, and with
         // preview its route preview with the mode tabs, as a tap on Directions would.
         if (intent.hasExtra("to_lat")) {

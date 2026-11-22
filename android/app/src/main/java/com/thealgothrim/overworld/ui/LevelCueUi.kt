@@ -59,7 +59,12 @@ fun LevelCueRow(spec: SkinSpec, cue: CueAhead, modifier: Modifier = Modifier, te
  */
 @Composable
 fun LevelGlyph(kind: CueKind, route: Color, other: Color, modifier: Modifier = Modifier) {
-  Canvas(modifier) {
+  Canvas(modifier) { drawLevelGlyph(kind, route, other) }
+}
+
+/** [LevelGlyph]'s drawing, filling the draw area: for Android Auto's turn card too (car/CarArrows). */
+fun androidx.compose.ui.graphics.drawscope.DrawScope.drawLevelGlyph(kind: CueKind, route: Color, other: Color) {
+  run {
     val w = size.width
     val h = size.height
     val bold = Stroke(width = w * 0.13f, cap = StrokeCap.Round)

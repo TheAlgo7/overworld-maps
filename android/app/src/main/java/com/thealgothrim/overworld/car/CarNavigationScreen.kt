@@ -8,7 +8,13 @@ import androidx.car.app.navigation.model.MapWithContentTemplate
 import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
 import androidx.car.app.model.CarColor
+import androidx.car.app.model.Pane
+import androidx.car.app.model.PaneTemplate
+import androidx.car.app.model.Row
 import androidx.car.app.model.Template
+import com.thealgothrim.overworld.ui.arrivalClock
+import com.thealgothrim.overworld.ui.formatDistance
+import com.thealgothrim.overworld.ui.formatDuration
 import androidx.car.app.navigation.NavigationManager
 import androidx.car.app.navigation.model.MessageInfo
 import androidx.car.app.navigation.model.NavigationTemplate
@@ -111,6 +117,8 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
   private var uiState: NavigationUiState? by mutableStateOf(null)
   /** What the game HUD's template was last built for (on a trip or not); null with the HUD off. */
   private var templateShape: Boolean? = null
+  /** The place the last trip reached and when (see the "Arrived" card). */
+  private var arrivedAt: Pair<String, Long>? = null
   /** The car screen's density (px per dp), unscaled; set while the screen draws. */
   @Volatile private var carDensity = 1f
   private var mapState: NavigationMapState? = null
@@ -292,6 +300,19 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
     themeStore.carGameHud.onEach { invalidate() }.launchIn(scope)
     // The phone's route preview shows on the car too, with Start and Cancel.
     viewModel.planner.onEach { invalidate() }.launchIn(scope)
+    // The live-traffic time and the road's details fill in the preview card a moment after the route.
+    viewModel.extras.onEach { if (viewModel.planner.value.preview != null) invalidate() }.launchIn(scope)
+    // + Cam comes and goes with its switch.
+    themeStore.carCamButton.onEach { invalidate() }.launchIn(scope)
+    // A trip that reached its end: "Arrived" with the place for a while, then "Set a waypoint" again.
+    scope.launch {
+      viewModel.arrived.collect { place ->
+        arrivedAt = place to System.currentTimeMillis()
+        invalidate()
+        delay(ARRIVED_SHOWN_MS)
+        invalidate()
+      }
+    }
     carContext.onBackPressedDispatcher.addCallback(this, cancelPreviewOnBack)
     // Added last, so it runs first: a panel closes before Back reaches the preview.
     carContext.onBackPressedDispatcher.addCallback(this, panelBack)
@@ -340,7 +361,7 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
                   .filter { !previewing && buttonsSettled }
                   .map { (key, target) -> target.first to press(key, target.second) }
                   .toTypedArray(),
-              // The "Where to?" card, always there while it shows.
+              // The "Set a waypoint" card, always there while it shows.
               *CarTapTargets.cardTargets.entries
                   .filter { !previewing }
                   .map { (key, target) -> target.first to press(key, target.second) }
@@ -391,12 +412,22 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
   override fun content() {
     val theme by themeStore.carTheme.collectAsState()
     val surfaceArea by screenSurfaceState(surfaceAreaTracker)
+    // The strip's room: from the cards to the map's right edge. Four named buttons need about 760 dp.
+    val stripRoom = surfaceArea?.let { a -> with(LocalDensity.current) { (a.visibleArea.right - a.stableArea.left).toDp() } }
+    LaunchedEffect(stripRoom) {
+      val narrow = stripRoom != null && stripRoom < STRIP_NAMED_MIN
+      if (narrow != narrowStrip) {
+        narrowStrip = narrow
+        invalidate()
+      }
+    }
     // From the stable area: the part Android Auto keeps clear even while its buttons show. The
     // visible area changes as they come and go, and the arrow moved with it.
     val normalPadding = animatedPadding(safeStablePadding(surfaceArea?.stableArea), "browse")
-    // Keep the arrow low and a little right of centre while driving, like Google's: the road ahead
-    // gets the screen and the HUD keeps the left.
-    val trackingPadding = animatedPadding(safeStablePadding(surfaceArea?.stableArea, top = 0.45f, start = 0.25f), "follow")
+    // Keep the arrow low and a little right of centre while driving, like Google's (its car sits
+    // about 85% of the way down; ours now about 80%): the road ahead gets the screen and the cards
+    // keep the left.
+    val trackingPadding = animatedPadding(safeStablePadding(surfaceArea?.stableArea, top = 0.6f, start = 0.25f), "follow")
     val driveCamera = theme.skin.driveCamera
     val zoom = CAR_ZOOM + driveCamera.zoomOffset
     val navState = viewModel.navigationUiState.collectAsState()
@@ -490,35 +521,33 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
       return NavigationTemplate.Builder()
           .setBackgroundColor(CarColor.createCustom(card, card))
           .apply {
-            // Game HUD mode draws the turn and ETA on the map surface instead of these cards.
-            // Turn data still reaches the car's own cluster display through NavigationManager.
+            // The old game HUD (test builds only) draws the turn and ETA on the map instead of
+            // these cards. Turn data reaches the car's own cluster display through NavigationManager
+            // either way.
             if (!themeStore.carGameHud.value) {
-              metricRoutingInfo(carContext, tripState)?.let { setNavigationInfo(it) }
-              val timeColor = if (theme.skin == Skin.RDR) CarColor.YELLOW else CarColor.GREEN
-              tripState.progress()?.let { setDestinationTravelEstimate(it.toMetricTravelEstimate(timeColor)) }
+              val extras = viewModel.extras.value
+              metricRoutingInfo(
+                      carContext, tripState, theme.skin,
+                      rerouting = state.isCalculatingNewRoute == true,
+                      cue = viewModel.levelCueAhead(state, extras),
+                  )
+                  ?.let { setNavigationInfo(it) }
+              // The same time to go as the old HUD's: live traffic's, eased (see remainingSeconds).
+              val seconds = viewModel.remainingSeconds(state, extras)
+              tripState.progress()?.let { setDestinationTravelEstimate(it.toMetricTravelEstimate(etaColor(theme.skin, extras.eta), seconds)) }
             }
           }
           .setActionStrip(if (themeStore.carGameHud.value) searchStrip() else
               ActionStrip.Builder()
-                  .addAction(
-                      Action.Builder()
-                          .setTitle(carContext.getString(R.string.end_trip))
-                          .setOnClickListener { viewModel.stopNavigation() }
-                          .build()
-                  )
+                  .addAction(worldAction(GameIcon.CLOSE, R.string.end_trip) { viewModel.stopNavigation() })
                   // Petrol, food, toilets along the rest of the route; a pick becomes a stop.
-                  .addAction(
-                      Action.Builder()
-                          .setTitle(carContext.getString(R.string.nearby))
-                          .setOnClickListener { showNearby() }
-                          .build()
-                  )
-                  .addAction(
-                      Action.Builder()
-                          .setTitle(carContext.getString(R.string.settings))
-                          .setOnClickListener { showSettings() }
-                          .build()
-                  )
+                  .addAction(worldAction(GameIcon.NEARBY, R.string.nearby, titled = !narrowStrip) { showNearby() })
+                  .addAction(worldAction(GameIcon.SETTINGS, R.string.settings, titled = !narrowStrip) { showSettings() })
+                  .apply {
+                    // + Cam, when it's switched on: Android Auto's own button, where the old HUD
+                    // drew one on the map.
+                    if (themeStore.carCamButton.value) addAction(worldAction(GameIcon.CAMERA, "+ Cam", titled = !narrowStrip) { markCamera() })
+                  }
                   .build())
           .apply {
             // With the game HUD, its own themed map buttons stand in for these (see MapButtons).
@@ -527,27 +556,18 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
             if (themeStore.carGameHud.value) setMapActionStrip(ActionStrip.Builder().addAction(Action.PAN).build())
             else setMapActionStrip(
               ActionStrip.Builder()
-                  .addAction(
-                      Action.Builder()
-                          .setIcon(icons.mute(state.isMuted == true))
-                          .setOnClickListener { viewModel.toggleMute() }
-                          .build()
-                  )
-                  .addAction(Action.Builder().setIcon(icons.add).setOnClickListener { mapState?.zoomIn() }.build())
-                  .addAction(Action.Builder().setIcon(icons.remove).setOnClickListener { mapState?.zoomOut() }.build())
-                  .addAction(
-                      Action.Builder()
-                          .setIcon(icons.camera(mapState?.isTrackingUser != false))
-                          .setOnClickListener { toggleOverview() }
-                          .build()
-                  )
+                  .addAction(mapAction(if (state.isMuted == true) GameIcon.SOUND_OFF else GameIcon.SOUND_ON) { viewModel.toggleMute() })
+                  .addAction(mapAction(GameIcon.ZOOM_IN) { zoomBy(1.0) })
+                  .addAction(mapAction(GameIcon.ZOOM_OUT) { zoomBy(-1.0) })
+                  // The route overview, or back to the car once the map has been moved.
+                  .addAction(mapAction(if (mapState?.isTrackingUser != false) GameIcon.OVERVIEW else GameIcon.NAVIGATE) { toggleOverview() })
                   .build()
           )
           }
           .build()
     }
 
-    // Not navigating: the themed map with Search, Nearby, Saved and Settings. In game-HUD mode the "Where to?" card is
+    // Not navigating: the themed map with Search, Nearby, Saved and Settings. In game-HUD mode the "Set a waypoint" card is
     // drawn on the map in the theme; otherwise Android Auto shows it as its own message card.
     val preview = viewModel.planner.value.preview
     cancelPreviewOnBack.isEnabled = preview != null
@@ -555,35 +575,23 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
     val idleActions =
         ActionStrip.Builder()
             // Find a place on the car screen itself; the phone can stay in its mount.
-            .addAction(
-                Action.Builder()
-                    .setTitle(carContext.getString(R.string.search))
-                    .setOnClickListener { screenManager.push(CarSearchScreen(carContext)) }
-                    .build()
-            )
-            .addAction(
-                Action.Builder()
-                    .setTitle(carContext.getString(R.string.nearby))
-                    .setOnClickListener { showNearby() }
-                    .build()
-            )
-            .addAction(
-                Action.Builder()
-                    .setTitle(carContext.getString(R.string.saved))
-                    .setOnClickListener { showSaved() }
-                    .build()
-            )
-            .addAction(
-                Action.Builder()
-                    .setTitle(carContext.getString(R.string.settings))
-                    .setOnClickListener { showSettings() }
-                    .build()
-            )
+            .addAction(worldAction(GameIcon.SEARCH, R.string.search) { screenManager.push(CarSearchScreen(carContext)) })
+            .addAction(worldAction(GameIcon.NEARBY, R.string.nearby, titled = !narrowStrip) { showNearby() })
+            .addAction(worldAction(GameIcon.STAR, R.string.saved, titled = !narrowStrip) { showSaved() })
+            .addAction(worldAction(GameIcon.SETTINGS, R.string.settings, titled = !narrowStrip) { showSettings() })
             .build()
     return NavigationTemplate.Builder()
         .apply {
           if (!themeStore.carGameHud.value) {
-            setNavigationInfo(MessageInfo.Builder(theme.name).setText(carContext.getString(R.string.car_idle_hint)).build())
+            val card = theme.carCard.toArgb()
+            setBackgroundColor(CarColor.createCustom(card, card))
+            // Just arrived: the place, like the phone's ARRIVED card. Otherwise "Set a waypoint".
+            val arrived = arrivedAt?.takeIf { System.currentTimeMillis() - it.second < ARRIVED_SHOWN_MS }?.first
+            setNavigationInfo(
+                if (arrived != null) MessageInfo.Builder("Arrived").setText(arrived).build()
+                // The games' own words for picking a destination. The world's name is already on the map.
+                else MessageInfo.Builder(carContext.getString(R.string.car_idle_title)).setText(carContext.getString(R.string.car_idle_hint)).build()
+            )
           }
         }
         .setActionStrip(if (themeStore.carGameHud.value) searchStrip() else idleActions)
@@ -594,26 +602,52 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
             else
                 ActionStrip.Builder()
                     .addAction(Action.PAN)
-                    .addAction(Action.Builder().setIcon(icons.add).setOnClickListener { mapState?.zoomIn() }.build())
-                    .addAction(Action.Builder().setIcon(icons.remove).setOnClickListener { mapState?.zoomOut() }.build())
+                    .addAction(mapAction(GameIcon.ZOOM_IN) { zoomBy(1.0) })
+                    .addAction(mapAction(GameIcon.ZOOM_OUT) { zoomBy(-1.0) })
                     // Back to following the car after looking around (there was no way back before).
-                    .addAction(
-                        Action.Builder()
-                            .setIcon(icons.camera(mapState?.isTrackingUser != false))
-                            .setOnClickListener { mapState?.let { followCar(it) }; invalidate() }
-                            .build()
-                    )
+                    .addAction(mapAction(GameIcon.NAVIGATE) { mapState?.let { followCar(it) }; invalidate() })
                     .build()
         )
         .build()
   }
 
+  /** One of Android Auto's top buttons with the world's own icon beside its name. */
+  private fun worldAction(icon: GameIcon, title: Int, titled: Boolean = true, onClick: () -> Unit): Action =
+      worldAction(icon, carContext.getString(title), titled, onClick)
+
+  /** A button in Android Auto's strip; [titled] false: the icon alone (a narrow map, see [narrowStrip]). */
+  private fun worldAction(icon: GameIcon, title: String, titled: Boolean = true, onClick: () -> Unit): Action =
+      Action.Builder().setIcon(carIcon(icon)).apply { if (titled) setTitle(title) }.setOnClickListener { onClick() }.build()
+
   /**
-   * The route preview: our themed card is drawn on the map (its Start and Cancel are pressed through
-   * map taps); Start and Cancel are in Android Auto's strip too.
+   * The map is too narrow for the strip's buttons with their names (split screen beside a media
+   * card, small head units): Android Auto doesn't shrink them, it pushed the last one (Settings)
+   * off the edge. Then only the first keeps its name, the rest are icons, like Google Maps'.
    */
-  private fun previewTemplate(): Template =
-      NavigationTemplate.Builder()
+  private var narrowStrip = false
+
+  /** One of Android Auto's round map buttons with the world's own icon. */
+  private fun mapAction(icon: GameIcon, onClick: () -> Unit): Action =
+      Action.Builder().setIcon(carIcon(icon)).setOnClickListener { onClick() }.build()
+
+  /** + Cam: marks a speed camera here, and says so for a moment. */
+  private fun markCamera() {
+    viewModel.markCamera()
+    androidx.car.app.CarToast.makeText(carContext, "Speed camera marked", androidx.car.app.CarToast.LENGTH_SHORT).show()
+  }
+
+  /**
+   * The route preview. With Android Auto's cards (API 7 heads): a card beside the map with the place,
+   * the time and the road's details, Start in the world's colour, and the route on the map beside it.
+   * Older heads, and the old HUD (whose own card is drawn on the map), keep Start and Cancel in
+   * Android Auto's strip.
+   */
+  private fun previewTemplate(): Template {
+    val preview = viewModel.planner.value.preview
+    if (preview != null && !themeStore.carGameHud.value && hostPanels) {
+      return previewCardTemplate(carContext, preview, viewModel.extras.value, themeStore.carTheme.value, viewModel::startPreview, viewModel::cancelPreview)
+    }
+    return NavigationTemplate.Builder()
           .setActionStrip(
               ActionStrip.Builder()
                   .addAction(
@@ -627,6 +661,7 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
                   .build()
           )
           .build()
+  }
 
   /** The driver's own zoom, held for a while against the automatic one (see AutoZoomEffect). */
   private fun zoomBy(delta: Double) {
@@ -663,6 +698,56 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
 /** A tap's zoom step: quicker than Ferrostar's 300 ms, since Android Auto already held the tap half a second. */
 private val ZOOM_MS = 200.milliseconds
 
+/**
+ * The route preview as Android Auto's card beside the map (Car App API 7): the place, the time and
+ * distance with the arrival, the road's details (the way, traffic lights, incidents, traffic), Start
+ * in the world's colour and Cancel. The route itself shows on the map beside it.
+ */
+internal fun previewCardTemplate(
+    carContext: CarContext,
+    preview: com.thealgothrim.overworld.RoutePreview,
+    extras: com.thealgothrim.overworld.RouteExtras,
+    theme: com.thealgothrim.overworld.theme.OverworldTheme,
+    onStart: () -> Unit,
+    onCancel: () -> Unit,
+): Template {
+  val seconds = extras.eta?.travelSeconds ?: preview.durationSeconds
+  val facts =
+      listOfNotNull(
+          preview.via?.let { "via $it" },
+          extras.lightsOnRoute.takeIf { it > 0 }?.let { "$it traffic lights" },
+          extras.markedIncidents.size.takeIf { it > 0 }?.let { "$it incident${if (it == 1) "" else "s"}" },
+          com.thealgothrim.overworld.ui.trafficNote(extras.eta),
+      )
+  val accent = theme.hudAccent.toArgb()
+  val pane =
+      Pane.Builder()
+          .addRow(
+              Row.Builder()
+                  .setTitle("${formatDuration(seconds)}  ·  ${formatDistance(preview.distanceMeters)}")
+                  .addText("Arrive at ${arrivalClock(seconds)}")
+                  .build()
+          )
+          .apply { if (facts.isNotEmpty()) addRow(Row.Builder().setTitle(facts.joinToString("  ·  ")).build()) }
+          .addAction(
+              Action.Builder()
+                  .setTitle(carContext.getString(R.string.start))
+                  .setFlags(Action.FLAG_PRIMARY)
+                  .setBackgroundColor(CarColor.createCustom(accent, accent))
+                  .setOnClickListener { onStart() }
+                  .build()
+          )
+          .addAction(Action.Builder().setTitle(carContext.getString(R.string.cancel)).setOnClickListener { onCancel() }.build())
+          .build()
+  return MapWithContentTemplate.Builder()
+      .setContentTemplate(PaneTemplate.Builder(pane).setTitle(preview.place.name).setHeaderAction(Action.BACK).build())
+      .setMapController(MapController.Builder().setMapActionStrip(ActionStrip.Builder().addAction(Action.PAN).build()).build())
+      .build()
+}
+
+/** How long the "Arrived" card stays after a trip reaches its end. */
+private const val ARRIVED_SHOWN_MS = 20_000L
+
 /** A tap this soon after the map buttons came up brought them up; it presses none. */
 private const val REVEAL_MS = 650L
 
@@ -681,3 +766,6 @@ internal fun androidx.compose.ui.geometry.Rect.forCarTouch(density: Float): andr
 }
 
 private const val CAR_TOUCH_DP = 76f
+
+/** The room four named buttons need in Android Auto's strip (Curvv: 996 dp full screen fits, 572 dp split doesn't). */
+private val STRIP_NAMED_MIN = 760.dp

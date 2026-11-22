@@ -21,16 +21,17 @@ import kotlinx.coroutines.delay
 
 /**
  * How each game's map camera sits while driving, matched to the games: GTA VI's minimap is a steep
- * 3D view close in (Rockstar's Extended Look, 60° is MapLibre's limit), GTA V's radar a gentler
- * tilt, and Red Dead's minimap is flat, looked at from straight above.
+ * 3D view close in (Rockstar's Extended Look, 60° is MapLibre's limit); GTA V and Red Dead lean
+ * back nearly as far, about as steep as Google Maps' driving view on Android Auto (Gaurav, 21 Nov:
+ * 45° read as sitting far above; Red Dead's flat game minimap read as lifeless in the car).
  */
 data class DriveCamera(val tilt: Double, val zoomOffset: Double)
 
 val Skin.driveCamera: DriveCamera
   get() =
       when (this) {
-        Skin.GTA -> DriveCamera(tilt = 45.0, zoomOffset = 0.0)
-        Skin.RDR -> DriveCamera(tilt = 0.0, zoomOffset = 0.0)
+        Skin.GTA -> DriveCamera(tilt = 55.0, zoomOffset = 0.0)
+        Skin.RDR -> DriveCamera(tilt = 55.0, zoomOffset = 0.0)
         Skin.GTA6 -> DriveCamera(tilt = 60.0, zoomOffset = 0.4)
       }
 
@@ -167,7 +168,7 @@ private const val MAX_FRAME_OUT = 0.8
 /**
  * The game's tilt, looking more steeply down over the last [FLATTEN_METRES] before a turn so the
  * junction reads clearly, like Google Maps (about 60° cruising, 20° there). Back to the game's own
- * tilt once the turn is behind. Red Dead's map is flat already.
+ * tilt once the turn is behind.
  */
 fun turnTilt(camera: DriveCamera, toTurnMetres: Double?): Double =
     if (toTurnMetres != null && toTurnMetres < FLATTEN_METRES) camera.tilt * NEAR_TURN_TILT else camera.tilt
@@ -187,4 +188,4 @@ fun rememberDriveTilt(camera: DriveCamera, uiState: State<NavigationUiState>): D
 }
 
 private const val FLATTEN_METRES = 550.0
-private const val NEAR_TURN_TILT = 0.5
+private const val NEAR_TURN_TILT = 0.75

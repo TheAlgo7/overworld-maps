@@ -13,6 +13,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -105,7 +106,7 @@ fun OverworldPhoneMap(
   val variant by AppModule.viewModel.mapVariant.collectAsState()
   val flat = !details.buildings3d
   val places = details.placeIcons
-  val baseStyle = rememberMapStyle(StyleKey(theme, car = false, trafficTiles, variant, flat, places)) { k ->
+  val (builtFor, baseStyle) = rememberBuiltStyle(StyleKey(theme, car = false, trafficTiles, variant, flat, places)) { k ->
     BaseStyle.Json(StyleCache.json(context, k.theme, k.car, k.trafficTiles, k.variant, k.flat, k.places))
   }
   val smoothed = rememberSmoothedUiState(uiState)
@@ -142,7 +143,13 @@ fun OverworldPhoneMap(
         },
     ) {
       timelineDay?.let { TimelineDayLayer(it, theme) }
-      OverworldLayers(smoothed, shown, theme, car = false, extras, details, previewRoute, pickedDestination, style = baseStyle, headingUp = { mapState.headingUp() && !northUp }, glide = mapState.glide, camera = mapState.cameraState)
+      // A new style gets all-new layers and sources: the style is built in the background, so a
+      // world's own layers (Red Dead's contours) appeared on the old style first, and when the new
+      // one landed MapLibre was asked to add those same sources again and crashed ("Cannot add
+      // source twice", switching to Red Dead mid-trip, 21 Nov).
+      key(baseStyle) {
+        OverworldLayers(smoothed, shown, builtFor.theme, car = false, extras, details, previewRoute, pickedDestination, style = baseStyle, headingUp = { mapState.headingUp() && !northUp }, glide = mapState.glide, camera = mapState.cameraState)
+      }
     }
     // "Take flyover" on the map at the split, clear of the turn banner and the trip sheet.
     val levels = extras.levels
@@ -186,6 +193,8 @@ fun OverworldCarMap(
   val extras by AppModule.viewModel.extras.collectAsState()
   val trafficTiles = AppModule.traffic.flowTilesUrl?.takeIf { details.traffic }
   val planner by AppModule.viewModel.planner.collectAsState()
+  // Android Auto's own cards (every Play build) or, in test builds only, the old game HUD.
+  val gameHud by AppModule.themeStore.carGameHud.collectAsState()
 
   Box(Modifier.fillMaxSize()) {
     FrameStatsProbe("car")
@@ -199,12 +208,38 @@ fun OverworldCarMap(
     }
     // The minimap's north and, when the destination is off the map, its waypoint on the edge.
     val destination = (uiState.routeGeometry?.takeIf { uiState.isNavigating() } ?: planner.preview?.route?.geometry)?.lastOrNull()
-    MinimapEdge(theme, mapState.cameraState, destination, stable, avoid = com.thealgothrim.overworld.ui.CarHudBlocks.all)
-    com.thealgothrim.overworld.ui.WantedFlash(theme, car = true)
-    // "Take flyover" on the map at the split, like Google Maps' callout (the turn card says it too).
-    val levels = extras.levels
-    AppModule.viewModel.levelCueAhead(uiState, extras)?.takeIf { levels != null && uiState.isCalculatingNewRoute != true }?.let { cue ->
-      LevelCallout(mapState.cameraState, levels!!.pointAt(cue.cue.at), cue, theme.spec, stable)
+    MinimapEdge(
+        theme, mapState.cameraState, destination,
+        // The old HUD kept the edge clear. With Android Auto's cards the markers ride the screen's
+        // own border and step past the cards (see MinimapEdge's cards).
+        room = if (gameHud) stable else PaddingValues(0.dp),
+        avoid = com.thealgothrim.overworld.ui.CarHudBlocks.all,
+        cards = !gameHud,
+    )
+    if (!gameHud) {
+      // Android Auto's cards hold the turn and the time; the map keeps the drive's own facts, in
+      // the world's art: the speed, the limit sign and what's ahead (NF-2's "speed limit, road
+      // obstructions" on the safe area). No street line: names aren't on the games' radar either.
+      // Google Maps' place for them: in the cards' column, lined up with them, just above the time
+      // card (Gaurav's pick, 21 Nov; on the right they floated loose and pulled the eye).
+      CompositionLocalProvider(LocalIconSkin provides theme.skin) {
+        com.thealgothrim.overworld.ui.CarDriveInfo(
+            theme, uiState, extras,
+            Modifier.align(Alignment.BottomStart).padding(start = aaCardStart(surfaceArea), bottom = AA_TIME_CARD_BLOCK),
+        )
+      }
+    }
+    // The old HUD's extras. With Android Auto's cards nothing on the map moves but the map (rule
+    // SA-1: no animation while driving): the camera flash becomes the lit star on the alert card
+    // (CarDriveInfo), and the flyover choice is said in Android Auto's turn card, where turn
+    // directions belong (NF-2).
+    if (gameHud) {
+      com.thealgothrim.overworld.ui.WantedFlash(theme, car = true)
+      // "Take flyover" on the map at the split, like Google Maps' callout (the turn card says it too).
+      val levels = extras.levels
+      AppModule.viewModel.levelCueAhead(uiState, extras)?.takeIf { levels != null && uiState.isCalculatingNewRoute != true }?.let { cue ->
+        LevelCallout(mapState.cameraState, levels!!.pointAt(cue.cue.at), cue, theme.spec, stable)
+      }
     }
 
     // The HUD was drawn for the Curvv's wide screen. Smaller head units, and the map's half of a
@@ -216,52 +251,29 @@ fun OverworldCarMap(
     Box(Modifier.fillMaxSize().padding(stable)) {
     CompositionLocalProvider(LocalDensity provides Density(density.density * hudScale, density.fontScale), LocalIconSkin provides theme.skin) {
     Box(Modifier.fillMaxSize().padding(12.dp)) {
-      val gameHud by AppModule.themeStore.carGameHud.collectAsState()
       val area by AppModule.viewModel.area.collectAsState()
       val panelUp = CarPanels.open != null && themedListsOn() && panelActions != null
       // The panel takes the left column, in place of the HUD's cards.
       if (gameHud && !panelUp) {
         val vm = AppModule.viewModel
         CarGameHud(theme, uiState, area, extras, vm.remainingSeconds(uiState, extras), vm.hazardAhead(uiState, extras), planner.preview, panelActions)
-      } else if (!gameHud) {
-        uiState.currentStepRoadName
-            ?.takeIf { it.isNotBlank() && uiState.isNavigating() }
-            ?.let { road ->
-              Text(
-                  text = theme.display(listOfNotNull(road, area).joinToString(", ")),
-                  color = theme.hudFg,
-                  style =
-                      TextStyle(
-                          fontFamily = theme.font.family,
-                          fontWeight = theme.font.weight,
-                          fontStyle = theme.font.style,
-                          fontSize = 20.sp,
-                      ),
-                  modifier =
-                      Modifier.align(Alignment.BottomCenter)
-                          // Sits above the OpenStreetMap credit line in the corner.
-                          .padding(bottom = 18.dp)
-                          .background(theme.hudBg, RoundedCornerShape(12.dp))
-                          .padding(horizontal = 14.dp, vertical = 6.dp),
-              )
-            }
       }
       // Settings, Saved or Nearby, in the theme, in the left column.
       val panel = CarPanels.open
       if (panelUp && panel != null && panelActions != null) {
         CarPanelView(panel, theme, theme.spec, panelActions, Modifier.align(Alignment.TopStart))
       }
-      // OpenStreetMap attribution stays readable on the car screen too.
-      val variant by AppModule.viewModel.carMapVariant.collectAsState()
-      Text(
-          text = "© OpenStreetMap contributors",
-          color = if (theme.isDark(variant)) Color.White.copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.6f),
-          fontSize = 10.sp,
-          modifier = Modifier.align(Alignment.BottomEnd),
-      )
     }
     }
     }
+    // OpenStreetMap attribution stays readable on the car screen too, tucked in the map's own corner.
+    val creditVariant by AppModule.viewModel.carMapVariant.collectAsState()
+    Text(
+        text = "© OpenStreetMap contributors",
+        color = if (theme.isDark(creditVariant)) Color.White.copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.6f),
+        fontSize = 10.sp,
+        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 6.dp),
+    )
   }
 }
 
@@ -377,14 +389,17 @@ private fun CarMapView(
   val variant by AppModule.viewModel.carMapVariant.collectAsState()
   val flat = !details.buildings3d
   val places = details.placeIcons
-  val baseStyle = rememberMapStyle(StyleKey(theme, car = true, trafficTiles, variant, flat, places)) { k ->
+  val (builtFor, baseStyle) = rememberBuiltStyle(StyleKey(theme, car = true, trafficTiles, variant, flat, places)) { k ->
     BaseStyle.Json(StyleCache.json(context, k.theme, k.car, k.trafficTiles, k.variant, k.flat, k.places))
   }
   val mapOptions = remember(maximumFps) { MapOptions(renderOptions = RenderOptions(maximumFps = maximumFps), ornamentOptions = OrnamentOptions.AllDisabled) }
   val smoothed = rememberSmoothedUiState(uiState)
   val shown = rememberDisplayedPosition(smoothed)
   FollowedMapView(baseStyle, mapState, smoothed, shown, northUp = false, mapOptions = mapOptions, cameraOptions = cameraOptions) {
-    OverworldLayers(smoothed, shown, theme, car = true, extras, details, previewRoute, null, style = baseStyle, headingUp = mapState.headingUp, glide = mapState.glide, camera = mapState.cameraState)
+    // Fresh layers for each style, as on the phone (crash switching to Red Dead mid-trip).
+    key(baseStyle) {
+      OverworldLayers(smoothed, shown, builtFor.theme, car = true, extras, details, previewRoute, null, style = baseStyle, headingUp = mapState.headingUp, glide = mapState.glide, camera = mapState.cameraState)
+    }
   }
   RecenterGlideEffect(mapState)
 }
@@ -555,7 +570,16 @@ data class StyleKey(
  * so the switches felt slow (7 Nov).
  */
 @Composable
-fun rememberMapStyle(key: StyleKey, build: (StyleKey) -> BaseStyle): BaseStyle {
+fun rememberMapStyle(key: StyleKey, build: (StyleKey) -> BaseStyle): BaseStyle = rememberBuiltStyle(key, build).second
+
+/**
+ * [rememberMapStyle] with the key the style on screen was built for. Draw the layers for that
+ * key's theme, not the newest one: while a new world's style is still being built, its layers
+ * (Red Dead's route, contours) went onto the old style, and MapLibre crashed when the new style
+ * took them over ("Cannot add source twice", switching to Red Dead mid-trip, 21 Nov).
+ */
+@Composable
+fun rememberBuiltStyle(key: StyleKey, build: (StyleKey) -> BaseStyle): Pair<StyleKey, BaseStyle> {
   val built = remember { mutableStateOf(key to build(key)) }
   val latest by rememberUpdatedState(build)
   LaunchedEffect(key) {
@@ -563,7 +587,7 @@ fun rememberMapStyle(key: StyleKey, build: (StyleKey) -> BaseStyle): BaseStyle {
     val style = withContext(Dispatchers.Default) { latest(key) }
     built.value = key to style
   }
-  return built.value.second
+  return built.value
 }
 
 /**
@@ -571,3 +595,26 @@ fun rememberMapStyle(key: StyleKey, build: (StyleKey) -> BaseStyle): BaseStyle {
  * dashed last leg): closer is the same spot, further is a bad match between place and road.
  */
 private val OFF_ROAD_METRES = 15.0..1_500.0
+
+/**
+ * The left edge of Android Auto's cards, which end a small gap before the area it keeps clear
+ * (its stable area) and are narrower in split screen, beside a media card, than full screen.
+ * Measured in the DHU on the Curvv's screen, 21 Nov: full screen 17..513 px, split 647..1043 px,
+ * stable area from 530 and 1060 px.
+ */
+@Composable
+private fun aaCardStart(surfaceArea: SurfaceArea?): androidx.compose.ui.unit.Dp {
+  val area = surfaceArea?.stableArea ?: return AA_CARD_GAP
+  val width = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width
+  return with(LocalDensity.current) {
+    val split = width > 0 && area.left > width * 0.45f
+    (area.left.toDp() - AA_CARD_GAP - if (split) AA_CARD_WIDTH_SPLIT else AA_CARD_WIDTH).coerceAtLeast(0.dp)
+  }
+}
+
+private val AA_CARD_GAP = 14.dp
+private val AA_CARD_WIDTH = 397.dp
+private val AA_CARD_WIDTH_SPLIT = 317.dp
+
+/** Android Auto's time card and the gap under it, from the map's bottom (measured in the DHU, 21 Nov). */
+private val AA_TIME_CARD_BLOCK = 102.dp

@@ -72,6 +72,13 @@ fun MinimapEdge(
      * the N sat on the speed's "km/h"; on the car it tucked under the street name (13 Nov).
      */
     avoid: List<androidx.compose.ui.geometry.Rect> = emptyList(),
+    /**
+     * Android Auto's own cards are up and [room] is the whole map: the markers ride the screen's own
+     * border, right to the edge beside the cards, like the game's radar rim, and step along it past
+     * the [avoid] boxes instead of stopping in front of them. Sliding round the stable area's edge
+     * put the N mid-screen beside the cards (Gaurav, 21 Nov).
+     */
+    cards: Boolean = false,
 ) {
   val skin = theme.skin
   val waypoint =
@@ -102,6 +109,33 @@ fun MinimapEdge(
             arrow.y.coerceIn(top + inner, maxOf(top + inner, bottom - inner)),
         )
 
+    /**
+     * [p], on the screen's border, moved along the border clear of the [avoid] boxes: to the
+     * nearer side of whatever covers it.
+     */
+    fun clearOfCards(p: DpOffset): DpOffset {
+      var x = p.x
+      var y = p.y
+      // All the way to the screen's own edge, beside Android Auto's cards too, as on the game's
+      // radar rim (stepping round the card column held it in front of the cards; Gaurav, 21 Nov).
+      // Only our own boxes are stepped round, along the border.
+      for (a in avoid) {
+        val m = AVOID_MARGIN
+        val x0 = (a.left / px).dp - m
+        val x1 = (a.right / px).dp + m
+        val y0 = (a.top / px).dp - m
+        val y1 = (a.bottom / px).dp + m
+        if (x !in x0..x1 || y !in y0..y1) continue
+        val onSide = x <= left + 1.dp || x >= right - 1.dp
+        if (onSide) {
+          y = listOf(y0, y1).filter { it in top..bottom }.minByOrNull { kotlin.math.abs((it - y).value) } ?: y
+        } else {
+          x = listOf(x0, x1).filter { it in left..right }.minByOrNull { kotlin.math.abs((it - x).value) } ?: x
+        }
+      }
+      return DpOffset(x, y)
+    }
+
     /** Where a ray from [origin], [angle] degrees clockwise from screen-up, meets the border. */
     fun border(angle: Double): DpOffset {
       val r = Math.toRadians(angle)
@@ -110,6 +144,7 @@ fun MinimapEdge(
       val tx = when { dx > 1e-6 -> (right - origin.x).value / dx; dx < -1e-6 -> (left - origin.x).value / dx; else -> Double.MAX_VALUE }
       val ty = when { dy > 1e-6 -> (bottom - origin.y).value / dy; dy < -1e-6 -> (top - origin.y).value / dy; else -> Double.MAX_VALUE }
       var t = min(tx, ty)
+      if (cards) return clearOfCards(DpOffset(origin.x + (dx * t).dp, origin.y + (dy * t).dp))
       // Stop where the ray would enter the box to avoid (grown by a marker's half width), so the
       // marker sits beside it, still in its direction.
       for (a in avoid) {
@@ -142,10 +177,7 @@ fun MinimapEdge(
           EdgeDisc(border(north), NORTH_SIZE, Color.Black, Color(0x55FFFFFF)) {
             Text("N", style = TextStyle(fontFamily = Vi.sansSemiBold, fontSize = 13.sp, color = Vi.White))
           }
-      Skin.GTA ->
-          EdgeDisc(border(north), NORTH_SIZE, Color.Black, Color(0x55FFFFFF)) {
-            Text("N", style = TextStyle(fontFamily = GameFonts.menu, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Gta.White))
-          }
+      Skin.GTA -> GtaRadarNorth(border(north), NORTH_SIZE)
       Skin.RDR -> {
         // The rim's four letters; the N a size up with its arrow pointing out past it.
         RdrLetter("E", border(north + 90), 15)
@@ -181,6 +213,31 @@ fun MinimapEdge(
   }
 }
 
+/**
+ * GTA V's radar_north, drawn to the sprite (Gaurav's `GTA V - Radar North.png`, 24 px): a plain
+ * black disc, no ring, a thin white N 13/24 of it tall. Drawn, not scaled up, so it stays sharp on
+ * a car screen at three times the sprite's size.
+ */
+@Composable
+private fun GtaRadarNorth(at: DpOffset, size: Dp) {
+  Canvas(Modifier.offset(at.x - size / 2, at.y - size / 2).size(size)) {
+    val u = this.size.width / 24f
+    drawCircle(Color.Black)
+    val n =
+        Path().apply {
+          moveTo(7.6f * u, 17.6f * u)
+          lineTo(7.6f * u, 5.9f * u)
+          lineTo(16.4f * u, 17.4f * u)
+          lineTo(16.4f * u, 5.9f * u)
+        }
+    drawPath(
+        n,
+        Color.White,
+        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.9f * u, join = androidx.compose.ui.graphics.StrokeJoin.Miter),
+    )
+  }
+}
+
 @Composable
 private fun EdgeDisc(at: DpOffset, size: Dp, fill: Color, ring: Color, content: @Composable () -> Unit = {}) {
   Box(
@@ -193,7 +250,7 @@ private fun EdgeDisc(at: DpOffset, size: Dp, fill: Color, ring: Color, content: 
 
 /** One of Red Dead's rim letters: dark ink with a paper halo, so it reads over roads too. */
 @Composable
-private fun RdrLetter(letter: String, at: DpOffset, size: Int) {
+private fun RdrLetter(letter: String, at: DpOffset, size: Int, light: Boolean = false) {
   val box = (size + 10).dp
   Box(Modifier.offset(at.x - box / 2, at.y - box / 2).size(box), contentAlignment = Alignment.Center) {
     Text(
@@ -202,8 +259,9 @@ private fun RdrLetter(letter: String, at: DpOffset, size: Int) {
             TextStyle(
                 fontFamily = GameFonts.lino,
                 fontSize = size.sp,
-                color = Rdr.OffBlack,
-                shadow = Shadow(color = Color(0xE6E3CCA6), offset = Offset.Zero, blurRadius = 7f),
+                // On the corner dial's dark glass: paper letters with a dark halo.
+                color = if (light) PAPER else Rdr.OffBlack,
+                shadow = Shadow(color = if (light) Color(0xCC000000) else Color(0xE6E3CCA6), offset = Offset.Zero, blurRadius = 7f),
             ),
     )
   }
@@ -214,14 +272,15 @@ private fun RdrLetter(letter: String, at: DpOffset, size: Int) {
  * pointing north (the radar rim in Gaurav's captures 03 and 28).
  */
 @Composable
-private fun RdrNorthArrow(n: DpOffset, north: Double) {
+private fun RdrNorthArrow(n: DpOffset, north: Double, light: Boolean = false) {
   val box = 52.dp
   Canvas(Modifier.offset(n.x - box / 2, n.y - box / 2).size(box).rotate(north.toFloat())) {
     val c = size.width / 2
     val dp = density
     // Distances out from the letter's centre, in dp.
     fun y(r: Float) = c - r * dp
-    val halo = Color(0xE6E3CCA6)
+    val halo = if (light) Color(0x99000000) else Color(0xE6E3CCA6)
+    val ink = if (light) PAPER else Rdr.OffBlack
     val head =
         Path().apply {
           moveTo(c, y(25f))
@@ -232,8 +291,8 @@ private fun RdrNorthArrow(n: DpOffset, north: Double) {
         }
     drawLine(halo, Offset(c, y(11f)), Offset(c, y(19f)), strokeWidth = 4.5f * dp)
     drawPath(head, halo, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f * dp))
-    drawLine(Rdr.OffBlack, Offset(c, y(11f)), Offset(c, y(19f)), strokeWidth = 2f * dp)
-    drawPath(head, Rdr.OffBlack)
+    drawLine(ink, Offset(c, y(11f)), Offset(c, y(19f)), strokeWidth = 2f * dp)
+    drawPath(head, ink)
   }
 }
 
@@ -268,3 +327,4 @@ private val EDGE_INSET = 18.dp
 private val AVOID_MARGIN = 15.dp
 private val NORTH_SIZE = 26.dp
 private val WAYPOINT_SIZE = 20.dp
+private val PAPER = Color(0xFFE8D9BC)
