@@ -210,6 +210,8 @@ FACADES = {
     # of the Ocean Beach frame; slate by night, glass #343764 and slabs #5E6680 from the 6:35 am map.
     "-map": ((0xA6, 0xBA, 0xDF), (0x81, 0x97, 0xB5), (0xC3, 0xD0, 0xEA)),
     "-map-night": ((0x41, 0x4A, 0x7A), (0x34, 0x37, 0x64), (0x5E, 0x66, 0x80)),
+    # Golden hour, derived between the two (themes.js, gta6 dusk).
+    "-map-dusk": ((0x91, 0x8E, 0xA8), (0x7A, 0x76, 0x8B), (0xA9, 0xA3, 0xAF)),
 }
 WINDOWS = {f"vi-{kind}{suffix}": (kind, colours) for suffix, colours in FACADES.items() for kind in ("wall", "windows", "glass")}
 

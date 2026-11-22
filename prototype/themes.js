@@ -376,8 +376,36 @@
         viNames: { region: "#8d92a3", area: "#838997" },
       },
       variants: {
-        // Before sunrise (the 6:35 am capture). No dusk of its own: the light map holds until the
-        // sun is 4 degrees down, then this.
+        // Golden hour, DERIVED (no launch capture shows the pause map at dusk): each colour 42% of
+        // the way from the day map to the night one, then 16% toward a sunset orange (#FF9E64).
+        // Names stay darker than the ground, as by day. From 6 degrees of sun to 4 below.
+        dusk: {
+          page: "#9f9297",
+          dark: false,
+          map: {
+            land: "#759477", residential: "#a09399", industrial: "#9e9198",
+            park: "#6d9676", wood: "#6a9171", grass: "#759477", sand: "#b7a688",
+            water: "#7fa1b1", waterway: "#7fa1b1",
+            waterLine: "#9da9ae",
+            depth: { bands: [[10, "#779eae"], [20, "#719bac"], [50, "#6d98aa"], [200, "#6995a7"]] },
+            hillshade: { strength: 0.35, shadow: "rgba(48, 40, 64, 0.5)", highlight: "rgba(255, 196, 140, 0.35)", accent: "rgba(48, 40, 64, 0.3)" },
+            building: "#9a92a5",
+            buildings3d: { color: "#918ea8", opacity: 0.96, heightScale: 1, minHeight: 4, facades: "-map-dusk" },
+            bridge: { lift: 5.0, face: 1.7, faceColor: "#a298a5", edge: "#cdc0c4", shadow: { color: "#6f6571", opacity: 0.45 } },
+            light: { color: "#fff0e6", intensity: 0.4 },
+            rail: "#aca0a9",
+            roads: {
+              motorway: { fill: "#d7c8c5", casing: null },
+              major: { fill: "#d5c7c3", casing: null },
+              mid: { fill: "#d3c5c0", casing: null },
+              minor: { fill: "#d1c3bd", casing: null },
+              service: { fill: "#c9bbba", casing: null },
+            },
+            label: { road: "#3a3440", roadHalo: "#d5c7c3", place: "#3a3440", placeHalo: "#a09399", water: "#2f4f5f", waterHalo: "#7fa1b1" },
+            viNames: { region: "#5f5862", area: "#655d67" },
+          },
+        },
+        // Before sunrise (the 6:35 am capture), from 4 degrees of sun below the horizon.
         night: {
           page: "#10132e",
           dark: true,

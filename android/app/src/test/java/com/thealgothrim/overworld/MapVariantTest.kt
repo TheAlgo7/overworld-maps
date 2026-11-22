@@ -32,10 +32,11 @@ class MapVariantTest {
   }
 
   @Test
-  fun gtaViPauseMapHasNoDuskOfItsOwn() {
-    // Dusk off a trip keeps the day pause map; night has its own file.
+  fun gtaViPauseMapHasDayDuskAndNight() {
+    // The pause map has a golden hour of its own (derived), and a night; so does the car.
     val vi = theme("gta6")
-    assertEquals("styles/gta6.json", vi.styleAsset(car = false, variant = "dusk"))
+    assertEquals("styles/gta6-dusk.json", vi.styleAsset(car = false, variant = "dusk"))
+    assertEquals("styles/gta6-dusk-car.json", vi.styleAsset(car = true, variant = "dusk"))
     assertEquals("styles/gta6-night-car.json", vi.styleAsset(car = true, variant = "night"))
     assertEquals("styles/gta6-radar-dusk.json", vi.styleAsset(car = false, variant = "radar-dusk"))
     assertFalse(vi.isDark("dusk"))
