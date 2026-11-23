@@ -19,7 +19,7 @@
 
 <p align="center">
   <a href="#get-it">Get it</a> ·
-  <a href="#three-worlds">Three worlds</a> ·
+  <a href="#four-worlds">Four worlds</a> ·
   <a href="#features">Features</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#build-it">Build it</a> ·
@@ -58,7 +58,7 @@ Updates then arrive as ordinary Play Store updates.
 
 The APK and the Play copy are signed differently, so uninstall one before installing the other.
 
-## Three worlds
+## Four worlds
 
 <picture>
   <source media="(max-width: 600px)" srcset="docs/readme/world-gta5-mobile.webp">
@@ -79,19 +79,26 @@ The APK and the Play copy are signed differently, so uninstall one before instal
   <img src="docs/readme/world-gta6.webp" alt="It follows the sun: the GTA VI world at night on the car screen and by day on the phone" width="100%">
 </picture>
 
-**GTA VI.** Two maps, as in the game, matched to the launch release. The pause map: soft green land, white roads, a bright cyan sea that deepens offshore, periwinkle buildings standing in 3D, gentle hill shading, place pins, and the game's big grey place names (cities and districts in tall condensed capitals, neighbourhoods smaller). As the sun sets it turns warm and dim, and before sunrise it's dark teal land, indigo water and slate buildings. On a phone trip it switches to the minimap: a steep 3D view close in, grey ground, lane dashes, flyovers standing over the roads below, and a pink route that fades in just ahead of the marker. The car keeps the pause map. Menus in the game's silver and violet.
+**GTA VI.** Two maps, as in the game. The pause map, coloured from the launch map: grey towns under pale lilac-grey roads, steel-blue buildings standing in 3D with a soft shadow, soft cyan water that deepens offshore, deep green parks, gentle hill shading, plain rounded place tiles and the game's big grey names for countries, states and cities only. As the sun sets it turns warm and dim, and before sunrise it's dark teal land, indigo water and slate buildings. On a phone trip it switches to the minimap, and the car shows the minimap all the time, as the game does while you drive: a steep 3D view close in, near-white by day with soft see-through blocks, khaki expressways with grey shoulders, flyovers standing over the roads below, navy at night, and a pink route that fades in just ahead of the marker. Menus in the game's silver and violet.
+
+<picture>
+  <source media="(max-width: 600px)" srcset="docs/readme/world-algo-mobile.webp">
+  <img src="docs/readme/world-algo.webp" alt="Black and crimson: the Algothrim world on the car screen and the phone" width="100%">
+</picture>
+
+**Algothrim.** The Algothrim's own world: thealgothrim.com drawn as a map. Black ground, graphite roads, wine-dark water with a crimson glow along the shore, near-black towers with warm and crimson lit windows, and a crimson route (or white with crimson edges). Its own place icons, player marker and app icon, Unbounded and Montserrat type, and menus in black glass with crimson. Not a game: a gift for everyone who drives with Overworld.
 
 <picture>
   <source media="(max-width: 600px)" srcset="docs/readme/phone-mobile.webp">
   <img src="docs/readme/phone.webp" alt="Your phone, same worlds: the map with its blips, Settings as Red Dead's pause menu, and a GTA VI drive" width="100%">
 </picture>
 
-**On the phone,** the same three worlds with Google Maps' layout: search, Home, Work and Saved, a place sheet, a route preview with live traffic, and Settings drawn as the game's pause menu.
+**On the phone,** the same four worlds with Google Maps' layout: search, Home, Work and Saved, a place sheet, a route preview with live traffic, and Settings drawn as the game's pause menu.
 
 ## Features
 
 - **The car screen comes first.** The game's map fills the Android Auto screen, and Android Auto's own cards carry the turn, "Then", lanes and time to go, in each world's colours with its own turn tiles (purple for GTA V, red for Red Dead, pink for GTA VI). Your speed, the speed-limit sign and camera alerts sit above the time card. It scales to every head unit and to split screen beside Spotify.
-- **Pick the route's colour.** Each world's own route, or the game's other one: yellow in GTA V, yellow or blue in Red Dead, cyan in GTA VI, with the destination marker to match.
+- **Pick the route's colour.** Each world's own route, or the game's other one: yellow in GTA V, yellow or blue in Red Dead, cyan in GTA VI, white in Algothrim, with the destination marker to match. Settings shows each as a swatch.
 - **Google's routes, the game's look.** Trips follow Google Maps' own route, with its traffic, closures and time to go, laid onto the game map. One switch turns Google off and uses only open data.
 - **Every light, every camera.** Traffic lights on the route, speed cameras ahead, accidents, road works and closures along the way, and speed-limit signs for each world that turn red at 5 km/h over.
 - **Flyovers you drive under.** Bridges stand over the roads they cross, and the route runs under a flyover you pass beneath and over one you drive on.
@@ -127,7 +134,7 @@ The APK and the Play copy are signed differently, so uninstall one before instal
 
 ### On the phone
 
-- **Google Maps layout, game look.** Tap a shop, temple or petrol pump on the map and the camera flies to it with Directions and Save; tilt with two fingers; tap locate twice and the map turns with the phone. GTA's pause-map corner shows the area and the scale beside the locate button. Settings is the game's pause menu with seven tabs across the top (Display, Navigation, Vehicle, Privacy, Offline, Alerts, About), each on one screen: Display opens first with the three worlds as pictures, one tap to switch, and every switch reads On or Off. Anything that forgets a place asks for a second tap.
+- **Google Maps layout, game look.** Tap a shop, temple or petrol pump on the map and the camera flies to it with Directions and Save; tilt with two fingers; tap locate twice and the map turns with the phone. GTA's pause-map corner shows the area and the scale beside the locate button. Settings is the game's pause menu with seven tabs across the top (Display, Navigation, Vehicle, Privacy, Offline, Alerts, About), each on one screen: Display opens first with the four worlds as pictures, each drawn by the app over a famous spot in your country's capital (India Gate in India), one tap to switch, then the route colours as swatches, and every switch reads On or Off. Anything that forgets a place asks for a second tap.
 - **Your places on the map.** Home, Work and starred places stand on the map the way each game marks what's yours (a safehouse, a briefcase, a star), and a tap on one opens it.
 - **You: saved places, Timeline and history.** The player-marker button beside Settings opens You, a game menu with three tabs. **Saved** holds Home, Work, your parked car, lists (Favourites, Want to go, Travel plans, Starred and your own, each with one of the world's icons), places with your own names and notes, and saved trips that start in one tap. **Timeline** shows where you stopped and the drives between them: a day at a time, a month at a glance, your most visited places and cities, and trips away from home, and any day can be drawn on the map. **History** keeps your searches, the places you looked at and your directions, each one removable. All of it stays on the phone; Timeline can be switched off or cleared in Settings, Privacy.
 - **Car, bike or walk.** Directions show the time by car, by motorbike and on foot side by side, and one tap switches the route. Walking routes keep to footpaths at your walking pace, and the speed badge hides on foot.

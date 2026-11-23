@@ -26,10 +26,18 @@ const WORLDS = {
   gta6: {
     bg: 'linear-gradient(160deg,#f0a05a 0%,#c8607a 34%,#4b2a6e 66%,#1d1536 100%)',
     color: '#fff6ee', accent: '#ffd27a', line: PINK, head: ['It follows', 'the sun'],
-    sub: "GTA VI's minimap: raised buildings and a pink route. Pale by day, warm at golden hour, violet at night.",
+    sub: "GTA VI's minimap: soft raised buildings and a pink route. Near-white by day, warm at golden hour, navy at night.",
     car: 'car-gta6-night.webp', phone: 'phone-gta6-drive.webp', glow: '#ff8fb5',
     extras: (m) => [{ type: 'pop', src: 'card-gta6.png', x: m ? 360 : 930, y: m ? 1004 : 468, w: m ? 440 : 400, rot: -3, radius: m ? 16 : 14 },
                     { type: 'sticker', src: 'limit_gta6_60.png', x: m ? 850 : 1390, y: m ? 1050 : 520, w: m ? 140 : 124, rot: 10 }],
+  },
+  // Algothrim: The Algothrim's own world (30 Nov 2026), thealgothrim.com as a map.
+  algo: {
+    bg: 'radial-gradient(900px 700px at 72% 56%, #4a0b18 0%, rgba(74,11,24,0) 70%), linear-gradient(180deg,#0c0a0b,#050505)',
+    color: '#f5f2f3', accent: '#dc1c45', line: '#dc1c45', head: ['Black and', 'crimson'],
+    sub: "Algothrim, The Algothrim's own world: black ground, near-black towers with lit windows, a crimson route.",
+    car: 'car-algo.webp', phone: 'phone-algo-drive.webp', glow: '#dc1c45',
+    extras: (m) => [{ type: 'sticker', src: 'app_icon_algo.png', x: m ? 820 : 1360, y: m ? 1030 : 500, w: m ? 160 : 140, rot: 8 }],
   },
 };
 
