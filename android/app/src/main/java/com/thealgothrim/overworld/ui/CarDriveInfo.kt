@@ -94,6 +94,7 @@ fun Modifier.carGlass(skin: Skin, shape: Shape = RoundedCornerShape(20.dp)): Mod
         Skin.GTA -> Color(0xA6101012)
         Skin.GTA6 -> Color(0x9E24122C)
         Skin.RDR -> Color(0xB01C1712)
+        Skin.ALGO -> Color(0xA60A0A0B)
       }
   return this.outerShadow(shape, blur = 14.dp, drop = 3.dp, color = Color(0x66000000))
       .clip(shape)

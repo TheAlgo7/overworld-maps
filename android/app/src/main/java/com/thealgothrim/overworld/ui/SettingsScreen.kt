@@ -209,51 +209,59 @@ private fun DisplayTab(theme: OverworldTheme, spec: SkinSpec, selected: String?,
   val details by store.details.collectAsState()
   val mapTime by store.mapTime.collectAsState()
   val variant by AppModule.viewModel.mapVariant.collectAsState()
-  val units by AppModule.prefs.units.collectAsState()
   val live = AppModule.traffic.hasLiveTraffic
+  // Four groups, each under its own heading (his 23 Nov "not cluttered"): the world, what the map
+  // shows, the route, the app icon. Distance units went to Navigation, beside the speedometer.
+  SkinSectionTitle(spec, "World")
+  Gap(6)
   // The worlds as pictures: one tap switches (it was a row tapped over and over to cycle).
-  Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-    THEMES.forEach { t -> ThemeCard(spec, t, selected = t.id == theme.id, modifier = Modifier.weight(1f)) { store.select(t.id) } }
-  }
+  ThemeGrid(spec, theme.id, gap = 10.dp) { store.select(it) }
   if (theme.timeOfDay) {
-    Gap(10)
+    Gap(6)
     val now = (variant ?: "day").replaceFirstChar { it.uppercase() }
     LabeledChoices(spec, if (mapTime == com.thealgothrim.overworld.theme.MapTime.AUTO) "Time of day: by the sun, $now now" else "Time of day", com.thealgothrim.overworld.theme.MapTime.entries, mapTime, { it.label }) { store.setMapTime(it) }
   }
-  // The route's colour: the world's main one first, then the others its game draws.
-  val routeNames = store.routeColours(theme)
-  if (routeNames.size > 1) {
+  // The route's colour as swatches, the world's main one first, then the others its game draws.
+  val looks = store.routeLooks(theme)
+  if (looks.size > 1) {
     store.routeColourChanged.collectAsState().value
-    Gap(10)
-    LabeledChoices(spec, "Route colour", routeNames.indices.toList(), store.routeColourOf(theme), { routeNames[it] }) { store.setRouteColour(theme, it) }
+    SkinSectionTitle(spec, "Route colour")
+    Gap(6)
+    RouteSwatches(spec, looks, store.routeColourOf(theme)) { store.setRouteColour(theme, it) }
   }
-  LabeledChoices(spec, "Distance units", Units.entries, units, { if (it == Units.AUTO) "Auto (${if (it.miles) "mi" else "km"})" else it.label }) { AppModule.prefs.setUnits(it) }
+  SkinSectionTitle(spec, "On the map")
+  Rows(
+      theme.skin,
+      listOfNotNull(
+          Setting("Place icons", "The game's shop, food and petrol icons on the map. Tap one there to go to it.", onOff(details.placeIcons)) { store.setDetails(details.copy(placeIcons = !details.placeIcons)) },
+          if (theme.buildings3d) Setting("3D buildings", "Buildings stand up like on the GTA VI minimap. Off lays them flat, which is lighter work for the phone.", onOff(details.buildings3d)) { store.setDetails(details.copy(buildings3d = !details.buildings3d)) } else null,
+          Setting("Traffic lights", "Signals along your route, from OpenStreetMap.", onOff(details.signals)) { store.setDetails(details.copy(signals = !details.signals)) },
+          if (live) Setting("Incidents", "Accidents, road works, closures and jams, with alerts ahead.", onOff(details.incidents)) { store.setDetails(details.copy(incidents = !details.incidents)) } else null,
+          if (live) Setting("Traffic on every road", "Your route always shows its own traffic. This colours all roads: amber slow, red jammed.", onOff(details.traffic)) { store.setDetails(details.copy(traffic = !details.traffic)) } else null,
+      ),
+      selected,
+      tap,
+  )
   // The launcher icon, as pictures like the worlds (his ask, 13 Nov): it follows the world unless
   // one is picked by hand; GTA VI has two, plain and with Macca the Gator.
   val icons = AppModule.appIcons
   val iconChoice by icons.choice.collectAsState()
   val iconNow = iconChoice.forWorld(theme.id)
-  Column(Modifier.padding(vertical = 6.dp)) {
-    SkinText(spec.title("App icon"), spec.title, spec.titleSize(14.sp, 16.sp), spec.sub, Modifier.padding(start = 2.dp, bottom = 6.dp), spacing = spec.titleSpacing)
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-      AppIcon.entries.forEach { i -> AppIconTile(spec, i, selected = i == iconNow, modifier = Modifier.weight(1f)) { icons.pick(i, theme.id) } }
-    }
+  SkinSectionTitle(spec, "App icon")
+  Gap(6)
+  Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    AppIcon.entries.forEach { i -> AppIconTile(spec, i, selected = i == iconNow, modifier = Modifier.weight(1f)) { icons.pick(i, theme.id) } }
   }
   Gap(4)
   Rows(
       theme.skin,
-      listOfNotNull(
+      listOf(
           Setting(
               "Icon follows the world",
               "On: picking a world switches the app's icon to that world's (GTA VI keeps the one you picked, plain or Macca). Off: the icon stays as picked above. " +
                   "The new icon shows once you leave the app, and waits until a trip ends.",
               onOff(iconChoice.followsWorld),
           ) { icons.setFollowsWorld(!iconChoice.followsWorld, theme.id) },
-          Setting("Place icons", "The game's shop, food and petrol icons on the map. Tap one there to go to it.", onOff(details.placeIcons)) { store.setDetails(details.copy(placeIcons = !details.placeIcons)) },
-          if (theme.buildings3d) Setting("3D buildings", "Buildings stand up like on the GTA VI minimap. Off lays them flat, which is lighter work for the phone.", onOff(details.buildings3d)) { store.setDetails(details.copy(buildings3d = !details.buildings3d)) } else null,
-          Setting("Traffic lights", "Signals along your route, from OpenStreetMap.", onOff(details.signals)) { store.setDetails(details.copy(signals = !details.signals)) },
-          if (live) Setting("Incidents", "Accidents, road works, closures and jams, with alerts ahead.", onOff(details.incidents)) { store.setDetails(details.copy(incidents = !details.incidents)) } else null,
-          if (live) Setting("Traffic on every road", "Your route always shows its own traffic. This colours all roads: amber slow, red jammed.", onOff(details.traffic)) { store.setDetails(details.copy(traffic = !details.traffic)) } else null,
       ),
       selected,
       tap,
@@ -277,14 +285,20 @@ private fun NavigationTab(theme: OverworldTheme, spec: SkinSpec, uiState: Naviga
   val useGoogle by AppModule.themeStore.useGoogle.collectAsState()
   // Google's three mute states over the app's two switches: the voice, and the camera beep.
   val level = when { !muted -> VoiceLevel.ON; cameraBeep -> VoiceLevel.ALERTS; else -> VoiceLevel.MUTED }
-  LabeledChoices(spec, "Voice", VoiceLevel.entries, level, { it.label }) { l ->
+  // Three groups like Display (his 23 Nov "not cluttered"): what it says, which way it goes, what
+  // the screen shows.
+  SkinSectionTitle(spec, "Voice")
+  Gap(6)
+  LabeledChoices(spec, "Spoken directions", VoiceLevel.entries, level, { it.label }) { l ->
     val wantVoice = l == VoiceLevel.ON
     if (wantVoice == muted) onMute()
     vm.setCameraBeep(l != VoiceLevel.MUTED)
   }
   LabeledChoices(spec, "Guidance volume", GuidanceVolume.entries, volume, { it.label }) { prefs.setVolume(it) }
+  Rows(theme.skin, listOf(Setting("Play test sound", "The camera beep, then a turn in the voice, at the volume above.") { AppModule.testSound() }), selected, tap)
+  SkinSectionTitle(spec, "Route")
   Column(Modifier.fillMaxWidth()) {
-    SkinHelp(spec, "Route options: kept off unless there's no other way.")
+    SkinHelp(spec, "Kept off unless there's no other way.")
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       ChoiceChip(spec, "No tolls", avoidTolls, { prefs.setAvoidTolls(!avoidTolls) }, Modifier.weight(1f))
       ChoiceChip(spec, "No highways", avoidHighways, { prefs.setAvoidHighways(!avoidHighways) }, Modifier.weight(1f))
@@ -295,17 +309,27 @@ private fun NavigationTab(theme: OverworldTheme, spec: SkinSpec, uiState: Naviga
   Rows(
       theme.skin,
       listOf(
-          Setting("Play test sound", "The camera beep, then a turn in the voice, at the volume above.") { AppModule.testSound() },
           Setting("Fuel-efficient routes", "Of two routes about as quick (within 5% or two minutes), take the shorter one: less road, less fuel.", onOff(fuelSaver)) { prefs.setFuelSaver(!fuelSaver) },
-          Setting("Speed limit sign", "The road's limit beside your speed, in the world's own sign.", onOff(showLimit)) { prefs.setShowLimit(!showLimit) },
-          Setting("Speedometer", "Your speed on the map while driving.", onOff(showSpeed)) { prefs.setShowSpeed(!showSpeed) },
-          Setting("Keep map north up", "The phone's map stays north up on a trip instead of turning with the road. The car screen always turns with the road.", onOff(northUp)) { prefs.setNorthUp(!northUp) },
           Setting(
               "Google routes and search",
               if (useGoogle) "Routes, traffic times and place search come from Google Maps, laid onto the game map. Off uses only open map data."
               else "Only open map data: OpenStreetMap routes and search, TomTom traffic.",
               onOff(useGoogle),
           ) { AppModule.themeStore.setUseGoogle(!useGoogle) },
+      ),
+      selected,
+      tap,
+  )
+  SkinSectionTitle(spec, "On screen")
+  Gap(6)
+  val units by prefs.units.collectAsState()
+  LabeledChoices(spec, "Distance units", Units.entries, units, { if (it == Units.AUTO) "Auto (${if (it.miles) "mi" else "km"})" else it.label }) { prefs.setUnits(it) }
+  Rows(
+      theme.skin,
+      listOf(
+          Setting("Speed limit sign", "The road's limit beside your speed, in the world's own sign.", onOff(showLimit)) { prefs.setShowLimit(!showLimit) },
+          Setting("Speedometer", "Your speed on the map while driving.", onOff(showSpeed)) { prefs.setShowSpeed(!showSpeed) },
+          Setting("Keep map north up", "The phone's map stays north up on a trip instead of turning with the road. The car screen always turns with the road.", onOff(northUp)) { prefs.setNorthUp(!northUp) },
       ),
       selected,
       tap,
@@ -563,6 +587,10 @@ private fun Rows(skin: Skin, rows: List<Setting>, selected: String?, tap: (Setti
       Skin.RDR -> {
         RdrMenuRow(r.label, isSelected, { tap(r) }, value = r.value, labelColor = if (armed) Rdr.Red else null)
         if (isSelected) RdrDescription(r.description, color = if (armed) Rdr.Red else Rdr.GreyLight)
+      }
+      Skin.ALGO -> {
+        com.thealgothrim.overworld.ui.algo.AlgoMenuRow(r.label, isSelected, { tap(r) }, value = r.value, labelColor = if (armed && !isSelected) com.thealgothrim.overworld.ui.algo.Algo.CrimsonText else null)
+        if (isSelected) com.thealgothrim.overworld.ui.algo.AlgoDescription(r.description, color = if (armed) com.thealgothrim.overworld.ui.algo.Algo.CrimsonText else com.thealgothrim.overworld.ui.algo.Algo.Sub)
       }
     }
   }

@@ -186,8 +186,9 @@ private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardA
   // One card, like Google's: the turn, then "Then", then any alert, split by hairlines. As wide as
   // its widest row; the dividers and GTA VI's row (its square sits on the right edge) take that width.
   WidestColumn(modifier.skinPanel(spec), min = 300.dp, max = 440.dp) {
-    if (spec.vi) {
-      // GTA VI: the game's own card, the move in words over the distance and the pink arrow square on the right.
+    if (spec.rounded) {
+      // GTA VI: the game's own card, the move in words over the distance and the pink arrow square on
+      // the right. Algothrim: the same card in Unbounded with a crimson square.
       val rerouting = uiState.isCalculatingNewRoute == true
       ViTurnRow(
           title = if (rerouting) "Rerouting" else content?.let(::viManeuver).orEmpty(),
@@ -195,9 +196,10 @@ private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardA
           line = if (rerouting) "" else listOf(distance, road.takeUnless { it.endsWith(".") }.orEmpty()).filter { it.isNotEmpty() }.joinToString("  ·  "),
           content = content,
           side = uiState.remainingSteps?.firstOrNull()?.drivingSide,
-          titleSize = 30.sp,
-          lineSize = 23.sp,
+          titleSize = if (spec.algo) 25.sp else 30.sp,
+          lineSize = if (spec.algo) 21.sp else 23.sp,
           modifier = Modifier.layoutId(Stretch),
+          look = spec.look,
       )
     } else Row(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
       Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) { content?.let { TurnArrow(it, uiState.remainingSteps?.firstOrNull()?.drivingSide, spec.fg) } }
@@ -407,7 +409,7 @@ private fun StreetLine(spec: SkinSpec, parts: List<String>, modifier: Modifier) 
   when {
     spec.gta -> Box(modifier) { GtaText(parts.joinToString("  |  "), 24.sp, align = TextAlign.Center) }
     // GTA VI: the minimap's clean grotesk, white with a thin dark edge.
-    spec.vi -> Box(modifier) { ViText(parts.joinToString("  ·  "), 22.sp, font = Vi.sansSemiBold, align = TextAlign.Center) }
+    spec.rounded -> Box(modifier) { ViText(parts.joinToString("  ·  "), 22.sp, font = spec.look.street, align = TextAlign.Center) }
     else ->
         RdrText(
             parts.joinToString(",  ").uppercase(),

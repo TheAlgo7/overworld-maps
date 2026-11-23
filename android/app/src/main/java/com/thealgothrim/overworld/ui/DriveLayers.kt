@@ -219,7 +219,7 @@ fun BoxScope.NavigationLayer(
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
       SkinRoundButton(spec, if (uiState.isMuted == true) GameIcon.SOUND_OFF else GameIcon.SOUND_ON, onMute)
       SkinRoundButton(spec, if (following) GameIcon.OVERVIEW else GameIcon.NAVIGATE, if (following) onOverview else onRecenter)
-      SkinRoundButton(spec, GameIcon.LAYERS, onLayers)
+      // Layers stays on the browsing map: two buttons on a trip, not three (23 Nov, "overwhelming").
     }
   }
 
@@ -272,7 +272,7 @@ fun BoxScope.NavigationLayer(
             if (street.isNotEmpty()) Box(Modifier.onGloballyPositioned { c -> onStreetBox(c.boundsInRoot()) }) {
               when {
                 spec.gta -> GtaText(street.joinToString("  |  "), 21.sp, align = TextAlign.Center)
-                spec.vi -> ViText(street.joinToString("  ·  "), 18.sp, font = Vi.sansSemiBold, align = TextAlign.Center)
+                spec.rounded -> ViText(street.joinToString("  ·  "), 18.sp, font = spec.look.street, align = TextAlign.Center)
                 else -> RdrText(street.joinToString(",  ").uppercase(), 16.sp, color = Rdr.GreyLight, align = TextAlign.Center, spacing = 1.sp)
               }
             }
@@ -317,7 +317,7 @@ private fun SheetIconButton(spec: SkinSpec, icon: GameIcon, onClick: () -> Unit,
       Modifier.size(48.dp)
           .then(
               when {
-                spec.vi -> Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0x1FFFFFFF))
+                spec.rounded -> Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0x1FFFFFFF))
                 spec.gta -> Modifier.background(Color(0x26FFFFFF))
                 else -> Modifier.background(Color(0x33000000))
               }
@@ -340,8 +340,9 @@ internal fun TurnBanner(spec: SkinSpec, uiState: NavigationUiState, hazard: Haza
 
   // One card, like Google's: the turn, then "Then", then any alert, split by hairlines.
   Column(Modifier.fillMaxWidth().skinPanel(spec)) {
-    if (spec.vi) {
-      // GTA VI: the game's own card, the move in words over the distance and the pink arrow square on the right.
+    if (spec.rounded) {
+      // GTA VI: the game's own card, the move in words over the distance and the pink arrow square on
+      // the right. Algothrim: the same card in Unbounded with a crimson square.
       val rerouting = uiState.isCalculatingNewRoute == true
       ViTurnRow(
           title = if (rerouting) "Rerouting" else content?.let(::viManeuver).orEmpty(),
@@ -349,8 +350,9 @@ internal fun TurnBanner(spec: SkinSpec, uiState: NavigationUiState, hazard: Haza
           line = if (rerouting) "" else listOf(distance, road.takeUnless { it.endsWith(".") }.orEmpty()).filter { it.isNotEmpty() }.joinToString("  ·  "),
           content = content,
           side = uiState.remainingSteps?.firstOrNull()?.drivingSide,
-          titleSize = 25.sp,
-          lineSize = 19.sp,
+          titleSize = if (spec.algo) 21.sp else 25.sp,
+          lineSize = if (spec.algo) 17.sp else 19.sp,
+          look = spec.look,
       )
     } else Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
@@ -402,8 +404,8 @@ private fun TripProgressBar(spec: SkinSpec, uiState: NavigationUiState) {
   // car is, and measured against that the bar dropped back to empty.
   val tripLength = remember(uiState.routeGeometry?.lastOrNull()) { routeLength }
   val done = if (tripLength > 0) (1 - progress.distanceRemaining / tripLength).toFloat().coerceIn(0f, 1f) else 0f
-  if (spec.vi) {
-    ViProgress(done, Modifier.padding(horizontal = 16.dp).padding(top = 12.dp))
+  if (spec.rounded) {
+    ViProgress(done, Modifier.padding(horizontal = 16.dp).padding(top = 12.dp), look = spec.look)
   } else if (spec.gta) {
     val stepLength = uiState.remainingSteps?.firstOrNull()?.distance ?: 0.0
     val turn = if (stepLength > 0) (1 - progress.distanceToNextManeuver / stepLength).toFloat() else 0f

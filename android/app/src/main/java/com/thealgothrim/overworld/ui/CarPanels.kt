@@ -418,7 +418,7 @@ private fun PlaceRow(
 /** Straight-line distance from the car, or from its last known spot before the first fix. */
 private fun away(place: Place): String = formatDistance(metres(AppModule.viewModel.currentCoordinate ?: AppModule.viewModel.startPoint, place.coordinate))
 
-private fun shape(spec: SkinSpec) = RoundedCornerShape(if (spec.vi) 10.dp else 0.dp)
+private fun shape(spec: SkinSpec) = RoundedCornerShape(if (spec.rounded) 10.dp else 0.dp)
 
 /** [rest], or the accent's glow for a moment after the part under [key] was tapped. */
 @Composable

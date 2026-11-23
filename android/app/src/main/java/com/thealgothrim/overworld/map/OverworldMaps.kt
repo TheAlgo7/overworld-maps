@@ -105,7 +105,9 @@ fun OverworldPhoneMap(
   // GTA VI changes palette with the time of day (day, golden hour, night); the others keep a single palette.
   val variant by AppModule.viewModel.mapVariant.collectAsState()
   val flat = !details.buildings3d
-  val places = details.placeIcons
+  // No shop and temple icons on a trip (his 23 Nov "too much going on"): like the game's minimap,
+  // the drive shows the route and the road; the icons come back when the trip ends.
+  val places = details.placeIcons && uiState.progress == null
   val (builtFor, baseStyle) = rememberBuiltStyle(StyleKey(theme, car = false, trafficTiles, variant, flat, places)) { k ->
     BaseStyle.Json(StyleCache.json(context, k.theme, k.car, k.trafficTiles, k.variant, k.flat, k.places))
   }
@@ -481,20 +483,30 @@ private fun OverworldLayers(
   }
   RoadFeatureLayers(visibleFeatures(extras, details), theme, car)
   // The games put the waypoint where it was set, which can be off the road the route ends on;
-  // Red Dead then dashes the last bit across open ground (Gaurav's capture 26).
+  // Red Dead then dashes the last bit across open ground (Gaurav's capture 26), GTA VI in blocks as
+  // wide as its route (launch captures 04, 46, 49), and Algothrim the same in crimson.
   val roadEnd = trip?.lastOrNull() ?: previewRoute?.lastOrNull() ?: pin
   val tripPlace by AppModule.viewModel.tripPlace.collectAsState()
   val place = if (trip != null) tripPlace else pin
   val offRoad = roadEnd != null && place != null && com.thealgothrim.overworld.traffic.metres(roadEnd, place) in OFF_ROAD_METRES
   val end = if (offRoad) place else roadEnd
-  if (offRoad && theme.routeChalk) ThemedLastLeg(roadEnd!!, place!!, theme, car)
+  if (offRoad && theme.skin != Skin.GTA) ThemedLastLeg(roadEnd!!, place!!, theme, car)
   SavedPlacesLayer(theme, car, end)
   end?.let { ThemedDestination(it, theme, car) }
   // Stops added on the way (Nearby during a trip) get the waypoint marker too.
   (state.tripState as? TripState.Navigating)?.remainingWaypoints?.dropLast(1)?.forEachIndexed { i, stop ->
     ThemedDestination(stop.coordinate, theme, car, id = "ow-stop-$i")
   }
-  shown?.let { ThemedPuck(it, theme, car, style, headingUp) }
+  // Under the flyovers like the route, except while on one; off a trip nothing says which, so on top.
+  val bridgesNow = extras.bridges
+  val overBridge by
+      androidx.compose.runtime.remember(shown, bridgesNow, trip != null) {
+        androidx.compose.runtime.derivedStateOf {
+          val along = shown?.along
+          trip == null || along == null || onFlyover(along, bridgesNow)
+        }
+      }
+  shown?.let { ThemedPuck(it, theme, car, style, headingUp, overBridge = { overBridge }) }
 }
 
 /**

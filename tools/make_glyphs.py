@@ -30,6 +30,13 @@ STACKS = {
     # fonts in res/font, also OFL).
     "BarlowCondensedBold": ("barlow-condensed-bold.ttf", None),
     "InterMedium": ("inter-medium.ttf", None),
+    # Algothrim (Gaurav's own world, 30 Nov 2026): thealgothrim.com's type. Unbounded SemiBold for
+    # cities, Montserrat for areas, roads and water. Static cuts of Google Fonts' variable files
+    # (ofl/unbounded, ofl/montserrat), also in res/font.
+    "UnboundedSemiBold": ("unbounded-semibold.ttf", None),
+    "MontserratSemiBold": ("montserrat-semibold.ttf", None),
+    "MontserratMedium": ("montserrat-medium.ttf", None),
+    "MontserratMediumItalic": ("montserrat-medium-italic.ttf", None),
 }
 RANGES = [(0, 255), (256, 511), (8192, 8447)]
 

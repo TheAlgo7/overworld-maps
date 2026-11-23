@@ -1,6 +1,6 @@
 """Builds the player markers from Gaurav's blip art (tools/blips/).
 
-GTA V and GTA VI are his drawings as they are. Red Dead 2 is his teardrop dressed like the game's
+GTA V, GTA VI and Algothrim are his drawings as they are. Red Dead 2 is his teardrop dressed like the game's
 blip_code_center_on_horse, the player marker while riding (which is what driving is): an off-white
 fill (COLOR_GREYLIGHT from the game's colors.xml), a heavier dark outline and a soft shadow so it
 stands off the parchment. The on-foot marker, blip_code_center, adds a dark ring in the round end;
@@ -8,7 +8,7 @@ the riding one has none, so neither does this.
 
 Every marker is centred on a transparent square, never stretched: the map turns it around the
 square's centre, which is the middle of the drawing, as the games turn their sprites. Output:
-android/app/src/main/res/drawable-nodpi/puck_{gta5,rdr2,gta6}.png
+android/app/src/main/res/drawable-nodpi/puck_{gta5,rdr2,gta6,algo}.png
 
 Run: python tools/make_pucks.py   (needs Pillow, numpy, scipy)
 """
@@ -27,9 +27,10 @@ INK = np.array([0x1B, 0x1A, 0x1A]) / 255  # RDR2 COLOR_OFFBLACK-ish outline
 FILL = np.array([0xD5, 0xD3, 0xD2]) / 255  # RDR2 COLOR_GREYLIGHT, the player blip
 
 
-def square(img: Image.Image, margin: float) -> Image.Image:
-    """The drawing centred (by its ink box) on a transparent square with [margin] free all round."""
-    box = img.getbbox()
+def square(img: Image.Image, margin: float, ink_alpha: int = 0) -> Image.Image:
+    """The drawing centred (by its ink box) on a transparent square with [margin] free all round.
+    [ink_alpha]: what counts as ink; his Algothrim PNG has faint specks well outside the kite."""
+    box = img.getchannel("A").point(lambda a: 255 if a > ink_alpha else 0).getbbox()
     ink = img.crop(box)
     side = round(max(ink.size) * (1 + 2 * margin))
     out = Image.new("RGBA", (side, side), (0, 0, 0, 0))
@@ -81,6 +82,8 @@ def main() -> None:
         "gta5": square(Image.open(BLIPS / "GTA 5 - Algo.png").convert("RGBA"), margin=0.04),
         "rdr2": square(rdr2(BLIPS / "RDR 2 - Algo.png"), margin=0.0),
         "gta6": square(Image.open(BLIPS / "GTA 6 - Algo.png").convert("RGBA"), margin=0.02),
+        # Algothrim, his own world: his white kite with a black rim, as drawn (23 Nov 2026).
+        "algo": square(Image.open(BLIPS / "Algothrim - Algo.png").convert("RGBA"), margin=0.04, ink_alpha=40),
     }
     for name, img in made.items():
         img.resize((SIZE, SIZE), Image.LANCZOS).save(OUT / f"puck_{name}.png", optimize=True)

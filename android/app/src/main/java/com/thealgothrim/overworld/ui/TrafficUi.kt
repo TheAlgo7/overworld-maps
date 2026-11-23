@@ -83,9 +83,9 @@ fun trafficNote(eta: TrafficEta?): String? {
 fun CardDivider(spec: SkinSpec, modifier: Modifier = Modifier) {
   Box(
       modifier.fillMaxWidth()
-          .padding(horizontal = when (spec.skin) { Skin.GTA -> 0.dp; Skin.GTA6 -> 16.dp; Skin.RDR -> 5.dp })
+          .padding(horizontal = when (spec.skin) { Skin.GTA -> 0.dp; Skin.GTA6, Skin.ALGO -> 16.dp; Skin.RDR -> 5.dp })
           .height(1.dp)
-          .background(when (spec.skin) { Skin.GTA -> Color(0x24FFFFFF); Skin.GTA6 -> Color(0x1FFFFFFF); Skin.RDR -> Rdr.Grey.copy(alpha = 0.35f) })
+          .background(when (spec.skin) { Skin.GTA -> Color(0x24FFFFFF); Skin.GTA6, Skin.ALGO -> Color(0x1FFFFFFF); Skin.RDR -> Rdr.Grey.copy(alpha = 0.35f) })
   )
 }
 
@@ -153,13 +153,13 @@ fun rememberSpeedNow(uiState: NavigationUiState): SpeedNow {
 }
 
 /** The red of each game's over-limit sign ring, for the speed too. */
-internal fun SkinSpec.overRed(): Color = when (skin) { Skin.GTA -> Color(0xFFE8262B); Skin.GTA6 -> Color(0xFFF92F45); Skin.RDR -> Color(0xFFCC0000) }
+internal fun SkinSpec.overRed(): Color = when (skin) { Skin.GTA -> Color(0xFFE8262B); Skin.GTA6 -> Color(0xFFF92F45); Skin.RDR -> Color(0xFFCC0000); Skin.ALGO -> Color(0xFFFF3B5F) }
 
-private fun SkinSpec.hudWhite(): Color = when (skin) { Skin.GTA -> Gta.White; Skin.GTA6 -> Vi.White; Skin.RDR -> Rdr.White }
+private fun SkinSpec.hudWhite(): Color = when (skin) { Skin.GTA -> Gta.White; Skin.GTA6 -> Vi.White; Skin.RDR -> Rdr.White; Skin.ALGO -> com.thealgothrim.overworld.ui.algo.Algo.White }
 
-private fun SkinSpec.speedFont() = when (skin) { Skin.GTA -> GameFonts.condensed; Skin.GTA6 -> Vi.condensedBold; Skin.RDR -> GameFonts.lino }
+private fun SkinSpec.speedFont() = when (skin) { Skin.GTA -> GameFonts.condensed; Skin.GTA6 -> Vi.condensedBold; Skin.RDR -> GameFonts.lino; Skin.ALGO -> com.thealgothrim.overworld.ui.algo.Algo.displayBold }
 
-private fun SkinSpec.unitFont() = when (skin) { Skin.GTA -> GameFonts.condensed; Skin.GTA6 -> Vi.condensed; Skin.RDR -> GameFonts.hapna }
+private fun SkinSpec.unitFont() = when (skin) { Skin.GTA -> GameFonts.condensed; Skin.GTA6 -> Vi.condensed; Skin.RDR -> GameFonts.hapna; Skin.ALGO -> com.thealgothrim.overworld.ui.algo.Algo.sansSemiBold }
 
 /**
  * Speed on the phone, floating on the map with no box: the current speed in outlined numerals
@@ -334,12 +334,16 @@ private fun SpeedReadout(spec: SkinSpec, kmh: Int, color: Color, height: Dp) {
 @Composable
 private fun LimitSign(spec: SkinSpec, limit: Int, over: Boolean, size: Dp, modifier: Modifier) {
   val redness by animateFloatAsState(if (over) 1f else 0f, tween(350), label = "limit")
-  val art = when (spec.skin) { Skin.GTA -> GTA_SIGNS; Skin.GTA6 -> GTA6_SIGNS; Skin.RDR -> RDR_SIGNS }[limit]
+  if (spec.algo) {
+    AlgoLimitSign(limit, redness, size, modifier)
+    return
+  }
+  val art = when (spec.skin) { Skin.GTA -> GTA_SIGNS; Skin.GTA6 -> GTA6_SIGNS; Skin.RDR, Skin.ALGO -> RDR_SIGNS }[limit]
   val blank =
       when (spec.skin) {
         Skin.GTA -> R.drawable.limit_blank_gta to R.drawable.limit_blank_gta_over
         Skin.GTA6 -> R.drawable.limit_blank_gta6 to R.drawable.limit_blank_gta6_over
-        Skin.RDR -> R.drawable.limit_blank_rdr to R.drawable.limit_blank_rdr_over
+        Skin.RDR, Skin.ALGO -> R.drawable.limit_blank_rdr to R.drawable.limit_blank_rdr_over
       }
   val (normalId, overId) = art ?: blank
   val normal = ImageBitmap.imageResource(normalId)
@@ -355,10 +359,10 @@ private fun LimitSign(spec: SkinSpec, limit: Int, over: Boolean, size: Dp, modif
     // An odd limit: the number fills exactly the box the art's numbers fill (height and width),
     // so it reads like the rest of the set: bold and wide for the GTAs, tall and narrow for Red Dead.
     val digits = limit.toString()
-    val place = when (spec.skin) { Skin.GTA -> GTA_NUMBER; Skin.GTA6 -> GTA6_NUMBER; Skin.RDR -> RDR_NUMBER }.let { if (digits.length > 2) it.second else it.first }
+    val place = when (spec.skin) { Skin.GTA -> GTA_NUMBER; Skin.GTA6 -> GTA6_NUMBER; Skin.RDR, Skin.ALGO -> RDR_NUMBER }.let { if (digits.length > 2) it.second else it.first }
     val style =
         TextStyle(
-            fontFamily = when (spec.skin) { Skin.GTA -> GTA_SIGN_FONT; Skin.GTA6 -> GTA6_SIGN_FONT; Skin.RDR -> GameFonts.lino },
+            fontFamily = when (spec.skin) { Skin.GTA -> GTA_SIGN_FONT; Skin.GTA6 -> GTA6_SIGN_FONT; Skin.RDR, Skin.ALGO -> GameFonts.lino },
             color = if (spec.rdr) Color(0xFFE9DDC6) else Color.White,
             fontSize = 100.sp,
         )
@@ -368,6 +372,32 @@ private fun LimitSign(spec: SkinSpec, limit: Int, over: Boolean, size: Dp, modif
     val sx = (place.width * d / ink.width).coerceIn(sy * 0.7f, sy * 1.3f)
     val at = Offset(place.x * d, place.y * d)
     scale(sx, sy, pivot = at) { drawText(layout, topLeft = at - ink.center) }
+  }
+}
+
+/**
+ * Algothrim's limit sign, drawn here (there's no hand-drawn set for it): a black disc with a crimson
+ * rim and the number in white Montserrat; over the limit the disc fills crimson and the rim turns
+ * white, fading across like the other worlds' signs.
+ */
+@Composable
+private fun AlgoLimitSign(limit: Int, redness: Float, size: Dp, modifier: Modifier) {
+  val measurer = rememberTextMeasurer()
+  val digits = limit.toString()
+  Canvas(modifier.size(size)) {
+    val d = this.size.minDimension
+    val c = Offset(this.size.width / 2f, this.size.height / 2f)
+    val ring = d * 0.11f
+    val fill = androidx.compose.ui.graphics.lerp(Color(0xFF0A0A0B), com.thealgothrim.overworld.ui.algo.Algo.Crimson, redness)
+    val rim = androidx.compose.ui.graphics.lerp(com.thealgothrim.overworld.ui.algo.Algo.Crimson, Color.White, redness)
+    drawCircle(fill, d / 2f, c)
+    drawCircle(rim, d / 2f - ring / 2f, c, style = androidx.compose.ui.graphics.drawscope.Stroke(ring))
+    val style = TextStyle(fontFamily = com.thealgothrim.overworld.ui.algo.Algo.sans, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = Color.White, fontSize = 100.sp)
+    val layout = measurer.measure(digits, style)
+    val ink = layout.multiParagraph.getPathForRange(0, digits.length).getBounds()
+    // The number fills about 40% of the sign's height, narrower for three digits.
+    val k = minOf(d * 0.40f / ink.height, d * (if (digits.length > 2) 0.58f else 0.5f) / ink.width)
+    scale(k, k, pivot = c) { drawText(layout, topLeft = c - ink.center) }
   }
 }
 

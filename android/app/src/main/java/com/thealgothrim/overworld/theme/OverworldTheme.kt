@@ -15,7 +15,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-enum class HudFont { CONDENSED, SERIF }
+/** The HUD's type: GTA's condensed face, Red Dead's serif, or Algothrim's Montserrat ([SANS]). */
+enum class HudFont { CONDENSED, SERIF, SANS }
 
 /** The palette GTA V and Red Dead use while driving: their radar, not the pause map. */
 const val RADAR = "radar"
@@ -23,8 +24,11 @@ const val RADAR = "radar"
 /** A radar palette: GTA V's and Red Dead's "radar", or one of GTA VI's ("radar-dusk", "radar-night"). */
 fun isRadar(variant: String?): Boolean = variant == RADAR || variant?.startsWith("$RADAR-") == true
 
-/** Which game's interface the app wears: GTA V's menus and HUD, Red Dead's, or GTA VI's. */
-enum class Skin { GTA, RDR, GTA6 }
+/**
+ * Which interface the app wears: GTA V's menus and HUD, Red Dead's, GTA VI's, or Algothrim's
+ * ([ALGO]: Gaurav's own world, thealgothrim.com's black and crimson, 30 Nov 2026).
+ */
+enum class Skin { GTA, RDR, GTA6, ALGO }
 
 /**
  * A palette of a theme's map with its own style files: GTA VI's dusk and night, or the radar GTA V
@@ -74,6 +78,8 @@ data class OverworldTheme(
     val buildings3d: Boolean,
     /** The sea is shaded by depth from Open Waters' Seascape, which the map credit names. */
     val seaDepth: Boolean = false,
+    /** The car shows the game's minimap ([RADAR] palettes) all the time, not the pause map (GTA VI). */
+    val carRadar: Boolean = false,
 ) {
   /**
    * The phone style, or the calmer car cut (wider roads, no texture or glow, fewer labels), in the
@@ -113,6 +119,7 @@ val HudFont.family: FontFamily
       when (this) {
         HudFont.CONDENSED -> GameFonts.condensed
         HudFont.SERIF -> GameFonts.lino
+        HudFont.SANS -> com.thealgothrim.overworld.ui.algo.Algo.sansSemiBold
       }
 
 val HudFont.weight: FontWeight
@@ -193,8 +200,10 @@ class ThemeStore(context: Context) {
    */
   private fun routeChoice(id: String): Int = prefs.getInt("$KEY_ROUTE_COLOUR$id", 0)
 
-  private fun styled(t: OverworldTheme): OverworldTheme {
-    val alt = ROUTE_COLOURS[t.id]?.getOrNull(routeChoice(t.id))?.takeIf { it.line != null } ?: return t
+  private fun styled(t: OverworldTheme): OverworldTheme = withRoute(t, routeChoice(t.id))
+
+  private fun withRoute(t: OverworldTheme, choice: Int): OverworldTheme {
+    val alt = ROUTE_COLOURS[t.id]?.getOrNull(choice)?.takeIf { it.line != null } ?: return t
     return t.copy(
         // The edge: the colour's own, else the line's where the world's edge is its line (GTA V),
         // else the world's (Red Dead's none).
@@ -203,6 +212,15 @@ class ThemeStore(context: Context) {
         blipShape = alt.shape ?: t.blipShape, blipFill = alt.line, blipCenter = alt.center ?: alt.line,
         blipStroke = alt.stroke ?: t.blipStroke,
     )
+  }
+
+  /** One route colour as Settings shows it: its name, the line and its edge, over the world's ground. */
+  data class RouteLook(val name: String, val line: Color, val casing: Color, val ground: Color)
+
+  /** The route colours [theme] offers as swatches, first the main one. */
+  fun routeLooks(theme: OverworldTheme): List<RouteLook> {
+    val base = byId(theme.id)
+    return ROUTE_COLOURS[theme.id].orEmpty().mapIndexed { i, c -> withRoute(base, i).let { RouteLook(c.name, it.routeLine, it.routeCasing, base.page) } }
   }
 
   /** The route colours [theme] offers, first the main one; empty when it has only one. */
@@ -406,6 +424,8 @@ class ThemeStore(context: Context) {
             "rdr2" to listOf(RouteColour("Red"), RouteColour("Yellow", Color(0xFFFEF390)), RouteColour("Blue", Color(0xFF57AADC))),
             // GTA VI: cyan for a destination you set yourself (core #5ACCBE, edge #7AE7E6).
             "gta6" to listOf(RouteColour("Pink"), RouteColour("Cyan", Color(0xFF5ACCBE), Color(0xFF7AE7E6))),
+            // Algothrim: crimson, or white with crimson edges (the site's white headings on crimson light).
+            "algo" to listOf(RouteColour("Crimson"), RouteColour("White", Color(0xFFF2F2F2), Color(0xFFC9183C), center = Color(0xFFC9183C), stroke = Color(0xFFC9183C))),
         )
     private const val KEY_CAR_MAP_TIME = "car_map_time"
     /** The car's theme on a first install (see _carTheme). */

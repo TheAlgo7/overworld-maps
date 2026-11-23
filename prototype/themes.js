@@ -10,39 +10,64 @@
 
   // Palettes follow the September 2026 design research (GTA V, Red Dead 2, GTA VI).
   // A personal build: named after the games. Rename before any public release.
-  // GTA VI's minimap, measured 2026-10-09 from Rockstar's official "An Extended Look" (the 4K download
-  // from rockstargames.com/VI): a sat-nav style minimap lit by the time of day. Pale warm-grey
-  // ground and broad lighter roads, raised cool-grey buildings, grey-teal water, no names, and one
-  // pink route and waypoint (#FB74A5, the same in every frame). At golden hour the same map goes dim
-  // and warm; at night it turns violet slate over near-black water. Since the launch (22 Nov) it is
+  // GTA VI's minimap as the game draws it since the launch, measured 23 Nov from Gaurav's 31 launch
+  // captures (Desktop\GTA6_Minimap_Screenshots, 4K walkthrough frames; the method and numbers are in
+  // "Ongoing Apps Assets\Overworld Maps\GTA VI\Minimap - launch measurements.md"). It is frosted
+  // glass: the world shows through at about 47%, so every colour here is the minimap as it reads over
+  // a typical world behind it (a fit over all 45 samples), not its raw layer. Green open ground,
+  // grey built-up ground, pale roads, khaki-yellow interstates with faint lane lines, plain slate
+  // blocks (no windows), teal water, khaki sand, no names, one pink route (#FB74A5). The earlier
+  // palette came from the pre-launch "Extended Look" trailer (pale warm grey, no green): wrong.
   // GTA VI's radar, the look on a phone trip; the pause map is the theme's own palette.
+  // The minimap's layer colours (fitted from the captures) as they read over a sunlit world: most
+  // captures had shade or foliage behind the minimap, and composited over that the day map looked
+  // like dusk (Gaurav, 23 Nov). Over mid-grey sunlit ground (#6A6A6A) instead: sage-green open land,
+  // silver-grey built-up ground, roads a step lighter, light slate blocks, teal water.
+  // 23 Nov night, from his two in-game daylight shots: by day the minimap is near-white (pale grey
+  // ground with only a hint of green, whitish roads, light cyan water). Composited over mid-grey it
+  // read as dusk ("much darker, feels like dusk"). Blocks without the dark roof rim and only a
+  // shade off the ground ("tearing my eyes how sharp"): no MSAA here, so contrast is what shows the
+  // jagged edge.
   const VI_MINIMAP = {
-    land: "#beb6b1", residential: "#beb6b1", industrial: "#b9b4b0",
-    park: "#8e9c8b", wood: "#879784", grass: "#93a190", sand: "#cec3b4",
-    water: "#739ba2", waterway: "#739ba2",
-    building: "#aeafb7", buildingLine: null,
+    land: "#b6c2ba", residential: "#c3c7c9", industrial: "#c3c7c9",
+    park: "#adc0b3", wood: "#a6b9ac", grass: "#afc1b5", sand: "#d8d4c2",
+    water: "#97c6d0", waterway: "#97c6d0",
+    building: "#b9bfc6", buildingLine: null,
     // Raised blocks: real heights where OpenStreetMap has them, a low default where it doesn't.
-    // Walls by height (OpenStreetMap's): plain under 12 m, like Rockstar's plain minimap blocks;
-    // windows to 60 m, as on the minimap's modelled buildings (the community frame comparison,
-    // Game Informer's first look); a glass curtain wall above, for towers like Miami's (and
-    // Dubai's). Roofs stay plain (see building-3d-roof). Sprites: tools/make_sprite.py.
-    buildings3d: { color: "#aeafb7", opacity: 0.94, heightScale: 1, minHeight: 4, facades: "" },
+    // Plain slate, soft and see-through like the game's frosted blocks: the ground shows through,
+    // the roof only a little lighter than the walls and no darkening down them. Solid with full
+    // light and a gradient, their top edges cut hard against the walls (Gaurav, 23 Nov: "so sharp").
+    // The rim: capture 34's roof #43505C inside a #4C5458 to #555A5D edge, darker and greyer than
+    // the roof, scaled to our block colour.
+    buildingShadow: { color: "#8b9196", opacity: 0.32, offset: [2, 3], blur: 5 },
+    buildings3d: { color: "#b9bfc6", opacity: 0.7, heightScale: 1, minHeight: 4, gradient: false, rim: null },
     // Flyovers seen from the minimap's 60 degree tilt: a concrete side under the deck and its
     // shadow on the ground (see bridgeLayers).
-    bridge: { lift: 5.0, face: 1.7, faceColor: "#9b928c", edge: "#aaa19b", shadow: { color: "#3a3430", opacity: 0.5 } },
-    light: { color: "#ffffff", intensity: 0.5 },
-    rail: "#a3a0a0",
-    // Roads are wide surfaces, a shade lighter than the ground, with no outlines.
-    roadScale: 1.6,
+    bridge: { lift: 5.0, face: 1.7, faceColor: "#9ea3a1", edge: "#c5cac8", shadow: { color: "#2c302d", opacity: 0.5 } },
+    light: { color: "#ffffff", intensity: 0.22 },
+    // Railways: two light blue-grey rails (#546368 over #415C4B ground in capture 24, scaled to here).
+    rail: "#a9b4bb", railDouble: true,
+    // A soft shore: the water's own colour blurred a little out over the land (captures 32, 46 have
+    // no hard edge), and pale solid footpaths between the blocks (34).
+    waterLine: "#97c6d0", waterLineBlur: 3, waterLineOpacity: 1,
+    trails: { color: "#d4d8d7", solid: true },
+    // Roads are broad pale bands with no outlines (the junction in capture 27), the palest thing on
+    // the map: the same contrast to the ground as the game (#787D77 on #4A6C53 there), and wide, since
+    // the game's bands are several times wider for the screen than a lane drawn to scale.
+    // Interstates are a warm khaki-grey (captures 24, 25, 26, 29: "I-97").
+    roadScale: 2.4,
     roads: {
-      motorway: { fill: "#d4cbc6", casing: null },
-      major: { fill: "#d2c9c4", casing: null },
-      mid: { fill: "#cfc7c2", casing: null },
-      minor: { fill: "#ccc4bf", casing: null },
-      service: { fill: "#c6beb9", casing: null },
+      // Interstates as in capture 24, across: green, a grey shoulder, yellow lanes, a thin dark
+      // median, yellow lanes, a grey shoulder. The dark edge (casing) makes the median where the two
+      // carriageways meet; the shoulders are stripes along each carriageway's edges.
+      motorway: { fill: "#dddbd0", casing: "#b9bcbc" },
+      major: { fill: "#e3e6e5", casing: null },
+      mid: { fill: "#e1e4e3", casing: null },
+      minor: { fill: "#dfe2e1", casing: null },
+      service: { fill: "#d9dcdb", casing: null },
     },
-    // White dashed lane dividers along highways, like the minimap's multi-lane decks.
-    laneDashes: { color: "#ebe5e1", groups: ["motorway", "major"] },
+    laneDashes: null,
+    laneStripes: { color: "#e6e8e8", groups: ["motorway"], share: 0.13, middle: false, minzoom: 13 },
     glow: null,
     labels: false,
     label: {
@@ -69,28 +94,30 @@
     viNames: null,
     fonts: null,
   };
-  // Golden hour: the minimap dims and warms; roads keep their lead over the ground.
+  // Golden hour: the launch captures at dusk (05, 12, 14) read almost as by day, so it is the day's
+  // palette 12% dimmer with a touch of sunset warmth (#FFAA78 at 4%), not the much darker map the
+  // trailer suggested.
   const VI_MINIMAP_DUSK = {
-    land: "#6f6d69", residential: "#6f6d69", industrial: "#6b6a68",
-    park: "#5b6759", wood: "#566355", grass: "#5f6b5d", sand: "#7e7666",
-    water: "#2f5867", waterway: "#2f5867",
-    building: "#5d6370",
-    buildings3d: { color: "#5f6573", opacity: 0.94, heightScale: 1, minHeight: 4, facades: "-dusk" },
-    bridge: { lift: 5.0, face: 1.7, faceColor: "#4d4a45", edge: "#66634f", shadow: { color: "#1e1c1a", opacity: 0.55 } },
-    light: { color: "#fff0e2", intensity: 0.38 },
-    rail: "#5c5a58",
+    land: "#687e6f", residential: "#7f7f80", industrial: "#7f7f80",
+    park: "#6a8071", wood: "#627766", grass: "#6b8172", sand: "#9f9881",
+    water: "#597f87", waterway: "#597f87",
+    building: "#5e646c",
+    buildingShadow: { color: "#3f423f", opacity: 0.32, offset: [2, 3], blur: 5 },
+    buildings3d: { color: "#767a81", opacity: 0.8, heightScale: 1, minHeight: 4, gradient: false, rim: null },
+    bridge: { lift: 5.0, face: 1.7, faceColor: "#6b6e6a", edge: "#9ea29d", shadow: { color: "#1e1c1a", opacity: 0.55 } },
+    light: { color: "#fff0e2", intensity: 0.22 },
+    rail: "#858d92",
+    waterLine: "#597f87",
+    trails: { color: "#888c88", solid: true },
     roads: {
-      motorway: { fill: "#857f6e", casing: null },
-      major: { fill: "#83806f", casing: null },
-      mid: { fill: "#7f7c72", casing: null },
-      minor: { fill: "#7b7a74", casing: null },
-      service: { fill: "#74736e", casing: null },
+      motorway: { fill: "#959081", casing: "#7a7976" },
+      major: { fill: "#8e928e", casing: null },
+      mid: { fill: "#8c8f8b", casing: null },
+      minor: { fill: "#898d89", casing: null },
+      service: { fill: "#828582", casing: null },
     },
-    // Golden hour shows the highways' lanes: warm lanes between pale grey stripes down the
-    // middle and along both edges of each carriageway (Extended Look 12:41 and 12:57, lanes
-    // #756f63, stripes #787a77, a stripe about half a lane wide), not white dashes.
     laneDashes: null,
-    laneStripes: { color: "#898c85", groups: ["motorway", "major"], share: 0.14 },
+    laneStripes: { color: "#939595", groups: ["motorway"], share: 0.13, middle: false, minzoom: 13 },
   };
   // Night: navy-violet ground, grey-violet roads, slate-blue buildings, teal grass and open land,
   // near-black navy water. Ground, buildings and greens corrected 23 Nov from a 4K night drive at
@@ -98,27 +125,39 @@
   // lighter and greyer since the launch footage (22 Nov: #53545e to #605961 at night, in Gaurav's
   // research folder), so they read against the ground on a dark car screen.
   const VI_MINIMAP_NIGHT = {
-    land: "#29263e", residential: "#29263e", industrial: "#28253c",
+    // Measured 23 Nov from a 4K night drive through Vice City (Gaurav's GTA6_ViceCity_Night_Screenshots,
+    // 18 minimap crops), the frost taken out and put back over dark asphalt (#26262C): navy built-up
+    // ground, pale lavender-grey roads, dark teal open land, periwinkle water inside a dark plum shore,
+    // slate-blue blocks with a lighter roof and a thin edge between roof and walls.
+    land: "#2b2e47", residential: "#2b2e47", industrial: "#2a2d45",
     park: "#26504f", wood: "#22474a", grass: "#264e51", sand: "#3a3540",
-    water: "#0d1120", waterway: "#0d1120",
-    building: "#363f55",
-    buildings3d: { color: "#404a63", opacity: 0.95, heightScale: 1, minHeight: 4, facades: "-night" },
+    water: "#55557c", waterway: "#55557c",
+    building: "#3a425c",
+    // Plain blocks, no windows, soft and see-through as by day. The roof is lighter than the walls
+    // (#505A74 against #3F4761) with a thin edge between them (#49516B), frames 10 and 14.
+    buildingShadow: { color: "#0b0d1a", opacity: 0.32, offset: [2, 3], blur: 5 },
+    buildings3d: { color: "#404a63", opacity: 0.82, heightScale: 1, minHeight: 4, gradient: false, rim: null },
     // Stacked ramps at night stand apart on near-black gaps (Extended Look 20:22, #160f1f
     // between the decks): dark, wider kerbs and a deeper shadow, where the day has pale kerbs.
     bridge: {
       lift: 5.0, face: 1.7, faceColor: "#1a1421", edge: "#17101f", edgeWidth: [1.1, 2.8, 4.8],
       shadow: { color: "#120c18", opacity: 0.75 },
     },
-    light: { color: "#ddd4ee", intensity: 0.3 },
-    rail: "#4a4552",
+    light: { color: "#ddd4ee", intensity: 0.2 },
+    rail: "#5a5868",
+    // The pond in frame 16 sits in a dark plum rim (#3C3B44 seen).
+    waterLine: "#3b3a48",
+    trails: { color: "#55545f", solid: true },
     roads: {
-      motorway: { fill: "#5a5862", casing: null },
-      major: { fill: "#58565f", casing: null },
-      mid: { fill: "#54525c", casing: null },
-      minor: { fill: "#504e58", casing: null },
-      service: { fill: "#48464f", casing: null },
+      motorway: { fill: "#605f6b", casing: "#3c3a45" },
+      major: { fill: "#605f6d", casing: null },
+      mid: { fill: "#5e5d6b", casing: null },
+      minor: { fill: "#5a5967", casing: null },
+      service: { fill: "#52515e", casing: null },
     },
-    laneDashes: { color: "#625b6e", groups: ["motorway", "major"] },
+    // No lane dashes at night (none in the 18 frames); grey shoulders on the interstates as by day.
+    laneDashes: null,
+    laneStripes: { color: "#6a6976", groups: ["motorway"], share: 0.13, middle: false, minzoom: 13 },
   };
 
   const THEMES = {
@@ -330,50 +369,60 @@
       id: "gta6",
       skin: "gta6",
       name: "GTA VI",
+      // The car shows the minimap at all times: it is what the game shows while you drive, and it is
+      // the softer of the two (Gaurav, 23 Nov). The phone keeps the pause map for looking around and
+      // turns into the minimap on a trip.
+      carRadar: true,
       blurb: "Mint land, white streets, a cyan sea and one pink route. The Leonida map, indigo at night.",
-      page: "#e7e9f4",
+      page: "#9ea5ad",
       dark: false,
       map: {
-        // Land outside the towns is green on the pause map; town blocks are pale lavender.
-        land: "#94d1a7", residential: "#e7e9f4", industrial: "#e3e6f2",
-        park: "#8ccfa2", wood: "#86ca9c", grass: "#94d1a7", sand: "#ffffd8",
+        // 23 Nov night, from gtabase.com/gta-6/map (his pick, sampled from his screenshot): muted, not
+        // the mint-and-lavender of before. Town blocks mid grey #9EA5AD under pale lilac-grey roads
+        // #D4D4DC, steel-blue buildings (#B4BFD1 enterable, #97A7BE not; one shade between here, see
+        // the minimap note), soft cyan water #6FB2C5, deep green parks #4F876E, sage grass #6E9986. The plain ground is grey too (#A3A9AF): unmarked town
+        // land in OpenStreetMap (most of Delhi) came out green, where gtabase's towns are grey.
+        land: "#a3a9af", residential: "#9ea5ad", industrial: "#9ba2ab",
+        park: "#4f876e", wood: "#4a7f66", grass: "#6e9986", sand: "#d9d3bb",
         // The sea: a pale cyan shelf along every shore (also lakes and rivers), a mint fringe at the
         // sand, deep cyan further out (#8ff3ff to #97fefe, #c0fbe8 to #dbfde2, #6feafc to #75ecfc).
-        water: "#8ff3ff", waterway: "#8ff3ff",
-        waterLine: "#c9fbe9",
-        depth: { bands: [[10, "#82f0fd"], [20, "#78ecfc"], [50, "#71e8fb"], [200, "#6ae3f8"]] },
+        water: "#6fb2c5", waterway: "#6fb2c5",
+        waterLine: "#8cc3cf",
+        depth: { bands: [[10, "#69adc1"], [20, "#63a8bd"], [50, "#5da3b9"], [200, "#579eb5"]] },
         // Hills lit from the north-west: deeper green in the shade, warm cream on the lit side.
-        hillshade: { strength: 0.35, shadow: "rgba(38, 104, 78, 0.55)", highlight: "rgba(255, 255, 238, 0.5)", accent: "rgba(38, 104, 78, 0.3)" },
-        building: "#c3d0ea", buildingLine: null,
+        hillshade: { strength: 0.25, shadow: "rgba(38, 104, 78, 0.55)", highlight: "rgba(255, 255, 238, 0.5)", accent: "rgba(38, 104, 78, 0.3)" },
+        building: "#a8b5ca", buildingLine: null,
         // Raised buildings in periwinkle, clearly darker than the blocks they stand on (23 Nov, the
         // Ocean Beach map frame: buildings about a quarter darker than the ground, #8197B5 against
         // #CDCDD6 in that darker video grade); the light shades their walls deeper still.
-        buildings3d: { color: "#a6badf", opacity: 0.96, heightScale: 1, minHeight: 4, facades: "-map" },
-        bridge: { lift: 5.0, face: 1.7, faceColor: "#c4cde0", edge: "#e1e6f1", shadow: { color: "#8c97b4", opacity: 0.35 } },
+        buildingShadow: { color: "#5f6670", opacity: 0.32, offset: [2, 3], blur: 5 },
+        buildings3d: { color: "#a8b5ca", opacity: 0.96, heightScale: 1, minHeight: 4, facades: "-map" },
+        bridge: { lift: 5.0, face: 1.7, faceColor: "#b4b8c3", edge: "#dcdce3", shadow: { color: "#6f7784", opacity: 0.35 } },
         light: { color: "#ffffff", intensity: 0.5 },
-        rail: "#c9cfdd",
+        rail: "#b8bcc6",
         roadScale: 1.6,
         roads: {
-          motorway: { fill: "#ffffff", casing: null },
-          major: { fill: "#fefffb", casing: null },
-          mid: { fill: "#fcfdf8", casing: null },
-          minor: { fill: "#fbfcf6", casing: null },
-          service: { fill: "#f3f5f7", casing: null },
+          motorway: { fill: "#dcdce3", casing: null },
+          major: { fill: "#d6d6de", casing: null },
+          mid: { fill: "#d4d4dc", casing: null },
+          minor: { fill: "#d1d1d9", casing: null },
+          service: { fill: "#c9c9d2", casing: null },
         },
         laneDashes: null,
         glow: null,
         labels: false,
         label: {
-          road: "#5a6075", roadHalo: "#ffffff", roadFont: "Noto Sans Regular",
-          place: "#3d4257", placeHalo: "#e7e9f4", placeFont: "Noto Sans Bold", placeSpacing: 0.08, upper: true,
-          water: "#2f7f8f", waterHalo: "#8ff3ff",
+          road: "#4a4f62", roadHalo: "#d4d4dc", roadFont: "Noto Sans Regular",
+          place: "#2c3040", placeHalo: "#b9bec6", placeFont: "Noto Sans Bold", placeSpacing: 0.08, upper: true,
+          water: "#1f5866", waterHalo: "#8cc3cf",
         },
         route: VI_MINIMAP.route,
         // Bundled glyphs on Android for the place names (tools/make_glyphs.py).
         fonts: { place: "InterMedium", city: "BarlowCondensedBold", water: "InterMedium" },
-        // The pause map's places are pins (a tile with a point under it); the minimap's are tiles.
-        pois: { ...VI_MINIMAP.pois, prefix: "vi-pin-", pins: true },
-        viNames: { region: "#8d92a3", area: "#838997" },
+        // Places are plain rounded tiles, the same as on the minimap: the game's have no point under
+        // them (Gaurav, 23 Nov, from the launch captures; the pins with a point were dropped).
+        pois: VI_MINIMAP.pois,
+        viNames: { region: "#8d92a3" },
       },
       variants: {
         // Golden hour, DERIVED (no launch capture shows the pause map at dusk): each colour 42% of
@@ -390,6 +439,7 @@
             depth: { bands: [[10, "#779eae"], [20, "#719bac"], [50, "#6d98aa"], [200, "#6995a7"]] },
             hillshade: { strength: 0.35, shadow: "rgba(48, 40, 64, 0.5)", highlight: "rgba(255, 196, 140, 0.35)", accent: "rgba(48, 40, 64, 0.3)" },
             building: "#9a92a5",
+            buildingShadow: { color: "#4c4450", opacity: 0.32, offset: [2, 3], blur: 5 },
             buildings3d: { color: "#918ea8", opacity: 0.96, heightScale: 1, minHeight: 4, facades: "-map-dusk" },
             bridge: { lift: 5.0, face: 1.7, faceColor: "#a298a5", edge: "#cdc0c4", shadow: { color: "#6f6571", opacity: 0.45 } },
             light: { color: "#fff0e6", intensity: 0.4 },
@@ -402,7 +452,7 @@
               service: { fill: "#c9bbba", casing: null },
             },
             label: { road: "#3a3440", roadHalo: "#d5c7c3", place: "#3a3440", placeHalo: "#a09399", water: "#2f4f5f", waterHalo: "#7fa1b1" },
-            viNames: { region: "#5f5862", area: "#655d67" },
+            viNames: { region: "#5f5862" },
           },
         },
         // Before sunrise (the 6:35 am capture), from 4 degrees of sun below the horizon.
@@ -417,6 +467,7 @@
             depth: { bands: [[10, "#2a2d63"], [20, "#282b5e"], [50, "#26265a"], [200, "#232455"]] },
             hillshade: { strength: 0.35, shadow: "rgba(0, 12, 20, 0.6)", highlight: "rgba(70, 150, 150, 0.22)", accent: "rgba(0, 12, 20, 0.35)" },
             building: "#343764",
+            buildingShadow: { color: "#141634", opacity: 0.32, offset: [2, 3], blur: 5 },
             buildings3d: { color: "#414a7a", opacity: 0.96, heightScale: 1, minHeight: 4, facades: "-map-night" },
             bridge: { lift: 5.0, face: 1.7, faceColor: "#4a4d70", edge: "#9a9cb0", shadow: { color: "#05061a", opacity: 0.6 } },
             light: { color: "#c9cdf0", intensity: 0.3 },
@@ -429,10 +480,10 @@
               service: { fill: "#76788c", casing: null },
             },
             label: { road: "#e4e5ee", roadHalo: "#131632", place: "#e4e5ee", placeHalo: "#131632", water: "#b9bbe6", waterHalo: "#2e3069" },
-            viNames: { region: "#6a6b7f", area: "#7d8194" },
+            viNames: { region: "#6a6b7f" },
           },
         },
-        radar: { page: "#bcb4af", dark: false, map: VI_MINIMAP },
+        radar: { page: "#c3c7c9", dark: false, map: VI_MINIMAP },
         "radar-dusk": { page: "#6e6c68", dark: true, map: { ...VI_MINIMAP, ...VI_MINIMAP_DUSK } },
         "radar-night": { page: "#1f1e2a", dark: true, map: { ...VI_MINIMAP, ...VI_MINIMAP_NIGHT } },
       },
@@ -445,6 +496,80 @@
         bg: "rgba(28,27,38,0.86)", fg: "#f1f3f7", sub: "#a1a6b4", accent: "#fb74a5", good: "#4be3c4",
         border: "rgba(255,255,255,0.14)", font: "'Barlow Condensed', sans-serif", fontKey: "condensed", weight: 600, upper: true,
         card: "#7a2d52",
+      },
+      overlay: null,
+    },
+
+    // Algothrim: Gaurav's own world, a birthday gift (30 Nov 2026). Not a game: his portfolio,
+    // thealgothrim.com, turned into a map. A black stage lit in crimson (#C9183C) like his key-art
+    // posters: near-black ground, graphite roads, deep wine water with a crimson glow at the shore,
+    // raised towers lit crimson with lit windows, one crimson route, names in the site's Unbounded and
+    // Montserrat. The player is his white kite marker; the icons are his own set (Codex, Nov 2026).
+    algo: {
+      id: "algo",
+      skin: "algo",
+      name: "Algothrim",
+      blurb: "A black stage lit in crimson: raised towers, one crimson route. My birthday gift to you, 30 Nov.",
+      page: "#080808",
+      dark: true,
+      map: {
+        land: "#080808", residential: "#0c0c0d", industrial: "#0e0e0f",
+        park: "#121213", wood: "#101011", grass: "#111112", sand: "#161413",
+        // Wine water, a shade darker out at sea, with a soft crimson rim along every shore.
+        water: "#1d0810", waterway: "#1d0810",
+        waterLine: "#7a1230", waterLineBlur: 3, waterLineOpacity: 0.9,
+        depth: { bands: [[10, "#1a070e"], [30, "#16060c"], [100, "#12050a"], [500, "#0e0408"]] },
+        // Near-black blocks, a shade off the ground (Gaurav, 23 Nov: "even more darker buildings").
+        building: "#111113", buildingLine: null,
+        // Raised blocks in near-black: plain walls for houses and shops, rows of windows (a few lit,
+        // one in crimson) to 60 m, dark glass with crimson floor lines above, for the towers.
+        buildings3d: { color: "#19191c", opacity: 0.96, heightScale: 1, minHeight: 4, facades: "", facadeSet: "algo" },
+        // A dim, barely warm key light: the crimson comes from the windows and the towers' floor
+        // lines (a crimson light turned every block plum, 23 Nov render).
+        light: { color: "#fff0f2", intensity: 0.3 },
+        bridge: { lift: 4.5, face: 1.5, faceColor: "#2a2a2e", edge: "#4a4a4f", shadow: { color: "#000000", opacity: 0.65 } },
+        rail: "#45454a",
+        roadScale: 1.25,
+        roads: {
+          motorway: { fill: "#8f8f94", casing: null },
+          major: { fill: "#7a7a7f", casing: null },
+          mid: { fill: "#66666b", casing: null },
+          minor: { fill: "#4f4f53", casing: null },
+          service: { fill: "#3b3b3f", casing: null },
+        },
+        laneDashes: { color: "#b4b4b9", groups: ["motorway", "major"] },
+        glow: null,
+        // Only the big names, his call (23 Nov): countries, states and cities, no roads or areas.
+        labels: false,
+        bigNames: { city: "#f2f2f2", minor: "#8c8c8c", font: "UnboundedSemiBold", citySpacing: 0.08, minorSpacing: 0.3 },
+        // Bundled glyphs on Android (tools/make_glyphs.py): the portfolio's own type.
+        fonts: { place: "MontserratSemiBold", city: "UnboundedSemiBold", water: "MontserratMediumItalic", road: "MontserratMedium" },
+        label: {
+          road: "#a3a3a8", roadHalo: "#080808", roadFont: "Noto Sans Regular",
+          place: "#bfbfbf", placeHalo: "#080808", placeFont: "Noto Sans Bold", placeSpacing: 0.12, upper: true,
+          city: "#f2f2f2", citySpacing: 0.08,
+          water: "#e0506e", waterHalo: "#1d0810",
+        },
+        // Crimson with a brighter edge each side (a tenth of its width), and a soft glow on the phone.
+        route: { line: "#dc1c45", casing: "#ff6b88", edge: 0.12, glow: "#c9183c" },
+        // His own icon set (Codex): white pictograms on crimson rounded tiles. They ship in the public
+        // build too: nothing in them is a game's.
+        pois: { prefix: "algo-", minzoom: 15, size: 0.8,
+          only: ["cafe", "fastfood", "food", "bar", "hospital", "doctor", "pharmacy", "bank", "post", "hotel", "train", "barber",
+            "clothes", "repair", "store", "market", "fuel", "charging", "police", "theatre", "landmark", "worship", "parking",
+            "airport", "school", "gym", "toilet", "mall", "tyre"] },
+      },
+      // The player: Gaurav's white kite with a black rim (tools/blips/algo.png). Waypoint: a crimson
+      // diamond with a white rim.
+      marker: { fill: "#ffffff", shade: "#d9d9d9", stroke: "#000000", shape: "kite" },
+      blip: { shape: "diamond", fill: "#c9183c", center: "#ffffff", stroke: "#ffffff" },
+      hud: {
+        // The site's panels: near-black, a faint white hairline, crimson for what matters.
+        // Good news (clear roads on the ETA) in a soft green like the other worlds' health green: a
+        // pale crimson there read as a warning (emulator, 23 Nov).
+        bg: "rgba(10,10,11,0.9)", fg: "#f2f2f2", sub: "#bfbfbf", accent: "#c9183c", good: "#62d394",
+        border: "rgba(255,255,255,0.1)", font: "'Montserrat', sans-serif", fontKey: "sans", weight: 600, upper: false,
+        card: "#3b0a17",
       },
       overlay: null,
     },
@@ -665,6 +790,28 @@
     };
   }
 
+  /**
+   * Only the big names (Gaurav, 23 Nov): countries far out, states as you come in, cities until the
+   * streets begin. [N]: city and minor (state, country) colours, the font, letter spacing and the
+   * city sizes at zoom 5, 9 and 12. No outline, like GTA VI's pause map.
+   */
+  function bigNameLayers(N, custom, tag) {
+    const font = custom ? N.font : "Noto Sans Bold";
+    const up = ["upcase", NAME];
+    const s = N.sizes || [14, 24, 32];
+    const place = (id, cls, minzoom, maxzoom, size, color, spacing) => ({
+      id: `label-${tag}-${id}`, type: "symbol", source: "omt", "source-layer": "place", minzoom, maxzoom,
+      filter: ["==", ["get", "class"], cls],
+      layout: { "text-field": up, "text-font": [font], "text-max-width": 14, "text-size": size, "text-letter-spacing": spacing },
+      paint: { "text-color": color },
+    });
+    return [
+      place("country", "country", 0, 6, ["interpolate", ["linear"], ["zoom"], 2, 12, 5, 20], N.minor, N.minorSpacing),
+      place("state", "state", 4, 8.5, ["interpolate", ["linear"], ["zoom"], 4, 11, 8, 18], N.minor, N.minorSpacing),
+      place("city", "city", 5, 13, ["interpolate", ["linear"], ["zoom"], 5, s[0], 9, s[1], 12, s[2]], N.city, N.citySpacing),
+    ];
+  }
+
   function buildStyle(theme, opts) {
     const car = !!(opts && opts.car);
     const m = paletteFor(theme, opts && opts.variant);
@@ -764,6 +911,21 @@
     if (m.depth) layers.push(depthLayer(m.depth));
     layers.push(waterwayLayer);
 
+    // A soft shadow down and right of every building (23 Nov, after Game Maps IRL's Leonyda: its
+    // flat blocks never look sharp because a blurred shadow takes the hard edge). MapLibre can't blur
+    // a fill, so: a faint nudged copy, plus a blurred line round its edge. Phone only.
+    if (m.buildingShadow && !car) {
+      const S = m.buildingShadow;
+      const fade = (o) => ["interpolate", ["linear"], ["zoom"], 14, 0, 15, o];
+      layers.push({
+        id: "building-shadow", type: "fill", source: "omt", "source-layer": "building", minzoom: 14,
+        paint: { "fill-color": S.color, "fill-opacity": fade(S.opacity * 0.7), "fill-translate": S.offset, "fill-antialias": false },
+      });
+      layers.push({
+        id: "building-shadow-edge", type: "line", source: "omt", "source-layer": "building", minzoom: 14,
+        paint: { "line-color": S.color, "line-opacity": fade(S.opacity), "line-width": S.blur, "line-blur": S.blur, "line-translate": S.offset },
+      });
+    }
     layers.push({
       id: "building", type: "fill", source: "omt", "source-layer": "building", minzoom: 14,
       // Raised buildings take over from the flat footprints as they grow (see building-3d).
@@ -803,9 +965,16 @@
 
     const railFilter = ["all", ["match", ["get", "class"], ["rail", "transit"], true, false], ["!=", ["get", "brunnel"], "tunnel"]];
     const dotted = m.railStyle === "dots";
+    // m.railDouble: two thin rails with the ground between (GTA VI's minimap, launch capture 24).
     layers.push({
       id: "rail", type: "line", source: "omt", "source-layer": "transportation", minzoom: 11, filter: railFilter,
-      paint: { "line-color": m.rail, "line-width": ["interpolate", ["linear"], ["zoom"], 11, dotted ? 1.2 : 0.6, 18, dotted ? 5 : 2] },
+      paint: Object.assign(
+        { "line-color": m.rail, "line-width": ["interpolate", ["linear"], ["zoom"], 11, dotted ? 1.2 : 0.6, 18, dotted ? 5 : 2] },
+        m.railDouble ? {
+          "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.5, 18, 1.6],
+          "line-gap-width": ["interpolate", ["linear"], ["zoom"], 12, 0.4, 15, 1.4, 18, 4],
+        } : {}
+      ),
     });
     if (dotted && (!car || m.railDotsInCar)) {
       // RDR2 railways: a thick ink line with light dots running along it.
@@ -840,7 +1009,11 @@
       layers.push({
         id: "trails", type: "line", source: "omt", "source-layer": "transportation", minzoom: 15,
         filter: ["all", ["match", ["get", "class"], ["path"], true, false], ["match", ["get", "brunnel"], ["tunnel"], false, true]],
-        paint: { "line-color": m.trails.color, "line-width": ["interpolate", ["linear"], ["zoom"], 15, 0.8, 18, 1.6], "line-dasharray": m.trails.dash },
+        // No dash for solid paths (GTA VI's pale footpaths between blocks, launch capture 34).
+        paint: Object.assign(
+          { "line-color": m.trails.color, "line-width": ["interpolate", ["linear"], ["zoom"], 15, m.trails.solid ? 1.4 : 0.8, 18, m.trails.solid ? 4 : 1.6] },
+          m.trails.dash ? { "line-dasharray": m.trails.dash } : {}
+        ),
       });
     }
     layers.push(...roadLayers(m, car, "tunnel"));
@@ -864,21 +1037,22 @@
         },
       };
     };
-    // Solid lane stripes instead (GTA VI at golden hour): one down the middle of each carriageway and
-    // one along each edge, each m.laneStripes.share of the road's width.
+    // Solid lane stripes instead: one down the middle of each carriageway and one along each edge,
+    // each m.laneStripes.share of the road's width; middle: false keeps only the edges (GTA VI's
+    // grey interstate shoulders, launch capture 24).
     const laneStripes = (id, brunnel) => {
       const S = m.laneStripes;
       const scale = (car ? 1.25 : 1) * (m.roadScale || 1);
       const layout = { "line-join": "round", ...(brunnel === "bridge" ? { "line-sort-key": ["coalesce", ["get", "layer"], 1] } : {}) };
-      const paint = { "line-color": S.color, "line-opacity": ["interpolate", ["linear"], ["zoom"], 15, 0, 15.6, 1] };
+      const paint = { "line-color": S.color, "line-opacity": ["interpolate", ["linear"], ["zoom"], S.minzoom || 15, 0, (S.minzoom || 15) + 0.6, 1] };
       return GROUPS.filter((g) => S.groups.includes(g.key)).flatMap((g) => [
-        {
-          id: `${id}-${g.key}-middle`, type: "line", source: "omt", "source-layer": "transportation", minzoom: 15,
+        ...(S.middle === false ? [] : [{
+          id: `${id}-${g.key}-middle`, type: "line", source: "omt", "source-layer": "transportation", minzoom: S.minzoom || 15,
           filter: classFilter(g.classes, brunnel), layout,
           paint: { ...paint, "line-width": widthExpr(g.w, scale * S.share) },
-        },
+        }]),
         {
-          id: `${id}-${g.key}-edges`, type: "line", source: "omt", "source-layer": "transportation", minzoom: 15,
+          id: `${id}-${g.key}-edges`, type: "line", source: "omt", "source-layer": "transportation", minzoom: S.minzoom || 15,
           filter: classFilter(g.classes, brunnel), layout,
           paint: { ...paint, "line-width": widthExpr(g.w, scale * S.share), "line-gap-width": widthExpr(g.w, scale * (1 - 2 * S.share)) },
         },
@@ -895,6 +1069,7 @@
       // can set maxHeight, but nothing in Rockstar's footage says the game caps its towers, so
       // GTA VI doesn't (Gaurav, 25 Oct).
       const B = m.buildings3d;
+      const set = B.facadeSet || "vi";
       const raw = ["max", B.minHeight, ["*", B.heightScale, ["coalesce", ["get", "render_height"], 5]]];
       const height = B.maxHeight ? ["min", B.maxHeight, raw] : raw;
       layers.push({
@@ -904,7 +1079,7 @@
           // Facades paint the walls by height (and the roof, which the cap below covers).
           ...(B.facades !== undefined
             ? { "fill-extrusion-pattern": ["step", ["coalesce", ["get", "render_height"], 5],
-                `vi-wall${B.facades}`, 12, `vi-windows${B.facades}`, 60, `vi-glass${B.facades}`] }
+                `${set}-wall${B.facades}`, 12, `${set}-windows${B.facades}`, 60, `${set}-glass${B.facades}`] }
             : { "fill-extrusion-color": B.color }),
           "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 14.5, 0, 16, height],
           "fill-extrusion-base": ["interpolate", ["linear"], ["zoom"], 14.5, 0, 16, ["*", B.heightScale, ["coalesce", ["get", "render_min_height"], 0]]],
@@ -912,8 +1087,9 @@
           // pass, then the colour), and among Cyber City's towers at the car's tilt that was a large
           // share of each frame (7 Nov drive, "so laggy"). Too little shows through at 0.94 to miss.
           "fill-extrusion-opacity": car ? 1 : B.opacity,
-          // Walls darken toward the ground, so the blocks sit on the map instead of floating on it.
-          "fill-extrusion-vertical-gradient": true,
+          // Walls darken toward the ground, so the blocks sit on the map instead of floating on it;
+          // a theme can turn it off (B.gradient false: GTA VI's flat, frosted minimap blocks).
+          "fill-extrusion-vertical-gradient": B.gradient !== false,
         },
       });
       if (B.facades !== undefined) {
@@ -926,6 +1102,40 @@
             "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 14.5, 0, 16, ["+", height, 0.5]],
             "fill-extrusion-base": ["interpolate", ["linear"], ["zoom"], 14.5, 0, 16, height],
             "fill-extrusion-opacity": car ? 1 : B.opacity,
+          },
+        });
+      }
+      if (B.rim && !car) {
+        // A thin darker rim round each roof, as on GTA VI's minimap (launch capture 34). MapLibre
+        // can't outline an extrusion, so: a dark slab at roof height drawn four times, each nudged a
+        // pixel or so on screen (left, right, up, down), then a cap in the roof's colour exactly on
+        // top; the nudged slabs show a hair's width round the cap, like a text halo. At roof height
+        // and depth-tested, a nearer block still hides the rim of one behind it. Phone only: five more
+        // passes over the buildings would cost the car its frame rate.
+        const t = B.rim.width;
+        const at = (dh) => ["interpolate", ["linear"], ["zoom"], 14.5, 0, 16, ["+", height, dh]];
+        const fade = ["interpolate", ["linear"], ["zoom"], 15, 0, 15.8, B.opacity];
+        [[t, 0], [-t, 0], [0, t], [0, -t]].forEach(([dx, dy], i) =>
+          layers.push({
+            id: `building-3d-rim-${i}`, type: "fill-extrusion", source: "omt", "source-layer": "building", minzoom: 15,
+            filter: ["!=", ["get", "hide_3d"], true],
+            paint: {
+              "fill-extrusion-color": B.rim.color,
+              "fill-extrusion-base": at(0),
+              "fill-extrusion-height": at(0.3),
+              "fill-extrusion-opacity": fade,
+              "fill-extrusion-translate": [dx, dy],
+              "fill-extrusion-translate-anchor": "viewport",
+            },
+          }));
+        layers.push({
+          id: "building-3d-rim-cap", type: "fill-extrusion", source: "omt", "source-layer": "building", minzoom: 15,
+          filter: ["!=", ["get", "hide_3d"], true],
+          paint: {
+            "fill-extrusion-color": B.rim.roof || B.color,
+            "fill-extrusion-base": at(0.3),
+            "fill-extrusion-height": at(0.45),
+            "fill-extrusion-opacity": fade,
           },
         });
       }
@@ -955,7 +1165,7 @@
     // Fonts: bundled map-lettering glyphs on Android (opts.glyphs), OpenFreeMap's Noto otherwise.
     const custom = !!(opts && opts.glyphs && m.fonts);
     const F = custom
-      ? { place: m.fonts.place, city: m.fonts.city, water: m.fonts.water, road: m.fonts.place, pencil: m.fonts.pencil }
+      ? { place: m.fonts.place, city: m.fonts.city, water: m.fonts.water, road: m.fonts.road || m.fonts.place, pencil: m.fonts.pencil }
       : { place: L.placeFont, city: L.placeFont, water: "Noto Sans Italic", road: L.roadFont, pencil: "Noto Sans Italic" };
 
     const firstLabel = layers.length;
@@ -1129,9 +1339,9 @@
           ? ["interpolate", ["linear"], ["zoom"], 5, 14, 12, 34 * labelScale]
           : ["interpolate", ["linear"], ["zoom"], 5, 11, 12, (custom ? 22 : 18) * labelScale],
         // Region names on the RDR2 map are set with very wide spacing.
-        "text-letter-spacing": towns ? 1.1 : custom ? 0.6 : L.placeSpacing,
+        "text-letter-spacing": towns ? 1.1 : L.citySpacing !== undefined ? L.citySpacing : custom ? 0.6 : L.placeSpacing,
       },
-      paint: { "text-color": L.place, "text-halo-color": L.placeHalo, "text-halo-width": 2, "text-opacity": towns ? 0.72 : 1 },
+      paint: { "text-color": L.city || L.place, "text-halo-color": L.placeHalo, "text-halo-width": 2, "text-opacity": towns ? 0.72 : 1 },
     });
     // Label-free themes (the GTA V map shows no names) hide the layers rather than drop them:
     // the app anchors its route line under "label-water", so that layer must exist.
@@ -1139,31 +1349,17 @@
       // Text labels only: the map's blips stay, like the game's pause map.
       for (const l of layers.slice(firstLabel)) if (!l.id.startsWith("poi-blips")) l.layout = Object.assign({}, l.layout, { visibility: "none" });
     }
-    // GTA VI's pause map names its places (m.viNames), copied from the launch captures (23 Nov):
-    // regions in huge condensed capitals ("MARIANA COUNTY", #6A6B7F at night), areas in a plain grey
-    // grotesk ("Ocean Beach", #838997 by day), no outline. Here cities and towns are the regions,
-    // suburbs and neighbourhoods the areas. Phone only: the car maps carry no names.
+    // GTA VI's pause map names its regions (m.viNames), copied from the launch captures (23 Nov): huge
+    // condensed capitals ("MARIANA COUNTY", #6A6B7F at night), no outline. Only the big names, Gaurav's
+    // call (23 Nov: the game has no small place names): countries, states and cities, no towns, areas
+    // or roads. Phone only: the car maps carry no names.
     if (m.viNames && !car) {
-      const N = m.viNames;
-      layers.push({
-        id: "label-vi-area", type: "symbol", source: "omt", "source-layer": "place", minzoom: 12,
-        filter: ["match", ["get", "class"], ["suburb", "neighbourhood", "quarter", "island"], true, false],
-        layout: {
-          "text-field": NAME, "text-font": [custom ? "InterMedium" : "Noto Sans Regular"], "text-max-width": 8,
-          "text-size": ["interpolate", ["linear"], ["zoom"], 12, 13, 16, 19],
-        },
-        paint: { "text-color": N.area },
-      });
-      layers.push({
-        id: "label-vi-region", type: "symbol", source: "omt", "source-layer": "place", minzoom: 5, maxzoom: 13,
-        filter: ["match", ["get", "class"], ["city", "town"], true, false],
-        layout: {
-          "text-field": ["upcase", NAME], "text-font": [custom ? "BarlowCondensedBold" : "Noto Sans Bold"], "text-max-width": 14,
-          "text-size": ["interpolate", ["linear"], ["zoom"], 5, 16, 9, 28, 12, 40], "text-letter-spacing": 0.02,
-        },
-        paint: { "text-color": N.region },
-      });
+      layers.push(...bigNameLayers(
+        { city: m.viNames.region, minor: m.viNames.region, font: "BarlowCondensedBold", citySpacing: 0.02, minorSpacing: 0.12, sizes: [16, 28, 40] },
+        custom, "vi"));
     }
+    // Algothrim the same way (m.bigNames), in the site's Unbounded: white cities, grey states and countries.
+    if (m.bigNames && !car) layers.push(...bigNameLayers(m.bigNames, custom, "big"));
 
     const style = {
       version: 8,

@@ -17,7 +17,9 @@ enum class AppIcon(val id: String, val alias: String, val label: String, val wor
   GTA5("gta5", "IconGta5", "GTA V", "gta5", R.drawable.app_icon_gta5),
   RDR2("rdr2", "IconRdr2", "Red Dead", "rdr2", R.drawable.app_icon_rdr2),
   GTA6("gta6", "IconGta6", "GTA VI", "gta6", R.drawable.app_icon_gta6),
-  GTA6_MACCA("gta6_macca", "IconGta6Macca", "Macca", "gta6", R.drawable.app_icon_gta6_macca);
+  GTA6_MACCA("gta6_macca", "IconGta6Macca", "Macca", "gta6", R.drawable.app_icon_gta6_macca),
+  /** Algothrim, his own world (30 Nov 2026). */
+  ALGO("algo", "IconAlgo", "Algothrim", "algo", R.drawable.app_icon_algo);
 
   companion object {
     fun byId(id: String?): AppIcon? = entries.firstOrNull { it.id == id }
@@ -44,6 +46,7 @@ data class IconChoice(
       if (!followsWorld) manual else when (world) {
         "rdr2" -> AppIcon.RDR2
         "gta6" -> vi
+        "algo" -> AppIcon.ALGO
         else -> AppIcon.GTA5
       }
 }

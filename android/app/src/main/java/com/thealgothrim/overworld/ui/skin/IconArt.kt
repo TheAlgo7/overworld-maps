@@ -37,6 +37,7 @@ val Skin.game: String
         Skin.GTA -> "gta5"
         Skin.RDR -> "rdr2"
         Skin.GTA6 -> "gta6"
+        Skin.ALGO -> "algo"
       }
 
 /**

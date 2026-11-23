@@ -26,7 +26,8 @@ import com.thealgothrim.overworld.theme.Skin
  */
 @Composable
 fun WantedFlash(theme: OverworldTheme, car: Boolean, modifier: Modifier = Modifier) {
-  if (theme.skin == Skin.RDR) return
+  // Algothrim isn't a game: no police in it either.
+  if (theme.skin == Skin.RDR || theme.skin == Skin.ALGO) return
   val at by AppModule.viewModel.wantedAt.collectAsState()
   val on by AppModule.prefs.wantedFlash.collectAsState()
   val t = remember { Animatable(1f) }

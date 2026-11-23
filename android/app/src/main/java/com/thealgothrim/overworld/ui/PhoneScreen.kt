@@ -506,6 +506,7 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
       Skin.GTA -> GtaBigMessage(arrivedVisible, "ARRIVED", arrivedAt.orEmpty(), Modifier.align(Alignment.Center))
       Skin.GTA6 -> ViBigMessage(arrivedVisible, "Arrived", arrivedAt.orEmpty(), Modifier.align(Alignment.Center))
       Skin.RDR -> RdrBigMessage(arrivedVisible, "ARRIVED", arrivedAt.orEmpty(), Modifier.align(Alignment.Center))
+      Skin.ALGO -> ViBigMessage(arrivedVisible, "Arrived", arrivedAt.orEmpty(), Modifier.align(Alignment.Center), look = com.thealgothrim.overworld.ui.algo.Algo.look)
     }
 
     // A word that something started (an offline download), over the map for a few seconds.
@@ -519,11 +520,34 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
       }
     }
 
+    // Algothrim, his birthday world, told about once (see AlgoGift), the same way as the support
+    // card below and before it: never both in one session.
+    var showGift by remember {
+      mutableStateOf(com.thealgothrim.overworld.ui.algo.AlgoGift.due(AppModule.prefs.algoGiftSeen, theme.id, viewModel.carConnected, navigating))
+    }
+    if (showGift && !navigating && !overlay && !searchOpen && !offerParking && planner.destination == null && planner.preview == null) {
+      Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        com.thealgothrim.overworld.ui.algo.AlgoGiftCard(
+            onTry = {
+              AppModule.prefs.seeAlgoGift()
+              showGift = false
+              AppModule.themeStore.select("algo")
+            },
+            onLater = {
+              AppModule.prefs.seeAlgoGift()
+              showGift = false
+            },
+            modifier = Modifier.align(Alignment.BottomCenter).padding(start = 12.dp, end = 12.dp, bottom = 96.dp),
+        )
+      }
+    }
+
     // Support Overworld, asked once (see SupportAsk): decided when the screen first opens, so it
     // never comes up in the middle of the session a trip ended in, and only over the plain map.
     var askSupport by remember {
       mutableStateOf(
-          com.thealgothrim.overworld.prefs.SupportAsk.due(AppModule.prefs.finishedTrips, AppModule.prefs.supportAnswered, viewModel.carConnected, navigating)
+          !showGift &&
+              com.thealgothrim.overworld.prefs.SupportAsk.due(AppModule.prefs.finishedTrips, AppModule.prefs.supportAnswered, viewModel.carConnected, navigating)
       )
     }
     if (askSupport && !navigating && !overlay && !searchOpen && !offerParking && planner.destination == null && planner.preview == null) {

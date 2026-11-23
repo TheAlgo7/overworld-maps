@@ -81,6 +81,13 @@ private fun badge(kind: RoadFeatureKind, skin: Skin): Pair<Color, Color> {
       RoadFeatureKind.TRAFFIC_LIGHT -> Color(0xFF26242F) to Color.White
     }
   }
+  // Algothrim: near-black discs with white glyphs; crashes, closures and cameras in crimson.
+  if (skin == Skin.ALGO) {
+    return when (kind) {
+      RoadFeatureKind.ACCIDENT, RoadFeatureKind.CLOSURE, RoadFeatureKind.SPEED_CAMERA -> Color(0xFFC9183C) to Color.White
+      else -> Color(0xFF0A0A0B) to Color.White
+    }
+  }
   return if (skin == Skin.GTA) {
     when (kind) {
       RoadFeatureKind.ACCIDENT, RoadFeatureKind.CLOSURE -> Color(0xFFEB2427) to Color.White
@@ -97,6 +104,11 @@ private fun badge(kind: RoadFeatureKind, skin: Skin): Pair<Color, Color> {
 
 private fun rim(kind: RoadFeatureKind, skin: Skin): Color =
     if (skin == Skin.GTA || skin == Skin.GTA6) Color.Black
+    else if (skin == Skin.ALGO)
+        when (kind) {
+          RoadFeatureKind.ACCIDENT, RoadFeatureKind.CLOSURE, RoadFeatureKind.SPEED_CAMERA -> Color.White
+          else -> Color(0xFFC9183C)
+        }
     else
         when (kind) {
           RoadFeatureKind.ACCIDENT, RoadFeatureKind.CLOSURE -> Color(0xFFCC0000)

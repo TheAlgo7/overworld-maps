@@ -79,14 +79,16 @@ internal object CarArrows {
         Skin.GTA6 -> Vi.Ink
         Skin.GTA -> Gta.White
         Skin.RDR -> Rdr.White
+        Skin.ALGO -> Color.White
       }
 
-  /** The tile in the world's route colour: GTA V's waypoint purple, Red Dead's red, GTA VI's pink. */
+  /** The tile in the world's route colour: GTA V's waypoint purple, Red Dead's red, GTA VI's pink, Algothrim's crimson. */
   private fun tileColor(skin: Skin): Color =
       when (skin) {
         Skin.GTA -> Color(0xFFA44CF2)
         Skin.RDR -> Color(0xFFCC0000)
         Skin.GTA6 -> Vi.Pink
+        Skin.ALGO -> com.thealgothrim.overworld.ui.algo.Algo.Crimson
       }
 
   private fun tile(skin: Skin, draw: (AndroidCanvas, Int, Int) -> Unit): CarIcon {

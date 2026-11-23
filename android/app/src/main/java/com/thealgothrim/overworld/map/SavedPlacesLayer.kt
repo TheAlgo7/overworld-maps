@@ -121,6 +121,7 @@ private fun savedBlip(context: Context, skin: Skin, kind: SavedKind): Painter {
         Skin.GTA -> "gta5"
         Skin.RDR -> "rdr2"
         Skin.GTA6 -> "gta6"
+        Skin.ALGO -> "algo"
       }
   val art =
       runCatching { context.assets.open("saved-blips/$game-${kind.name.lowercase()}.png").use { BitmapFactory.decodeStream(it) } }.getOrNull()
@@ -159,6 +160,13 @@ private class DrawnBlipPainter(private val skin: Skin, private val kind: SavedKi
         drawRoundRect(tile, Offset(s * 0.06f, s * 0.06f), Size(s * 0.88f, s * 0.88f), corner)
         drawRoundRect(Color(0xFF4A4650), Offset(s * 0.06f, s * 0.06f), Size(s * 0.88f, s * 0.88f), corner, style = Stroke(s * 0.06f))
         inset(s * 0.25f) { drawGameIcon(kind.icon, Color(0xFF26232B)) }
+      }
+      // Algothrim: your own places invert the shops' look, a crimson pictogram on a white tile.
+      Skin.ALGO -> {
+        val corner = CornerRadius(s * 0.26f)
+        drawRoundRect(Color(0xFFF2F2F2), Offset(s * 0.06f, s * 0.06f), Size(s * 0.88f, s * 0.88f), corner)
+        drawRoundRect(Color(0xFFC9183C), Offset(s * 0.06f, s * 0.06f), Size(s * 0.88f, s * 0.88f), corner, style = Stroke(s * 0.05f))
+        inset(s * 0.24f) { drawGameIcon(kind.icon, Color(0xFFC9183C)) }
       }
     }
   }

@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -79,15 +82,21 @@ fun BoxScope.MapLayersSheet(theme: OverworldTheme, onClose: () -> Unit) {
       spec,
       Modifier.align(Alignment.BottomCenter)
           // GTA VI's sheet floats above the gesture bar; the others reach the screen edge.
-          .then(if (spec.vi) Modifier.windowInsetsPadding(WindowInsets.navigationBars).sheetFloat(spec) else Modifier)
+          .then(if (spec.rounded) Modifier.windowInsetsPadding(WindowInsets.navigationBars).sheetFloat(spec) else Modifier)
           .fillMaxWidth()
           // GTA panels are see-through; over the locate button and credit that reads as a glitch.
-          .then(if (spec.vi) Modifier.background(Color(0xFF1C1B26), RoundedCornerShape(14.dp)) else Modifier.background(Color.Black))
+          .then(
+              when {
+                spec.vi -> Modifier.background(Color(0xFF1C1B26), RoundedCornerShape(14.dp))
+                spec.algo -> Modifier.background(Color(0xFF0A0A0B), RoundedCornerShape(com.thealgothrim.overworld.ui.algo.Algo.corner))
+                else -> Modifier.background(Color.Black)
+              }
+          )
           .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
   ) {
     // The panel reaches the screen edge; its content stays above the gesture bar.
-    Column(if (spec.vi) Modifier else Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {
-    Column(Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
+    Column(if (spec.rounded) Modifier else Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {
+    Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 16.dp)) {
       Row(verticalAlignment = Alignment.CenterVertically) {
         SkinText(spec.title("Map theme"), spec.title, spec.titleSize(if (spec.vi) 22.sp else 20.sp, 24.sp), spec.fg, Modifier.weight(1f), spacing = spec.titleSpacing)
         Box(Modifier.size(36.dp).clickable(onClick = onClose), contentAlignment = Alignment.Center) {
@@ -95,11 +104,7 @@ fun BoxScope.MapLayersSheet(theme: OverworldTheme, onClose: () -> Unit) {
         }
       }
       Spacer(Modifier.height(12.dp))
-      Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        THEMES.forEach { t ->
-          ThemeCard(spec, t, selected = t.id == theme.id, modifier = Modifier.weight(1f)) { store.select(t.id) }
-        }
-      }
+      ThemeGrid(spec, theme.id) { store.select(it) }
       Spacer(Modifier.height(18.dp))
       SkinText(spec.title("Map details"), spec.title, spec.titleSize(if (spec.vi) 18.sp else 16.sp, 19.sp), spec.sub, spacing = spec.titleSpacing)
       Spacer(Modifier.height(4.dp))
@@ -147,11 +152,16 @@ internal fun ThemeCard(
   // since the 8 Nov sweep found the Layers sheet and the car remote still ticking).
   val frame = if (selected) spec.accent else spec.fg.copy(alpha = 0.25f)
   // GTA VI's cards are rounded like the rest of its glass.
-  val shape = RoundedCornerShape(if (spec.vi) 10.dp else 0.dp)
+  val shape = RoundedCornerShape(if (spec.rounded) 10.dp else 0.dp)
   Column(modifier.clickable(onClick = onClick)) {
     Box(Modifier.fillMaxWidth().aspectRatio(400f / 230f).clip(shape).border(if (selected) 3.dp else 1.dp, frame, shape)) {
+      // The app's own picture of this world over the capital's landmark, else the bundled one.
+      val context = androidx.compose.ui.platform.LocalContext.current
+      androidx.compose.runtime.LaunchedEffect(Unit) { com.thealgothrim.overworld.theme.WorldPictures.ensure(context) }
+      val drawn = com.thealgothrim.overworld.theme.WorldPictures.pictures.collectAsState().value[t.id]
+      val art = if (drawn != null) remember(drawn) { androidx.compose.ui.graphics.painter.BitmapPainter(drawn.asImageBitmap()) } else painterResource(themeArt(t))
       Image(
-          painterResource(themeArt(t)),
+          art,
           contentDescription = t.name,
           contentScale = ContentScale.Crop,
           modifier = Modifier.fillMaxSize().padding(if (selected) 3.dp else 1.dp),
@@ -176,7 +186,7 @@ internal fun ThemeCard(
 internal fun AppIconTile(spec: SkinSpec, icon: com.thealgothrim.overworld.AppIcon, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
   val frame = if (selected) spec.accent else spec.fg.copy(alpha = 0.25f)
   val shape = RoundedCornerShape(percent = 26)
-  val nameShape = RoundedCornerShape(if (spec.vi) 10.dp else 0.dp)
+  val nameShape = RoundedCornerShape(if (spec.rounded) 10.dp else 0.dp)
   Column(modifier.clickable(onClick = onClick), horizontalAlignment = Alignment.CenterHorizontally) {
     Box(Modifier.fillMaxWidth().aspectRatio(1f).border(if (selected) 3.dp else 1.dp, frame, shape).padding(if (selected) 5.dp else 3.dp)) {
       Image(
@@ -191,7 +201,34 @@ internal fun AppIconTile(spec: SkinSpec, icon: com.thealgothrim.overworld.AppIco
         Modifier.fillMaxWidth().clip(nameShape).background(if (selected) spec.accent else spec.fg.copy(alpha = 0.08f)).padding(vertical = 5.dp),
         contentAlignment = Alignment.Center,
     ) {
-      SkinFitText(icon.label, spec.title, spec.titleSize(if (spec.vi) 16.sp else 14.sp, 16.sp), if (selected) spec.onAccent else spec.sub, spacing = spec.titleSpacing)
+      // Algothrim's Unbounded is too wide for a tile this narrow ("Algothrim" clipped at 384 dp): Montserrat.
+      SkinFitText(
+          icon.label,
+          if (spec.algo) com.thealgothrim.overworld.ui.algo.Algo.sansSemiBold else spec.title,
+          if (spec.algo) 14.sp else spec.titleSize(if (spec.vi) 16.sp else 14.sp, 16.sp),
+          if (selected) spec.onAccent else spec.sub,
+          spacing = spec.titleSpacing,
+      )
+    }
+  }
+}
+
+/**
+ * The worlds as picture cards, two to a row: four in one row left each card about 78 dp wide on his
+ * 384 dp phone, and a row that scrolls sideways reads as a bug (his rule), so they stack.
+ */
+@Composable
+internal fun ThemeGrid(spec: SkinSpec, selectedId: String, gap: androidx.compose.ui.unit.Dp = 12.dp, caption: Boolean = true, onPick: (String) -> Unit) {
+  Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+    THEMES.chunked(2).forEach { pair ->
+      Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+        pair.forEach { t -> ThemeCard(spec, t, selected = t.id == selectedId, modifier = Modifier.weight(1f)) { onPick(t.id) } }
+        if (pair.size == 1) Spacer(Modifier.weight(1f))
+      }
+    }
+    if (caption) {
+      val spot by com.thealgothrim.overworld.theme.WorldPictures.spot.collectAsState()
+      SkinText("Each world at ${spot.caption}", spec.body, 13.sp, spec.sub, Modifier.padding(start = 2.dp), maxLines = 1)
     }
   }
 }
@@ -202,6 +239,7 @@ private fun themeArt(t: OverworldTheme): Int =
       Skin.RDR -> R.drawable.theme_rdr2
       Skin.GTA6 -> R.drawable.theme_gta6
       Skin.GTA -> R.drawable.theme_gta5
+      Skin.ALGO -> R.drawable.theme_algo
     }
 
 @Composable

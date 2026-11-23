@@ -53,6 +53,8 @@ import androidx.compose.ui.unit.sp
 import com.thealgothrim.overworld.theme.GameFonts
 import com.thealgothrim.overworld.theme.OverworldTheme
 import com.thealgothrim.overworld.theme.Skin
+import com.thealgothrim.overworld.ui.algo.Algo
+import com.thealgothrim.overworld.ui.algo.algoGlass
 import com.thealgothrim.overworld.ui.gta.Gta
 import com.thealgothrim.overworld.ui.rdr.Rdr
 import com.thealgothrim.overworld.ui.vi.Vi
@@ -76,10 +78,14 @@ data class SkinSpec(
     val number: FontFamily,
     val upperTitles: Boolean,
 ) {
-  /** GTA V. GTA VI ([vi]) and Red Dead ([rdr]) each have their own look. */
+  /** GTA V. GTA VI ([vi]), Red Dead ([rdr]) and Algothrim ([algo]) each have their own look. */
   val gta get() = skin == Skin.GTA
   val vi get() = skin == Skin.GTA6
   val rdr get() = skin == Skin.RDR
+  val algo get() = skin == Skin.ALGO
+
+  /** Rounded panels floating off the screen's edges: GTA VI's glass and Algothrim's cards. */
+  val rounded get() = vi || algo
 
   /** Title letter spacing: Red Dead's engraved capitals spread out, GTA VI's condensed ones a little. */
   val titleSpacing: TextUnit
@@ -88,12 +94,20 @@ data class SkinSpec(
           Skin.RDR -> 1.sp
           Skin.GTA6 -> 0.6.sp
           Skin.GTA -> 0.sp
+          Skin.ALGO -> 0.sp
         }
 
-  /** Title sizes are set for GTA's fonts; Red Dead's serif reads smaller, so it goes up a size. */
-  fun titleSize(gta: TextUnit, rdr: TextUnit): TextUnit = if (this.rdr) rdr else gta
+  /**
+   * Title sizes are set for GTA's fonts; Red Dead's serif reads smaller, so it goes up a size, and
+   * Algothrim's Unbounded is twice as wide as GTA's condensed type, so it comes down a little.
+   */
+  fun titleSize(gta: TextUnit, rdr: TextUnit): TextUnit = if (this.rdr) rdr else if (algo) gta * 0.82f else gta
 
   fun title(text: String) = if (upperTitles) text.uppercase() else text
+
+  /** The rounded worlds' shared HUD pieces in this world's colours and type (GTA VI's otherwise). */
+  val look: com.thealgothrim.overworld.ui.vi.RoundLook
+    get() = if (algo) Algo.look else Vi.look
 
   /** Text on the accent colour: GTA VI's dark ink on its pink, white on the others' purple and red. */
   val onAccent: Color
@@ -120,6 +134,13 @@ val OverworldTheme.spec: SkinSpec
                 skin, Vi.White, Vi.Sub, hudAccent, Vi.PinkDeep, hudGood, Vi.Glass,
                 title = Vi.condensed, body = Vi.sans, big = Vi.condensedBold, number = Vi.condensed,
                 upperTitles = true,
+            )
+        // The site's type: Unbounded for titles and big numbers, Montserrat for the rest; no capitals.
+        Skin.ALGO ->
+            SkinSpec(
+                skin, Algo.White, Algo.Sub, hudAccent, Algo.CrimsonDeep, hudGood, Algo.Panel,
+                title = Algo.display, body = Algo.sans, big = Algo.displayBold, number = Algo.sansSemiBold,
+                upperTitles = false,
             )
       }
 
@@ -152,6 +173,7 @@ fun SkinText(
  */
 fun Modifier.skinPanel(spec: SkinSpec, elevated: Boolean = true): Modifier =
     if (spec.vi) this.viGlass(elevated = elevated)
+    else if (spec.algo) this.algoGlass(elevated = elevated)
     else this.then(if (elevated) Modifier.shadow(10.dp, RoundedCornerShape(0.dp), clip = false) else Modifier)
         .background(spec.panel)
         .then(
@@ -172,7 +194,7 @@ fun Modifier.skinPanel(spec: SkinSpec, elevated: Boolean = true): Modifier =
  * Room around a bottom sheet: GTA V's and Red Dead's run edge to edge; GTA VI's float off the
  * edges like its top card, rounded all round.
  */
-fun Modifier.sheetFloat(spec: SkinSpec): Modifier = if (spec.vi) this.padding(start = 12.dp, end = 12.dp, bottom = 12.dp) else this
+fun Modifier.sheetFloat(spec: SkinSpec): Modifier = if (spec.rounded) this.padding(start = 12.dp, end = 12.dp, bottom = 12.dp) else this
 
 @Composable
 fun SkinPanel(spec: SkinSpec, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
@@ -214,6 +236,7 @@ val SkinSpec.puck: Int
         Skin.GTA -> com.thealgothrim.overworld.R.drawable.puck_gta5
         Skin.RDR -> com.thealgothrim.overworld.R.drawable.puck_rdr2
         Skin.GTA6 -> com.thealgothrim.overworld.R.drawable.puck_gta6
+        Skin.ALGO -> com.thealgothrim.overworld.R.drawable.puck_algo
       }
 
 /**
@@ -251,12 +274,13 @@ fun SkinRecenterButton(spec: SkinSpec, onClick: () -> Unit, modifier: Modifier =
 
 /** The solid face the map's own buttons share, per game. */
 private fun Modifier.mapButtonFace(spec: SkinSpec, shape: androidx.compose.ui.graphics.Shape): Modifier =
-    this.then(if (spec.vi) Modifier.outerShadow(shape, blur = 6.dp, drop = 1.5.dp) else Modifier.shadow(8.dp, shape, clip = false))
+    this.then(if (spec.rounded) Modifier.outerShadow(shape, blur = 6.dp, drop = 1.5.dp) else Modifier.shadow(8.dp, shape, clip = false))
         .background(
             when (spec.skin) {
               Skin.GTA -> Color(0xE6000000)
               Skin.GTA6 -> Vi.Glass
               Skin.RDR -> Rdr.OffBlack
+              Skin.ALGO -> Algo.Panel
             },
             shape,
         )
@@ -265,6 +289,7 @@ private fun Modifier.mapButtonFace(spec: SkinSpec, shape: androidx.compose.ui.gr
               Skin.GTA -> Modifier
               Skin.GTA6 -> Modifier.border(1.dp, Vi.Hairline, shape)
               Skin.RDR -> Modifier.border(1.5.dp, Rdr.Grey.copy(alpha = 0.7f), shape)
+              Skin.ALGO -> Modifier.border(1.dp, Color(0x26FFFFFF), shape)
             }
         )
         .clip(shape)
@@ -281,6 +306,8 @@ fun SkinPrimaryButton(spec: SkinSpec, label: String, onClick: () -> Unit, modifi
                 Skin.GTA -> Modifier.background(spec.accent)
                 Skin.GTA6 -> Modifier.clip(RoundedCornerShape(Vi.corner)).background(spec.accent)
                 Skin.RDR -> Modifier.background(spec.accent).border(1.5.dp, Rdr.White.copy(alpha = 0.8f))
+                // The site's main button: a crimson pill.
+                Skin.ALGO -> Modifier.clip(RoundedCornerShape(percent = 50)).background(spec.accent)
               }
           )
           .clickable(onClick = onClick)
@@ -306,6 +333,8 @@ fun SkinSecondaryButton(spec: SkinSpec, label: String, onClick: () -> Unit, modi
                 Skin.GTA -> Modifier.background(Color(0x26FFFFFF)).border(1.dp, spec.fg.copy(alpha = 0.25f))
                 Skin.GTA6 -> Modifier.clip(RoundedCornerShape(Vi.corner)).background(Color(0x1FFFFFFF)).border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(Vi.corner))
                 Skin.RDR -> Modifier.background(Color(0x33000000)).border(1.dp, spec.fg.copy(alpha = 0.6f))
+                // The site's other button: a dark pill with a grey edge.
+                Skin.ALGO -> Modifier.clip(RoundedCornerShape(percent = 50)).background(Color(0x14FFFFFF)).border(1.dp, Color(0x40FFFFFF), RoundedCornerShape(percent = 50))
               }
           )
           .clickable(onClick = onClick)
@@ -375,6 +404,8 @@ fun SkinRow(
                 highlighted && spec.gta -> Modifier.background(Gta.RowSelected)
                 // GTA VI: the pause menu's silver bar.
                 highlighted && spec.vi -> Modifier.background(Vi.Silver)
+                // Algothrim: the crimson bar.
+                highlighted && spec.algo -> Modifier.background(Algo.Selected)
                 highlighted -> Modifier.background(Color(0x40000000)).border(1.5.dp, Rdr.White.copy(alpha = 0.9f))
                 else -> Modifier
               }
@@ -403,7 +434,7 @@ fun SkinRow(
 fun SkinDivider(spec: SkinSpec, modifier: Modifier = Modifier) {
   Canvas(modifier.fillMaxWidth().height(if (spec.rdr) 9.dp else 1.dp)) {
     val y = size.height / 2f
-    if (spec.vi) {
+    if (spec.vi || spec.algo) {
       drawLine(Vi.Hairline, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
     } else if (spec.gta) {
       drawLine(Color(0x33FFFFFF), Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
@@ -428,10 +459,11 @@ fun SkinChip(spec: SkinSpec, label: String, icon: GameIcon, onClick: () -> Unit)
                 Skin.GTA -> Modifier.shadow(6.dp, RoundedCornerShape(0.dp), clip = false).background(spec.panel)
                 Skin.GTA6 -> Modifier.viGlass()
                 Skin.RDR -> Modifier.shadow(6.dp, RoundedCornerShape(2.dp), clip = false).background(spec.panel).border(1.dp, Rdr.Grey.copy(alpha = 0.5f))
+                Skin.ALGO -> Modifier.algoGlass(corner = 19.dp)
               }
           )
           .clickable(onClick = onClick)
-          .padding(horizontal = if (spec.vi) 14.dp else 12.dp),
+          .padding(horizontal = if (spec.rounded) 14.dp else 12.dp),
       verticalAlignment = Alignment.CenterVertically,
   ) {
     GameIconView(icon, spec.fg, Modifier.size(18.dp))

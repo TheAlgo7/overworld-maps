@@ -212,7 +212,7 @@ private fun SavePanel(spec: SkinSpec, place: Place, saved: SavedState, onDone: (
 /** A list in the save panel: lit in the accent when the place is in it. */
 @Composable
 private fun ListToggleRow(spec: SkinSpec, name: String, icon: GameIcon, places: Int, on: Boolean, onClick: () -> Unit) {
-  val shape = RoundedCornerShape(if (spec.vi) 10.dp else 0.dp)
+  val shape = RoundedCornerShape(if (spec.rounded) 10.dp else 0.dp)
   val ink = if (on) spec.onAccent else spec.fg
   Row(
       Modifier.fillMaxWidth().heightIn(min = 50.dp).clip(shape).background(if (on) spec.accent else spec.fg.copy(alpha = 0.08f)).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp),

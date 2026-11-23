@@ -36,7 +36,7 @@ def d_mask(size: int) -> Image.Image:
     return m.resize((size, size), Image.LANCZOS)
 
 
-ICONS = ["gta5", "rdr2", "gta6", "gta6_macca"]  # the four launcher icons (make_icon.py)
+ICONS = ["gta5", "rdr2", "gta6", "gta6_macca", "algo"]  # the launcher icons (make_icon.py)
 
 for folder in sorted(MAIN.glob("mipmap-*dpi")):
     target = DEBUG / folder.name

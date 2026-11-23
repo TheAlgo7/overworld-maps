@@ -125,7 +125,43 @@ object Vi {
   /** Barlow Condensed: the mission HUD's condensed capitals ("TARGETS REMAINING", "00:35.12"). */
   val condensed = FontFamily(Font(R.font.barlow_condensed_semibold, FontWeight.SemiBold))
   val condensedBold = FontFamily(Font(R.font.barlow_condensed_bold, FontWeight.Bold))
+
+  val look =
+      RoundLook(
+          fg = White, sub = Sub, tile = Pink, onTile = Ink, heavy = sansSemiBold, text = sans, street = sansSemiBold,
+          label = condensed, upperLabels = true, big = sansSemiBold, bigSpacing = 9.sp, upperBig = true,
+          band = Color(0xC21C1B26), glow = Pink, track = Color(0x33FFFFFF),
+      )
 }
+
+/**
+ * The HUD pieces GTA VI and Algothrim share (both rounded cards with the turn on a tile in the route's
+ * colour), in each one's colours and type: [Vi.look], or Algothrim's (ui/algo).
+ */
+data class RoundLook(
+    val fg: Color,
+    val sub: Color,
+    /** The turn tile, the progress line and the glow behind big messages. */
+    val tile: Color,
+    /** The arrow on the tile. */
+    val onTile: Color,
+    /** The turn card's first line. */
+    val heavy: FontFamily,
+    val text: FontFamily,
+    /** The street name over the map. */
+    val street: FontFamily,
+    /** Small labels ("THEN"). */
+    val label: FontFamily,
+    val upperLabels: Boolean,
+    /** "Arrived". */
+    val big: FontFamily,
+    val bigSpacing: TextUnit,
+    val upperBig: Boolean,
+    /** The dark band behind a big message. */
+    val band: Color,
+    val glow: Color,
+    val track: Color,
+)
 
 /** A GTA VI panel: rounded dark glass with a hairline edge and a soft shadow. */
 fun Modifier.viGlass(corner: Dp = Vi.corner, elevated: Boolean = true, color: Color = Vi.Glass): Modifier {
@@ -335,11 +371,11 @@ fun ViMapLight(variant: String?) {
 
 // ---------------------------------------------------------------- turn
 
-/** GTA VI's turn arrow: dark, on a rounded pink tile in the route's colour. */
+/** GTA VI's turn arrow: dark, on a rounded pink tile in the route's colour ([look]'s for Algothrim). */
 @Composable
-fun ViTurnTile(content: VisualInstructionContent, side: DrivingSide?, size: Dp, modifier: Modifier = Modifier) {
-  Box(modifier.size(size).background(Vi.Pink, RoundedCornerShape(size * 0.24f)), contentAlignment = Alignment.Center) {
-    Box(Modifier.size(size * 0.72f), contentAlignment = Alignment.Center) { TurnArrow(content, side, Vi.Ink) }
+fun ViTurnTile(content: VisualInstructionContent, side: DrivingSide?, size: Dp, modifier: Modifier = Modifier, look: RoundLook = Vi.look) {
+  Box(modifier.size(size).background(look.tile, RoundedCornerShape(size * 0.24f)), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(size * 0.72f), contentAlignment = Alignment.Center) { TurnArrow(content, side, look.onTile) }
   }
 }
 
@@ -357,6 +393,7 @@ fun ViTurnRow(
     titleSize: TextUnit,
     lineSize: TextUnit,
     modifier: Modifier = Modifier,
+    look: RoundLook = Vi.look,
 ) {
   // The row's height changes only when its second line comes or goes (or the type's size does),
   // so the row keeps it between the distance's changes: see TurnRowPolicy.
@@ -366,10 +403,10 @@ fun ViTurnRow(
       content = {
         // The lines are the row's own children, with no Column or padding round them:
         // TurnRowPolicy stacks them and keeps their margins (see there for why).
-        Text(title, style = TextStyle(fontFamily = Vi.sansSemiBold, fontSize = titleSize, color = Vi.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (line.isNotEmpty()) Text(line, style = TextStyle(fontFamily = Vi.sans, fontSize = lineSize, color = Vi.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Box(Modifier.background(Vi.Pink), contentAlignment = Alignment.Center) {
-          content?.let { Box(Modifier.fillMaxSize(0.58f), contentAlignment = Alignment.Center) { TurnArrow(it, side, Vi.Ink) } }
+        Text(title, style = TextStyle(fontFamily = look.heavy, fontSize = titleSize, color = look.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (line.isNotEmpty()) Text(line, style = TextStyle(fontFamily = look.text, fontSize = lineSize, color = look.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Box(Modifier.background(look.tile), contentAlignment = Alignment.Center) {
+          content?.let { Box(Modifier.fillMaxSize(0.58f), contentAlignment = Alignment.Center) { TurnArrow(it, side, look.onTile) } }
         }
       },
       modifier = modifier.fillMaxWidth(),
@@ -438,43 +475,43 @@ private class TurnRowPolicy : MeasurePolicy {
 }
 // ---------------------------------------------------------------- bars
 
-/** Trip progress: a thin pink line on a faint track. */
+/** Trip progress: a thin pink line (Algothrim's crimson) on a faint track. */
 @Composable
-fun ViProgress(fraction: Float, modifier: Modifier = Modifier) {
+fun ViProgress(fraction: Float, modifier: Modifier = Modifier, look: RoundLook = Vi.look) {
   Canvas(modifier.fillMaxWidth().height(4.dp)) {
     val y = size.height / 2f
     val w = size.height
-    drawLine(Color(0x33FFFFFF), Offset(0f, y), Offset(size.width, y), strokeWidth = w, cap = StrokeCap.Round)
-    if (fraction > 0f) drawLine(Vi.Pink, Offset(0f, y), Offset(size.width * fraction.coerceIn(0f, 1f), y), strokeWidth = w, cap = StrokeCap.Round)
+    drawLine(look.track, Offset(0f, y), Offset(size.width, y), strokeWidth = w, cap = StrokeCap.Round)
+    if (fraction > 0f) drawLine(look.tile, Offset(0f, y), Offset(size.width * fraction.coerceIn(0f, 1f), y), strokeWidth = w, cap = StrokeCap.Round)
   }
 }
 
 // ---------------------------------------------------------------- big message
 
-private val glow = Shadow(Vi.Pink.copy(alpha = 0.9f), Offset.Zero, 28f)
-
 /**
  * "ARRIVED", in the style of the GTA VI title cards: wide-spaced white capitals glowing pink over a
- * dark band, the place underneath.
+ * dark band, the place underneath. Algothrim's ([look]): "Arrived" in Unbounded, lit crimson from
+ * behind like the site's hero.
  */
 @Composable
-fun ViBigMessage(visible: Boolean, title: String, subtitle: String, modifier: Modifier = Modifier) {
+fun ViBigMessage(visible: Boolean, title: String, subtitle: String, modifier: Modifier = Modifier, look: RoundLook = Vi.look) {
+  val glow = remember(look) { Shadow(look.glow.copy(alpha = 0.9f), Offset.Zero, 28f) }
   AnimatedVisibility(visible, modifier, enter = fadeIn(tween(300)), exit = fadeOut(tween(700))) {
     Box(
         Modifier.fillMaxWidth()
             .height(160.dp)
-            .background(Brush.horizontalGradient(0f to Color.Transparent, 0.18f to Color(0xC21C1B26), 0.82f to Color(0xC21C1B26), 1f to Color.Transparent)),
+            .background(Brush.horizontalGradient(0f to Color.Transparent, 0.18f to look.band, 0.82f to look.band, 1f to Color.Transparent)),
         contentAlignment = Alignment.Center,
     ) {
       Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            title.uppercase(),
-            style = TextStyle(fontFamily = Vi.sansSemiBold, fontSize = 40.sp, letterSpacing = 9.sp, color = Vi.White, shadow = glow, textAlign = TextAlign.Center),
+            if (look.upperBig) title.uppercase() else title,
+            style = TextStyle(fontFamily = look.big, fontSize = 40.sp, letterSpacing = look.bigSpacing, color = look.fg, shadow = glow, textAlign = TextAlign.Center),
         )
         Spacer(Modifier.height(6.dp))
         Text(
             subtitle,
-            style = TextStyle(fontFamily = Vi.sans, fontSize = 18.sp, color = Vi.White.copy(alpha = 0.85f), textAlign = TextAlign.Center),
+            style = TextStyle(fontFamily = look.text, fontSize = 18.sp, color = look.fg.copy(alpha = 0.85f), textAlign = TextAlign.Center),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )

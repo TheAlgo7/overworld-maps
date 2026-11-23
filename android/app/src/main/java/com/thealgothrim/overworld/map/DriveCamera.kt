@@ -33,6 +33,8 @@ val Skin.driveCamera: DriveCamera
         Skin.GTA -> DriveCamera(tilt = 55.0, zoomOffset = 0.0)
         Skin.RDR -> DriveCamera(tilt = 55.0, zoomOffset = 0.0)
         Skin.GTA6 -> DriveCamera(tilt = 60.0, zoomOffset = 0.4)
+        // Algothrim stands its towers up too, so it takes GTA VI's steep view in close.
+        Skin.ALGO -> DriveCamera(tilt = 60.0, zoomOffset = 0.4)
       }
 
 /**

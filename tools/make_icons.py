@@ -22,7 +22,12 @@ SOURCES = {
     "gta5": ROOT / "Reference - GTA V" / "icons",
     "rdr2": ROOT / "Reference - RDR2" / "icons",
     "gta6": ROOT / "Reference - GTA VI" / "icons",
+    # Algothrim (30 Nov 2026): Gaurav's own set, made by Codex from "04 - Algothrim prompts.md".
+    "algo": ROOT / "Reference - Algothrim" / "icons",
 }
+# Nothing in Algothrim's set is a game's, so it goes in the public build's assets, not the local ones.
+PUBLIC = {"algo"}
+MAIN = ROOT / "android" / "app" / "src" / "main" / "assets" / "icons"
 
 # The list's number -> the name the app asks for. Buttons are GameIcon names (lowercase); places
 # are the map's POI kinds (prototype/themes.js); road alerts are RoadFeatureKind names.
@@ -55,7 +60,7 @@ PANEL_PLACES = {"fuel", "food", "parking", "toilet", "hospital", "hotel", "cng",
 # icons keep them.
 # Buttons are 1-32 and, since 0.6, 81-96; 33-80 are map icons.
 BUTTON_NUMBERS = set(range(1, 33)) | set(range(81, 97))
-PLAIN = {"rdr2": {name for n, name in NAMES.items() if n in BUTTON_NUMBERS} | PANEL_PLACES, "gta6": PANEL_PLACES}
+PLAIN = {"rdr2": {name for n, name in NAMES.items() if n in BUTTON_NUMBERS} | PANEL_PLACES, "gta6": PANEL_PLACES, "algo": PANEL_PLACES}
 # The games whose pictogram is darker than what's behind it.
 DARK_INK = {"gta6"}
 
@@ -140,6 +145,17 @@ def plain(icon: Image.Image, dark: bool = False) -> Image.Image:
     return white
 
 
+def white_only(icon: Image.Image) -> Image.Image:
+    """Algothrim's map icons are white pictograms on a crimson tile: the white alone, for a panel.
+    White is bright in every channel, crimson only in red, so the darkest channel finds it."""
+    r, g, b, a = icon.split()
+    low = ImageChops.darker(ImageChops.darker(r, g), b)
+    ink = low.point(lambda v: max(0, min(255, (v - 90) * 255 // 120)))
+    white = Image.new("RGBA", icon.size, (255, 255, 255, 0))
+    white.putalpha(ImageChops.multiply(a, ink))
+    return white
+
+
 def vi_tile(icon: Image.Image, name: str, sheet: bool) -> Image.Image:
     """
     GTA VI's blip around [icon]'s pictogram. The generated pictograms are finer than the sheet's, so
@@ -189,7 +205,7 @@ def art(game: str, name: str, size: int, margin: float = 0.06, panel: bool = Fal
         return None
     icon = Image.open(path).convert("RGBA")
     if panel and name in PLAIN.get(game, ()):
-        icon = plain(icon, game in DARK_INK)
+        icon = white_only(icon) if game == "algo" else plain(icon, game in DARK_INK)
     elif game == "gta6" and next(n for n, v in NAMES.items() if v == name) not in BUTTON_NUMBERS and not finished(path):
         icon = vi_tile(icon, name, path.parent.name == "blips")
     box = icon.getchannel("A").point(lambda a: 255 if a > 8 else 0).getbbox()
@@ -210,7 +226,8 @@ if __name__ == "__main__":
             img = art(game, name, SIZE, panel=True)
             if img is None:
                 continue
-            (OUT / game).mkdir(parents=True, exist_ok=True)
-            img.save(OUT / game / f"{name}.png", optimize=True)
+            out = (MAIN if game in PUBLIC else OUT) / game
+            out.mkdir(parents=True, exist_ok=True)
+            img.save(out / f"{name}.png", optimize=True)
             made += 1
-        print(f"{game}: {made} icons" + (f" -> {OUT / game}" if made else ""))
+        print(f"{game}: {made} icons" + (f" -> {(MAIN if game in PUBLIC else OUT) / game}" if made else ""))

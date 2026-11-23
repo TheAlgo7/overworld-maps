@@ -179,6 +179,11 @@ fun MinimapEdge(
             Text("N", style = TextStyle(fontFamily = Vi.sansSemiBold, fontSize = 13.sp, color = Vi.White))
           }
       Skin.GTA -> GtaRadarNorth(border(north), NORTH_SIZE)
+      // Algothrim: a black disc with a crimson rim and a white N in the site's Montserrat.
+      Skin.ALGO ->
+          EdgeDisc(border(north), NORTH_SIZE, Color.Black, com.thealgothrim.overworld.ui.algo.Algo.Crimson) {
+            Text("N", style = TextStyle(fontFamily = com.thealgothrim.overworld.ui.algo.Algo.sansSemiBold, fontSize = 13.sp, color = com.thealgothrim.overworld.ui.algo.Algo.White))
+          }
       Skin.RDR -> {
         // The rim's four letters; the N a size up with its arrow pointing out past it.
         RdrLetter("E", border(north + 90), 15)

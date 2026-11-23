@@ -655,8 +655,10 @@ class OverworldViewModel :
 
   /**
    * [mapVariant] for the car screen, which keeps its own theme and time of day, and whose Auto
-   * follows the car. No radar on a trip here: on the big screen the radar's grey GTA V and dim
-   * Red Dead read as washed out next to the pause map he matched (Gaurav, 21 Nov).
+   * follows the car. GTA V and Red Dead keep the pause map here: on the big screen their radar's
+   * grey and dim parchment read as washed out next to the pause map he matched (Gaurav, 21 Nov).
+   * GTA VI shows its minimap all the time ([OverworldTheme.carRadar], 23 Nov): what the game shows
+   * while you drive, measured from its launch.
    */
   val carMapVariant: StateFlow<String?> =
       combine(AppModule.themeStore.carTheme, AppModule.themeStore.carMapTime, carDark, everyMinute()) { theme, time, dark, _ ->
@@ -668,8 +670,10 @@ class OverworldViewModel :
   private fun variantFor(theme: OverworldTheme, time: MapTime): String? =
       if (!theme.timeOfDay) null else time.variant(sunPhase())
 
-  private fun carVariantFor(theme: OverworldTheme, time: MapTime, dark: Boolean?): String? =
-      if (!theme.timeOfDay) null else time.carVariant(dark, sunPhase())
+  private fun carVariantFor(theme: OverworldTheme, time: MapTime, dark: Boolean?): String? {
+    val byTime = if (!theme.timeOfDay) null else time.carVariant(dark, sunPhase())
+    return if (theme.carRadar && theme.hasRadar) theme.radarFor(byTime) else byTime
+  }
 
   private fun sunPhase(): String? {
     val at = startPoint

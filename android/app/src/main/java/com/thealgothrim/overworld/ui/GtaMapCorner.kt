@@ -65,6 +65,8 @@ fun GtaMapCorner(spec: SkinSpec, area: String?, metresPerDp: Double, modifier: M
   ) {
     if (!area.isNullOrBlank()) {
       if (spec.vi) SkinText(area.uppercase(), Vi.condensed, 16.sp, Color.White, Modifier.widthIn(max = 200.dp), spacing = 0.8.sp)
+      // Algothrim: the site's small navigation capitals, spaced out.
+      else if (spec.algo) SkinText(area.uppercase(), com.thealgothrim.overworld.ui.algo.Algo.sansSemiBold, 12.sp, Color.White, Modifier.widthIn(max = 200.dp), spacing = 1.2.sp)
       else SkinText(area.uppercase(), spec.body, 14.sp, Color.White, Modifier.widthIn(max = 200.dp))
       Spacer(Modifier.height(3.dp))
     }

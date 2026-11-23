@@ -62,7 +62,7 @@ fun <T> ChoiceRow(spec: SkinSpec, options: List<T>, selected: T, label: (T) -> S
 /** One choice: lit in the accent when [on] (a chosen option, or a switch that's on). */
 @Composable
 fun ChoiceChip(spec: SkinSpec, label: String, on: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, icon: GameIcon? = null) {
-  val shape = RoundedCornerShape(if (spec.vi) 10.dp else 0.dp)
+  val shape = RoundedCornerShape(if (spec.rounded) 10.dp else 0.dp)
   val ink = if (on) spec.onAccent else spec.fg
   Column(
       modifier
@@ -132,6 +132,20 @@ private fun GameTab(spec: SkinSpec, label: String, on: Boolean, onClick: () -> U
         Text(label.uppercase(), color = if (on) Vi.OnSilver else Vi.White, fontFamily = Vi.condensedBold, fontSize = 17.sp, letterSpacing = 0.6.sp, maxLines = 1)
       }
     }
+    // Algothrim: the site's pills, the open one crimson.
+    spec.algo -> {
+      val pill = RoundedCornerShape(percent = 50)
+      Box(
+          tab.clip(pill)
+              .background(if (on) com.thealgothrim.overworld.ui.algo.Algo.Crimson else Color(0x14FFFFFF))
+              .border(1.dp, if (on) com.thealgothrim.overworld.ui.algo.Algo.Crimson else Color(0x33FFFFFF), pill)
+              .clickable(onClick = onClick)
+              .padding(horizontal = 16.dp),
+          contentAlignment = Alignment.Center,
+      ) {
+        Text(label, color = Color.White, fontFamily = com.thealgothrim.overworld.ui.algo.Algo.sansSemiBold, fontSize = 15.sp, maxLines = 1)
+      }
+    }
     else ->
         Box(tab.then(if (on) Modifier.roughBox() else Modifier).clickable(onClick = onClick).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
           RdrText(label.uppercase(), 16.sp, color = if (on) Color.White else Rdr.Grey, spacing = 1.sp)
@@ -166,13 +180,20 @@ fun SkinSectionTitle(spec: SkinSpec, title: String) {
           RdrText(title.uppercase(), 16.sp, color = Rdr.Grey, spacing = 2.sp)
           RdrDivider()
         }
+    // The site's section headings: Unbounded, white, with a short crimson line under it.
+    Skin.ALGO ->
+        Column(Modifier.padding(start = 4.dp, top = 22.dp, bottom = 8.dp)) {
+          Text(title, color = com.thealgothrim.overworld.ui.algo.Algo.White, fontFamily = com.thealgothrim.overworld.ui.algo.Algo.display, fontSize = 19.sp)
+          Spacer(Modifier.height(6.dp))
+          Box(Modifier.width(28.dp).height(2.dp).background(com.thealgothrim.overworld.ui.algo.Algo.Crimson, RoundedCornerShape(1.dp)))
+        }
   }
 }
 
 /** A text box in the world's look: for a place's own name, a note, a list's name. */
 @Composable
 fun SkinField(spec: SkinSpec, value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier, singleLine: Boolean = true) {
-  val shape = RoundedCornerShape(if (spec.vi) 10.dp else 0.dp)
+  val shape = RoundedCornerShape(if (spec.rounded) 10.dp else 0.dp)
   Box(
       modifier
           .fillMaxWidth()
@@ -232,7 +253,7 @@ fun HGap(w: Int = 10) = Spacer(Modifier.width(w.dp))
  */
 @Composable
 fun IconPicker(spec: SkinSpec, icons: List<GameIcon>, selected: GameIcon, onPick: (GameIcon) -> Unit) {
-  val shape = RoundedCornerShape(if (spec.vi) 10.dp else 0.dp)
+  val shape = RoundedCornerShape(if (spec.rounded) 10.dp else 0.dp)
   Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
     icons.forEach { icon ->
       val on = icon == selected
@@ -275,5 +296,44 @@ fun SupportLine(spec: SkinSpec) {
       com.thealgothrim.overworld.ui.skin.SkinText("Support it and help keep it that way", spec.body, 13.sp, spec.accent)
     }
     com.thealgothrim.overworld.ui.skin.GameIconView(com.thealgothrim.overworld.ui.skin.GameIcon.NAVIGATE, spec.sub, Modifier.size(16.dp))
+  }
+}
+
+/**
+ * The route colours as pictures (his 23 Nov ask: show what colour each one is): a stretch of route
+ * in that colour and its edge over the world's ground, the name under it lit like a world card.
+ */
+@Composable
+fun RouteSwatches(spec: SkinSpec, looks: List<com.thealgothrim.overworld.theme.ThemeStore.RouteLook>, selected: Int, onPick: (Int) -> Unit) {
+  val shape = RoundedCornerShape(if (spec.rounded) 10.dp else 0.dp)
+  Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    looks.forEachIndexed { i, look ->
+      val on = i == selected
+      Column(Modifier.weight(1f).clickable { onPick(i) }) {
+        Box(
+            Modifier.fillMaxWidth().height(46.dp).clip(shape).background(look.ground)
+                .border(if (on) 3.dp else 1.dp, if (on) spec.accent else spec.fg.copy(alpha = 0.25f), shape),
+        ) {
+          androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
+            // A gentle bend, like a route round a corner: edge first, the line on top.
+            val path = androidx.compose.ui.graphics.Path().apply {
+              moveTo(size.width * 0.08f, size.height * 0.72f)
+              cubicTo(size.width * 0.42f, size.height * 0.72f, size.width * 0.52f, size.height * 0.30f, size.width * 0.92f, size.height * 0.30f)
+            }
+            val w = 9.dp.toPx()
+            val cap = androidx.compose.ui.graphics.StrokeCap.Round
+            drawPath(path, look.casing, style = androidx.compose.ui.graphics.drawscope.Stroke(w + 4.dp.toPx(), cap = cap))
+            drawPath(path, look.line, style = androidx.compose.ui.graphics.drawscope.Stroke(w, cap = cap))
+          }
+        }
+        Spacer(Modifier.height(6.dp))
+        Box(
+            Modifier.fillMaxWidth().clip(shape).background(if (on) spec.accent else spec.fg.copy(alpha = 0.08f)).padding(vertical = 5.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+          com.thealgothrim.overworld.ui.skin.SkinFitText(look.name, spec.title, spec.titleSize(if (spec.vi) 16.sp else 14.sp, 16.sp), if (on) spec.onAccent else spec.sub, spacing = spec.titleSpacing)
+        }
+      }
+    }
   }
 }

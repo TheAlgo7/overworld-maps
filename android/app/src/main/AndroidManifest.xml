@@ -113,6 +113,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
+        <!-- Algothrim, Gaurav's own world (30 Nov 2026). -->
+        <activity-alias
+            android:name=".IconAlgo"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_algo"
+            android:roundIcon="@mipmap/ic_launcher_algo"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <service
             android:name="com.stadiamaps.ferrostar.core.service.FerrostarForegroundService"

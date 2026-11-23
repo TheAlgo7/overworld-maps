@@ -225,7 +225,7 @@ private fun ListRow(spec: SkinSpec, list: SavedList, places: Int, onClick: () ->
 
 @Composable
 private fun PlaceTile(spec: SkinSpec, title: String, sub: String, icon: GameIcon, modifier: Modifier, onClick: () -> Unit) {
-  val shape = RoundedCornerShape(if (spec.vi) 12.dp else 0.dp)
+  val shape = RoundedCornerShape(if (spec.rounded) 12.dp else 0.dp)
   Row(modifier.heightIn(min = 64.dp).clip(shape).background(spec.panel).clickable(onClick = onClick).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
     GameIconView(icon, spec.accent, Modifier.size(24.dp))
     Spacer(Modifier.width(10.dp))

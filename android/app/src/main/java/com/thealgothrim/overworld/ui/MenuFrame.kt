@@ -48,11 +48,14 @@ fun PauseMenuFrame(theme: OverworldTheme, title: String, onClose: () -> Unit, vi
         // GTA VI's menus are solid: the pause menu's slate, or Settings' violet ([violet]).
         Skin.GTA6 -> com.thealgothrim.overworld.ui.vi.Vi.Slate
         Skin.RDR -> Color(0xF0080706)
+        // Algothrim: the site's black stage, lit crimson from the top corner.
+        Skin.ALGO -> Color.Black
       }
   Box(
       Modifier.fillMaxSize()
           .background(scrim)
           .then(if (violet && theme.skin == Skin.GTA6) Modifier.background(com.thealgothrim.overworld.ui.vi.Vi.Violet) else Modifier)
+          .then(if (theme.skin == Skin.ALGO) Modifier.background(com.thealgothrim.overworld.ui.algo.Algo.Stage) else Modifier)
           .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
           .windowInsetsPadding(WindowInsets.safeDrawing)
   ) {
@@ -61,6 +64,7 @@ fun PauseMenuFrame(theme: OverworldTheme, title: String, onClose: () -> Unit, vi
         Skin.GTA -> GtaMenuHeader(title.uppercase())
         Skin.GTA6 -> ViMenuHeader(title, "Overworld", "")
         Skin.RDR -> RdrMenuTitle(title.uppercase(), "Overworld", "")
+        Skin.ALGO -> com.thealgothrim.overworld.ui.algo.AlgoMenuHeader(title, "Overworld")
       }
       content()
       // Room for the Back prompt below the last row.
@@ -70,6 +74,11 @@ fun PauseMenuFrame(theme: OverworldTheme, title: String, onClose: () -> Unit, vi
       Skin.GTA -> GtaInstructionalButtons(listOf(GtaPrompt("B", "Back", onClose)), Modifier.align(Alignment.BottomEnd).padding(16.dp))
       Skin.GTA6 -> ViPrompts(listOf(ViPrompt("B", "Back", onClose)), Modifier.align(Alignment.BottomEnd).padding(16.dp))
       Skin.RDR -> RdrPrompts(listOf(RdrPrompt("B", "Back", onClose)), Modifier.align(Alignment.BottomEnd).padding(bottom = 16.dp))
+      Skin.ALGO ->
+          com.thealgothrim.overworld.ui.algo.AlgoPrompts(
+              listOf(com.thealgothrim.overworld.ui.algo.AlgoPrompt("B", "Back", onClose)),
+              Modifier.align(Alignment.BottomEnd).padding(16.dp),
+          )
     }
   }
 }

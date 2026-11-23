@@ -266,9 +266,7 @@ private fun CarScreenSettings(spec: SkinSpec, theme: OverworldTheme) {
       SkinText(spec.title("Car screen"), spec.title, spec.titleSize(if (spec.vi) 22.sp else 20.sp, 24.sp), spec.fg, spacing = spec.titleSpacing)
       SkinText("Only the car's map. The phone keeps its own.", spec.body, 13.sp, spec.sub)
       Spacer(Modifier.height(12.dp))
-      Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        THEMES.forEach { t -> ThemeCard(spec, t, selected = t.id == theme.id, modifier = Modifier.weight(1f)) { store.selectCar(t.id) } }
-      }
+      ThemeGrid(spec, theme.id) { store.selectCar(it) }
       if (theme.timeOfDay) {
         Spacer(Modifier.height(14.dp))
         SkinText("Time of day. Auto follows the car's day and night.", spec.body, 15.sp, spec.sub, maxLines = 2)

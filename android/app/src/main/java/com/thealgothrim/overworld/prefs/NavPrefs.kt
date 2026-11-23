@@ -102,6 +102,13 @@ class NavPrefs(context: Context) {
 
   fun answerSupport() = prefs.edit { putBoolean("support_answered", true) }
 
+  // ------------------------------------------------------------ Algothrim (see AlgoGift)
+  /** The card that tells about Algothrim, his birthday world, was answered: it never comes back. */
+  val algoGiftSeen: Boolean
+    get() = prefs.getBoolean("algo_gift_seen", false)
+
+  fun seeAlgoGift() = prefs.edit { putBoolean("algo_gift_seen", true) }
+
   // ------------------------------------------------------------ display
   private val _units = MutableStateFlow(read("units", Units.AUTO))
   val units: StateFlow<Units> = _units.asStateFlow()

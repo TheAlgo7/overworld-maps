@@ -216,6 +216,35 @@ FACADES = {
 WINDOWS = {f"vi-{kind}{suffix}": (kind, colours) for suffix, colours in FACADES.items() for kind in ("wall", "windows", "glass")}
 
 
+def algo_facade(scale, kind):
+    """Algothrim's walls (prototype/themes.js, algo): graphite, a night city in his crimson. "wall"
+    plain with a faint floor line; "windows" four bays by four floors, most dark, two lit warm, one
+    dim and one crimson, so a street of them doesn't read as wallpaper; "glass" dark curtain wall
+    with crimson floor lines, the towers. 32 px cells: four floors at the zoom the map is driven at."""
+    s = 32 * scale
+    # Near-black (Gaurav, 23 Nov: "even more darker buildings"); the lit windows and crimson lines stay.
+    if kind == "glass":
+        img = Image.new("RGBA", (s, s), (0x0E, 0x0E, 0x12, 255))
+        d = ImageDraw.Draw(img)
+        for x in range(0, s, 4 * scale):
+            d.rectangle([x, 0, x + max(1, scale // 2) - 1, s - 1], fill=(0x18, 0x18, 0x1D, 255))
+        for y, colour in ((0, (0xB0, 0x16, 0x3A)), (8 * scale, (0x1E, 0x1D, 0x24)), (16 * scale, (0xB0, 0x16, 0x3A)), (24 * scale, (0x1E, 0x1D, 0x24))):
+            d.rectangle([0, y, s - 1, y + scale - 1], fill=colour + (255,))
+        return img
+    img = Image.new("RGBA", (s, s), (0x15, 0x15, 0x18, 255))
+    d = ImageDraw.Draw(img)
+    if kind == "wall":
+        for y in (0, 16 * scale):
+            d.rectangle([0, y, s - 1, y + scale - 1], fill=(0x1B, 0x1B, 0x1F, 255))
+        return img
+    lit = {(0, 1): (0xE3, 0xD2, 0xB8), (2, 3): (0xE3, 0xD2, 0xB8), (1, 2): (0x86, 0x78, 0x68), (3, 0): (0xD0, 0x1E, 0x46)}
+    for bx in range(4):
+        for by in range(4):
+            colour = lit.get((bx, by), (0x20, 0x20, 0x26))
+            d.rectangle([(bx * 8 + 2) * scale, (by * 8 + 2) * scale, (bx * 8 + 6) * scale - 1, (by * 8 + 6) * scale - 1], fill=colour + (255,))
+    return img
+
+
 def poi(blip: str, scale: int) -> Image.Image:
     size = 24 * scale
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
@@ -262,6 +291,9 @@ def write(out: Path, parts: dict, scale: int, suffix: str) -> None:
 for scale, suffix in [(1, ""), (2, "@2x")]:
     patterns = {"hatch": hatch(scale), "stipple": stipple(scale)}
     patterns.update({name: facade(scale, kind, *colours) for name, (kind, colours) in WINDOWS.items()})
+    patterns.update({f"algo-{kind}": algo_facade(scale, kind) for kind in ("wall", "windows", "glass")})
+    # Algothrim's place icons are Gaurav's own (no game's art), so they ship in the public sheet.
+    patterns.update(generated("algo", "algo-", 24, scale))
     patterns.update({f"animal-{f.stem}": animal(f, scale) for f in sorted(ANIMALS.glob("*.png"))})
     write(MAIN, patterns, scale, suffix)
     local = dict(patterns)
@@ -276,8 +308,8 @@ for scale, suffix in [(1, ""), (2, "@2x")]:
         local.update(generated(game, prefix, size, scale))
     if VI_REAL.exists():
         local.update({name: vi_real(icon, 22 * scale) for name, icon in VI_REAL_POIS.items()})
-    # Pins of every GTA VI place icon for the pause map ("vi-pin-<kind>").
-    local.update({f"vi-pin-{name[3:]}": pin(img) for name, img in list(local.items()) if name.startswith("vi-") and name[3:] in ART_POIS})
+    # GTA VI's places are plain tiles on both maps since 23 Nov (the game's have no point under them),
+    # so the "vi-pin-<kind>" pins (pin() above) are no longer built.
     if len(local) > len(patterns):
         write(LOCAL, local, scale, suffix)
 
@@ -308,7 +340,7 @@ if BLIPS.exists():
 if (VI_BLIPS / "r3c4.png").exists():
     saved["gta6-home"] = vi((3, 4), 4)
 # The generated set's own places (green home, office and star for GTA V) win here too.
-for game in ["gta5", "rdr2", "gta6"]:
+for game in ["gta5", "rdr2", "gta6", "algo"]:
     for kind in ["home", "work", "star"]:
         img = art(game, f"my_{kind}", 96, margin=0.04)
         if img is not None:
@@ -317,8 +349,10 @@ for game in ["gta5", "rdr2", "gta6"]:
 if (VI_REAL / "safehouse.png").exists():
     saved["gta6-home"] = vi_real("safehouse", 96)
 if saved:
-    SAVED.mkdir(parents=True, exist_ok=True)
+    # Algothrim's are Gaurav's own art, so they go in the public build's assets; the games' stay local.
     for name, img in saved.items():
-        img.save(SAVED / f"{name}.png")
+        folder = (ROOT / "android" / "app" / "src" / "main" / "assets" / "saved-blips") if name.startswith("algo-") else SAVED
+        folder.mkdir(parents=True, exist_ok=True)
+        img.save(folder / f"{name}.png")
 
 print("sprites ->", MAIN, "and", LOCAL if len(local) > len(patterns) else "(no local blips)")

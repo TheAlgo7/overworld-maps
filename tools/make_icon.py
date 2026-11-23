@@ -5,6 +5,7 @@
   rdr2.png        parchment O, red arrow, on the dark street map
   gta6.png        glowing white O on the Vice sunset with palms (the Play Store icon)
   gta6-macca.png  the same with Macca the Gator inside the O
+  algo.png        Algothrim, Gaurav's own world: the O on his black stage, lit crimson
   mask.png        the O and arrow in white on black (the same for every world)
 
 Each artwork is a flat square raster, so it is cut into Android's adaptive layers with the mask:
@@ -36,7 +37,9 @@ ART = ROOT / "tools" / "icon"
 PLACEMENT = 0.85
 S = 1728  # 432 px (xxxhdpi, 108 dp) at 4x
 DENSITIES = {"mdpi": 108, "hdpi": 162, "xhdpi": 216, "xxhdpi": 324, "xxxhdpi": 432}
-ICONS = {"gta5": "gta5.png", "rdr2": "rdr2.png", "gta6": "gta6.png", "gta6_macca": "gta6-macca.png"}
+# algo.png: Algothrim's (30 Nov 2026). Until Codex's crimson artwork lands it is mask.png itself,
+# his O and arrow on the black map, which is already that world's black stage.
+ICONS = {"gta5": "gta5.png", "rdr2": "rdr2.png", "gta6": "gta6.png", "gta6_macca": "gta6-macca.png", "algo": "algo.png"}
 APP_ICON = "gta6"  # the application's own icon and the Play Store's, his pick (13 Nov)
 
 mask_luma = np.asarray(Image.open(ART / "mask.png").convert("L")).astype(np.float32)

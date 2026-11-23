@@ -203,6 +203,8 @@ private fun routeWidth(theme: OverworldTheme) =
       Skin.GTA6 -> 0.7f
       // GTA V's route is as wide as the road.
       Skin.GTA -> 1f
+      // Algothrim's ribbon runs inside its graphite roads, the road showing along both edges.
+      Skin.ALGO -> 0.78f
     }
 
 /**
@@ -384,20 +386,27 @@ private fun chalkPattern(base: Color): ImageBitmap {
 }
 
 /**
- * Red Dead's last stretch off the road: a thin dashed red line from where the route meets the
- * road to the waypoint across open ground (capture 26).
+ * The last stretch off the road, from where the route meets the road to the waypoint: Red Dead's
+ * thin dashed red line across open ground (capture 26); GTA VI's route broken into blocks as wide as
+ * the route itself, short gaps between (launch captures 04, 46, 49: over water and off-road); and
+ * Algothrim's the same in its crimson. In the route's colour, whichever Settings picked.
  */
 @Composable
 @MaplibreComposable
 fun ThemedLastLeg(from: GeographicCoordinate, to: GeographicCoordinate, theme: OverworldTheme, car: Boolean) {
   val source = rememberGeoJsonSource(remember(from, to) { GeoJsonData.JsonString(lineJson(listOf(from, to))) })
+  val blocks = theme.skin == Skin.GTA6 || theme.skin == Skin.ALGO
+  val k = routeWidth(theme)
   Anchor.Below(FIRST_LABEL_LAYER) {
     LineLayer(
         id = "ow-last-leg",
         source = source,
         color = const(theme.routeLine),
-        width = widthByZoom(if (car) 1.6f else 1.3f, if (car) 4.2f else 3.4f),
-        dasharray = const(listOf<Number>(3, 2)),
+        width =
+            if (blocks) widthByZoom((if (car) 4.5f else 3.5f) * k, (if (car) 15f else 12f) * k)
+            else widthByZoom(if (car) 1.6f else 1.3f, if (car) 4.2f else 3.4f),
+        // In line widths: a block a little longer than the route is wide, a gap half as long.
+        dasharray = const(if (blocks) listOf<Number>(1.3, 0.55) else listOf<Number>(3, 2)),
         cap = const(LineCap.Butt),
         join = const(LineJoin.Round),
     )
@@ -477,6 +486,12 @@ fun ThemedPuck(
      * direction on the map instead, it went out of step with the camera and leaned into bends.
      */
     headingUp: () -> Boolean,
+    /**
+     * Whether the car is up on a flyover right now. Off one, the arrow goes under the bridges and
+     * the raised buildings like the route does, so a flyover passes over it (Gaurav, 23 Nov: it
+     * floated over the decks); on one, it stays over them. True when that can't be known (no trip).
+     */
+    overBridge: () -> Boolean = { true },
 ) {
   val screenUp = headingUp()
   // Moved every frame straight from the animation, without composing anything (see ThemedRouteAhead).
@@ -506,6 +521,7 @@ fun ThemedPuck(
             Skin.GTA -> R.drawable.puck_gta5
             Skin.RDR -> R.drawable.puck_rdr2
             Skin.GTA6 -> R.drawable.puck_gta6
+            Skin.ALGO -> R.drawable.puck_algo
           }
       )
   val painter = remember(art) { ArtPainter(art) }
@@ -516,20 +532,50 @@ fun ThemedPuck(
             // The teardrop's square has room for its shadow, so it takes a little more.
             Skin.RDR -> if (car) 31.dp else 27.dp
             Skin.GTA6 -> if (car) 30.dp else 26.dp
+            // His kite, a little bigger than GTA V's arrow: it is the brightest thing on a black map.
+            Skin.ALGO -> if (car) 30.dp else 26.dp
           }
       )
+  // Two copies on one source, one over everything and one under the bridges (and so under the
+  // raised buildings), and only the right one shown: moving one layer between the two places
+  // rebuilt it at every ramp, and it blinked.
+  val over = overBridge()
+  val icon = image(painter, size = DpSize(size, size), drawAsSdf = false)
+  val rotation = const(if (screenUp) IconRotationAlignment.Viewport else IconRotationAlignment.Map)
+  Anchor.Below(BRIDGES_LAYER) {
+    SymbolLayer(
+        id = "ow-puck-under",
+        source = source,
+        iconImage = icon,
+        iconAnchor = const(SymbolAnchor.Center),
+        iconRotate = feature["bearing"].asNumber(const(0f)),
+        iconPitchAlignment = const(IconPitchAlignment.Viewport),
+        iconRotationAlignment = rotation,
+        iconAllowOverlap = const(true),
+        iconIgnorePlacement = const(true),
+        visible = !over,
+    )
+  }
   SymbolLayer(
       id = "ow-puck",
       source = source,
-      iconImage = image(painter, size = DpSize(size, size), drawAsSdf = false),
+      iconImage = icon,
       iconAnchor = const(SymbolAnchor.Center),
       iconRotate = feature["bearing"].asNumber(const(0f)),
       iconPitchAlignment = const(IconPitchAlignment.Viewport),
-      iconRotationAlignment = const(if (screenUp) IconRotationAlignment.Viewport else IconRotationAlignment.Map),
+      iconRotationAlignment = rotation,
       iconAllowOverlap = const(true),
       iconIgnorePlacement = const(true),
+      visible = over,
   )
 }
+
+/**
+ * Whether [along] metres along the route is up on one of its flyovers ([bridges], from the routing
+ * server), with the same margin the route's own bridge pieces get at each end.
+ */
+fun onFlyover(along: Double, bridges: List<ClosedFloatingPointRange<Double>>): Boolean =
+    bridges.any { along > it.start - BRIDGE_MARGIN_METRES && along < it.endInclusive + BRIDGE_MARGIN_METRES }
 
 /** The waypoint marker: the theme's blip (GTA V four petals, RDR2 crossed ring, GTA VI pink dot, or a diamond). */
 @Composable
