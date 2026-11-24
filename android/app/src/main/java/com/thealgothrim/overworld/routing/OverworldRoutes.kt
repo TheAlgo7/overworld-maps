@@ -82,6 +82,9 @@ class OverworldRoutes(
    */
   @Volatile var tripMode: TravelMode = TravelMode.CAR
 
+  /** [line] as a walk along it (see LineRoute), read the way Ferrostar reads a route; debug checks. */
+  internal fun lineRoute(line: List<GeographicCoordinate>, seconds: Double): List<Route> = LineRoute.osrm(line, seconds)?.let { valhalla.parseResponse(it.toByteArray()) }.orEmpty()
+
   override suspend fun getRoutes(given: UserLocation, waypoints: List<Waypoint>): List<Route> = routesFor(tripMode, given, waypoints)
 
   /** Routes in travel [mode]; a preview asks for each mode at once to show their times side by side. */
@@ -194,6 +197,16 @@ class OverworldRoutes(
     }
     val metres = (if (lead.size < 2) 0.0 else RouteLine(lead).length) + best.metres
     if (metres > MAX_MATCH_METRES) return null
+    // A walk OpenStreetMap can't follow (a lane it doesn't have): Google's own line, turns from its
+    // bends (see LineRoute), not Valhalla's way round the block.
+    val walked = best
+    fun ownLine(why: String): List<Route>? {
+      if (mode != TravelMode.WALK) return null
+      val routes = LineRoute.osrm(walked.line, walked.typicalSeconds)?.let { runCatching { valhalla.parseResponse(it.toByteArray()) }.onFailure { e -> Log.w(TAG, "line route", e) }.getOrNull() }
+      if (routes.isNullOrEmpty()) return null
+      DriveLog.note("route: Google's walk line ($why), ${walked.metres.toInt()} m with ${routes.first().steps.size - 2} turns from its bends")
+      return routes
+    }
     // The same options Ferrostar sends Valhalla (instructions, lanes, speed limits), with Google's
     // line to follow instead of two ends to route between.
     val request = valhalla.generateRequest(userLocation, listOf(destination)) as? RouteRequest.HttpPost ?: return null
@@ -220,18 +233,19 @@ class OverworldRoutes(
       return JSONObject(String(bytes))
     }
     var shape = thinned(if (lead.size < 2) best.line else lead.dropLast(1) + best.line)
-    var answer = trace(shape) ?: return null
+    var answer = trace(shape) ?: return ownLine("no match")
     val pieces = answer.optJSONArray("matchings")?.length() ?: 0
     if (pieces > 1) {
       // Matched in pieces: OpenStreetMap's way across a gap differs from Google's (a U-turn cut
       // mapped as a ramp further on). Bridge each gap with Valhalla's way and match once more.
       val bridged = bridged(shape, answer, request.url, request.headers, mode.costing)
       if (bridged == null) {
+        ownLine("matched in $pieces pieces with no way across")?.let { return it }
         DriveLog.note("route: Google's ${metres.toInt()} m matched in $pieces pieces with no way across, used Valhalla")
         return null
       }
       shape = bridged
-      answer = trace(shape) ?: return null
+      answer = trace(shape) ?: return ownLine("no match")
       DriveLog.note("route: Google's line matched in $pieces pieces, bridged to ${answer.optJSONArray("matchings")?.length() ?: 0}")
     }
     val matchings = answer.optJSONArray("matchings") ?: return null
@@ -240,6 +254,7 @@ class OverworldRoutes(
     // Laid on a different road somewhere (OpenStreetMap missing Google's road): the turns would be wrong.
     if (matchings.length() > 1 || matched.isNaN() || abs(matched - metres) > metres * MATCH_SLACK + 150.0) {
       Log.w(TAG, "Google's ${metres.toInt()} m matched as ${matched.toInt()} m; not used")
+      ownLine("matched as ${matched.toInt()} m")?.let { return it }
       DriveLog.note("route: Google's ${metres.toInt()} m matched as ${matched.toInt()} m, used Valhalla")
       return null
     }

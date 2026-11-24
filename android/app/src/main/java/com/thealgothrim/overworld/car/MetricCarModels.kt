@@ -71,7 +71,7 @@ fun metricRoutingInfo(
     cue: CueAhead? = null,
 ): RoutingInfo? {
   if (rerouting) return RoutingInfo.Builder().setLoading(true).build()
-  val instruction = tripState.visualInstruction() ?: return null
+  val instruction = com.thealgothrim.overworld.shownInstruction(tripState.visualInstruction(), tripState.currentStep()) ?: return null
   val progress = tripState.progress() ?: return null
   val step = tripState.currentStep() ?: return null
   val side = step.drivingSide ?: DrivingSide.LEFT

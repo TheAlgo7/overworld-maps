@@ -61,7 +61,7 @@ class OverworldClusterSession : Session() {
 
 /**
  * The cluster's map (see OverworldClusterMap). Nothing on a cluster can be touched, so it only
- * follows the car heading-up, on a trip or not, with the arrow centred across and low, about 70%
+ * follows the car heading-up, on a trip or not, with the arrow centred across and low, about 78%
  * down, so most of the map is road ahead.
  */
 class CarClusterScreen(carContext: CarContext) : ComposableScreen(carContext) {
@@ -124,5 +124,10 @@ class CarClusterScreen(carContext: CarContext) : ComposableScreen(carContext) {
 /** The cluster's following zoom at about 40 km/h, before the theme's own offset: a little wider than the car screen's, for its smaller map. */
 private const val CLUSTER_ZOOM = 16.1
 
-/** The arrow's place: the share of the room above the camera's centre, so the arrow is (1 + this) / 2 down. */
-private const val FOLLOW_TOP = 0.4f
+/**
+ * The arrow's place: the share of the room above the camera's centre, so the arrow is (1 + this) / 2
+ * down. 0.55: about 78% down. At 70% the picture sat too high in the Curvv's cluster window (Gaurav,
+ * 24 Nov: "brought down a bit, it's super up"); lower still, the odometer strip the car draws along
+ * the bottom covers the arrow.
+ */
+private const val FOLLOW_TOP = 0.55f

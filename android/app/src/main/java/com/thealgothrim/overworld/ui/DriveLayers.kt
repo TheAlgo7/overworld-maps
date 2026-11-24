@@ -1,5 +1,6 @@
 package com.thealgothrim.overworld.ui
 
+import com.thealgothrim.overworld.shownInstruction
 import android.content.res.Configuration
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.layout.boundsInRoot
@@ -271,9 +272,9 @@ fun BoxScope.NavigationLayer(
           Box(Modifier.weight(1f).padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
             if (street.isNotEmpty()) Box(Modifier.onGloballyPositioned { c -> onStreetBox(c.boundsInRoot()) }) {
               when {
-                spec.gta -> GtaText(street.joinToString("  |  "), 21.sp, align = TextAlign.Center)
-                spec.rounded -> ViText(street.joinToString("  ·  "), 18.sp, font = spec.look.street, align = TextAlign.Center)
-                else -> RdrText(street.joinToString(",  ").uppercase(), 16.sp, color = Rdr.GreyLight, align = TextAlign.Center, spacing = 1.sp)
+                spec.gta -> GtaText(street.joinToString("  |  "), 15.sp, align = TextAlign.Center)
+                spec.rounded -> ViText(street.joinToString("  ·  "), 14.sp, font = spec.look.street, align = TextAlign.Center)
+                else -> RdrText(street.joinToString(",  ").uppercase(), 12.sp, color = Rdr.GreyLight, align = TextAlign.Center, spacing = 1.sp)
               }
             }
           }
@@ -286,14 +287,14 @@ fun BoxScope.NavigationLayer(
       // and the edge markers behind the car had no room left below it.
       SkinPanel(spec, Modifier.sheetFloat(spec).fillMaxWidth().onGloballyPositioned { sheetTop = it.boundsInRoot().top }) {
         TripProgressBar(spec, uiState)
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
           SheetIconButton(spec, GameIcon.CLOSE, onEnd, tint = spec.accent)
           Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
             val left = remaining ?: progress.durationRemaining
-            SkinText(formatDuration(left).uppercase(), spec.big, 32.sp, spec.trafficColor(extras.eta))
+            SkinText(formatDuration(left).uppercase(), spec.big, 24.sp, spec.trafficColor(extras.eta))
             SkinText(
                 "${formatDistance(progress.distanceRemaining)}  ·  ${arrivalClock(left)}",
-                spec.body, 16.sp, spec.sub,
+                spec.body, 13.sp, spec.sub,
             )
           }
           SheetIconButton(spec, if (expanded) GameIcon.CHEVRON_DOWN else GameIcon.CHEVRON_UP, { expanded = !expanded })
@@ -314,7 +315,7 @@ fun BoxScope.NavigationLayer(
 @Composable
 private fun SheetIconButton(spec: SkinSpec, icon: GameIcon, onClick: () -> Unit, tint: Color = spec.fg) {
   Box(
-      Modifier.size(48.dp)
+      Modifier.size(40.dp)
           .then(
               when {
                 spec.rounded -> Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0x1FFFFFFF))
@@ -325,14 +326,14 @@ private fun SheetIconButton(spec: SkinSpec, icon: GameIcon, onClick: () -> Unit,
           .clickable(onClick = onClick),
       contentAlignment = Alignment.Center,
   ) {
-    GameIconView(icon, tint, Modifier.size(24.dp))
+    GameIconView(icon, tint, Modifier.size(20.dp))
   }
 }
 
 /** The turn banner, in the game's HUD box. Adds a "Then" strip when the next turn follows quickly. */
 @Composable
 internal fun TurnBanner(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardAhead?) {
-  val content = uiState.visualInstruction?.primaryContent
+  val content = uiState.shownInstruction?.primaryContent
   val distance = uiState.progress?.distanceToNextManeuver?.let(::formatDistance).orEmpty()
   val road = content?.text?.trim().orEmpty()
   val next = uiState.remainingSteps?.getOrNull(1)
@@ -350,24 +351,24 @@ internal fun TurnBanner(spec: SkinSpec, uiState: NavigationUiState, hazard: Haza
           line = if (rerouting) "" else listOf(distance, road.takeUnless { it.endsWith(".") }.orEmpty()).filter { it.isNotEmpty() }.joinToString("  ·  "),
           content = content,
           side = uiState.remainingSteps?.firstOrNull()?.drivingSide,
-          titleSize = if (spec.algo) 21.sp else 25.sp,
-          lineSize = if (spec.algo) 17.sp else 19.sp,
+          titleSize = if (spec.algo) 17.sp else 19.sp,
+          lineSize = if (spec.algo) 14.sp else 15.sp,
           look = spec.look,
       )
     } else Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-      Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
+      Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
         content?.let { TurnArrow(it, uiState.remainingSteps?.firstOrNull()?.drivingSide, if (spec.gta) Gta.White else Rdr.White) }
       }
       Spacer(Modifier.width(14.dp))
       Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         if (uiState.isCalculatingNewRoute == true) {
-          SkinText(spec.title("Rerouting"), spec.title, 26.sp, spec.fg)
+          SkinText(spec.title("Rerouting"), spec.title, 20.sp, spec.fg)
         } else {
-          if (spec.gta) GtaText(distance, 34.sp) else RdrText(distance.uppercase(), 34.sp, spacing = 1.sp)
-          if (road.isNotEmpty()) SkinText(road, spec.body, 19.sp, spec.fg, maxLines = 2)
+          if (spec.gta) GtaText(distance, 24.sp) else RdrText(distance.uppercase(), 24.sp, spacing = 1.sp)
+          if (road.isNotEmpty()) SkinText(road, spec.body, 15.sp, spec.fg, maxLines = 2)
         }
       }
     }
@@ -375,14 +376,14 @@ internal fun TurnBanner(spec: SkinSpec, uiState: NavigationUiState, hazard: Haza
     val extras by com.thealgothrim.overworld.AppModule.viewModel.extras.collectAsState()
     com.thealgothrim.overworld.AppModule.viewModel.levelCueAhead(uiState, extras)?.takeIf { uiState.isCalculatingNewRoute != true }?.let {
       CardDivider(spec)
-      LevelCueRow(spec, it, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), textSize = 18.sp, glyph = 28.dp)
+      LevelCueRow(spec, it, Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), textSize = 15.sp, glyph = 22.dp)
     }
     then?.let {
       CardDivider(spec)
-      Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (spec.vi) SkinText("THEN", Vi.condensed, 16.sp, spec.sub, spacing = 0.8.sp) else SkinText("Then", spec.body, 15.sp, spec.sub)
+      Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (spec.vi) SkinText("THEN", Vi.condensed, 13.sp, spec.sub, spacing = 0.8.sp) else SkinText("Then", spec.body, 13.sp, spec.sub)
         Spacer(Modifier.width(8.dp))
-        Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) { TurnArrow(it, next?.drivingSide, spec.fg) }
+        Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) { TurnArrow(it, next?.drivingSide, spec.fg) }
       }
     }
     hazard?.let {
@@ -423,4 +424,4 @@ private fun TripProgressBar(spec: SkinSpec, uiState: NavigationUiState) {
     }
   }
 }
-private val LANDSCAPE_COLUMN = 400.dp
+private val LANDSCAPE_COLUMN = 340.dp

@@ -577,6 +577,12 @@ fun ThemedPuck(
 fun onFlyover(along: Double, bridges: List<ClosedFloatingPointRange<Double>>): Boolean =
     bridges.any { along > it.start - BRIDGE_MARGIN_METRES && along < it.endInclusive + BRIDGE_MARGIN_METRES }
 
+/** Whether a flyover on the route starts or ends within [NEAR_FLYOVER_METRES] of [along]: one can pass over the car. */
+fun nearFlyover(along: Double, bridges: List<ClosedFloatingPointRange<Double>>): Boolean =
+    bridges.any { along > it.start - NEAR_FLYOVER_METRES && along < it.endInclusive + NEAR_FLYOVER_METRES }
+
+private const val NEAR_FLYOVER_METRES = 250.0
+
 /** The waypoint marker: the theme's blip (GTA V four petals, RDR2 crossed ring, GTA VI pink dot, or a diamond). */
 @Composable
 @MaplibreComposable

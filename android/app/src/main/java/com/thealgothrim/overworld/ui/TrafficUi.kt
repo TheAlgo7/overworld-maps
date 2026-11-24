@@ -180,10 +180,10 @@ fun SpeedBadge(spec: SkinSpec, uiState: NavigationUiState, modifier: Modifier = 
   if (kmh == null && limit == null) return
   Row(modifier.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
     if (kmh != null) {
-      SpeedReadout(spec, kmh, color = if (speed.over) spec.overRed() else spec.hudWhite(), height = 56.dp)
-      if (limit != null) Spacer(Modifier.width(10.dp))
+      SpeedReadout(spec, kmh, color = if (speed.over) spec.overRed() else spec.hudWhite(), height = 38.dp)
+      if (limit != null) Spacer(Modifier.width(6.dp))
     }
-    if (limit != null) LimitSign(spec, limit, speed.over, 56.dp, Modifier)
+    if (limit != null) LimitSign(spec, limit, speed.over, 36.dp, Modifier)
   }
 }
 
@@ -201,9 +201,9 @@ fun Speedometer(spec: SkinSpec, speed: SpeedNow, modifier: Modifier = Modifier) 
   val density = androidx.compose.ui.platform.LocalDensity.current
   val outline = with(density) { (if (spec.rdr) 1.5.dp else 2.dp).toPx() }
   val text = kmh.toString()
-  val number = measurer.measure(text, TextStyle(fontFamily = spec.speedFont(), fontSize = 44.sp))
+  val number = measurer.measure(text, TextStyle(fontFamily = spec.speedFont(), fontSize = 30.sp))
   val unitText = speedUnit(spec.rdr)
-  val unit = measurer.measure(unitText, TextStyle(fontFamily = spec.unitFont(), fontSize = 16.sp))
+  val unit = measurer.measure(unitText, TextStyle(fontFamily = spec.unitFont(), fontSize = 12.sp))
   // Placed by the letters' own outlines: line boxes carry uneven space above and below.
   val numberInk = number.multiParagraph.getPathForRange(0, text.length).getBounds()
   val unitInk = unit.multiParagraph.getPathForRange(0, unitText.length).getBounds()
@@ -231,7 +231,7 @@ fun SpeedLimitSign(spec: SkinSpec, speed: SpeedNow, modifier: Modifier = Modifie
   val showLimit by AppModule.prefs.showLimit.collectAsState()
   if (!showLimit) return
   val limit = speed.limit ?: return
-  LimitSign(spec, limit, speed.over, 66.dp, modifier)
+  LimitSign(spec, limit, speed.over, 44.dp, modifier)
 }
 
 /** Gaurav's signs (tools/signs/, cut by tools/make_limit_signs.py): (normal, over the limit). */
@@ -306,13 +306,13 @@ private fun SpeedReadout(spec: SkinSpec, kmh: Int, color: Color, height: Dp) {
   val density = androidx.compose.ui.platform.LocalDensity.current
   val outline = with(density) { (if (spec.rdr) 1.5.dp else 2.dp).toPx() }
   // GTA VI: the mission HUD's bold condensed numerals, like its race timer.
-  val number = measurer.measure(kmh.toString(), TextStyle(fontFamily = spec.speedFont(), fontSize = 30.sp))
-  val unit = measurer.measure(speedUnit(spec.rdr), TextStyle(fontFamily = spec.unitFont(), fontSize = 11.sp))
+  val number = measurer.measure(kmh.toString(), TextStyle(fontFamily = spec.speedFont(), fontSize = 21.sp))
+  val unit = measurer.measure(speedUnit(spec.rdr), TextStyle(fontFamily = spec.unitFont(), fontSize = 9.sp))
   val numberInk = number.multiParagraph.getPathForRange(0, kmh.toString().length).getBounds()
   val unitInk = unit.multiParagraph.getPathForRange(0, unit.layoutInput.text.length).getBounds()
-  val width = with(density) { (maxOf(numberInk.width, unitInk.width, 44.dp.toPx()) + outline * 2).toDp() }
+  val width = with(density) { (maxOf(numberInk.width, unitInk.width, 30.dp.toPx()) + outline * 2).toDp() }
   Canvas(Modifier.width(width).height(height)) {
-    val gap = 4.dp.toPx()
+    val gap = 3.dp.toPx()
     val block = numberInk.height + gap + unitInk.height
     val top = (size.height - block) / 2
     val numberAt = Offset(size.width / 2 - numberInk.center.x, top - numberInk.top)

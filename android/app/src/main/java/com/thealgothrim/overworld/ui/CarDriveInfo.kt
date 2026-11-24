@@ -72,12 +72,12 @@ fun CarDriveInfo(theme: OverworldTheme, uiState: NavigationUiState, extras: Rout
   // ("Speed camera ahead") was too big for a glance (Gaurav, 21 Nov).
   Row(modifier.onGloballyPositioned { CarHudBlocks.bottom = it.boundsInRoot() }, verticalAlignment = Alignment.CenterVertically) {
     Speedometer(spec, speed, Modifier.padding(start = 6.dp, bottom = 4.dp))
-    Spacer(Modifier.width(14.dp))
+    Spacer(Modifier.width(10.dp))
     SpeedLimitSign(spec, speed)
     when {
       // Just passed a camera over the limit: the star lit, whatever is ahead now.
-      wanted -> AlertChip(spec, null, wanted = true, Modifier.padding(start = 14.dp))
-      hazard != null -> AlertChip(spec, hazard, wanted = false, Modifier.padding(start = 14.dp))
+      wanted -> AlertChip(spec, null, wanted = true, Modifier.padding(start = 10.dp))
+      hazard != null -> AlertChip(spec, hazard, wanted = false, Modifier.padding(start = 10.dp))
     }
   }
 }

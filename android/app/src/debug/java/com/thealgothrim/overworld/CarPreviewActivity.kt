@@ -12,12 +12,14 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.stadiamaps.ferrostar.core.boundingBox
 import com.stadiamaps.ferrostar.maplibreui.runtime.NavigationCameraMode
 import com.stadiamaps.ferrostar.maplibreui.runtime.navigationCameraOptions
 import com.stadiamaps.ferrostar.ui.maplibre.car.app.runtime.SurfaceAreaTracker
 import com.thealgothrim.overworld.car.safeStablePadding
 import com.thealgothrim.overworld.map.AutoZoomEffect
 import com.thealgothrim.overworld.map.driveCamera
+import com.thealgothrim.overworld.map.glideRecenter
 import com.thealgothrim.overworld.map.OverworldCarMap
 import com.thealgothrim.overworld.map.OverworldClusterMap
 import com.thealgothrim.overworld.map.rememberOverworldMapState
@@ -55,8 +57,8 @@ class CarPreviewActivity : ComponentActivity() {
       // The same camera as CarNavigationScreen: the game's tilt, the arrow low and right of centre.
       val driveCamera = theme.skin.driveCamera
       val zoom = 16.4 + driveCamera.zoomOffset
-      // The cluster's arrow is centred across and 70% down (CarClusterScreen).
-      val follow = safeStablePadding(area, top = if (cluster) 0.4f else 0.45f, start = if (cluster) 0f else 0.25f)
+      // The cluster's arrow is centred across and 78% down (CarClusterScreen).
+      val follow = safeStablePadding(area, top = if (cluster) 0.55f else 0.45f, start = if (cluster) 0f else 0.25f)
       val cameraOptions =
           navigationCameraOptions()
               .copy(
@@ -76,6 +78,16 @@ class CarPreviewActivity : ComponentActivity() {
         } else {
           state.cameraMode = NavigationCameraMode.FOLLOW_USER_WITH_BEARING
         }
+      }
+      // DEBUG_UI --es carcam overview|recenter: the car's overview button and the glide back.
+      val carCam by com.thealgothrim.overworld.ui.DebugUi.carCamera.collectAsState()
+      val overviewPadding = safeStablePadding(area)
+      LaunchedEffect(carCam) {
+        when (carCam) {
+          "overview" -> viewModel.navigationUiState.value.routeGeometry?.boundingBox()?.let { state.showRouteOverview(boundingBox = it, paddingValues = overviewPadding) }
+          "recenter" -> state.glideRecenter(isNavigating = navigating)
+        }
+        com.thealgothrim.overworld.ui.DebugUi.carCamera.value = null
       }
       if (cluster) OverworldClusterMap(theme, viewModel, state, cameraOptions, safeStablePadding(area))
       else OverworldCarMap(theme, viewModel, state, cameraOptions, tracker, panelActions)

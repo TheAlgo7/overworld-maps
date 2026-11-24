@@ -205,10 +205,10 @@ fun SkinPanel(spec: SkinSpec, modifier: Modifier = Modifier, content: @Composabl
 @Composable
 fun SkinRoundButton(spec: SkinSpec, icon: GameIcon, onClick: () -> Unit, modifier: Modifier = Modifier, tint: Color = spec.fg) {
   Box(
-      modifier.size(52.dp).mapButtonFace(spec, CircleShape).clickable(onClick = onClick),
+      modifier.size(42.dp).mapButtonFace(spec, CircleShape).clickable(onClick = onClick),
       contentAlignment = Alignment.Center,
   ) {
-    GameIconView(icon, tint, Modifier.size(26.dp))
+    GameIconView(icon, tint, Modifier.size(21.dp))
   }
 }
 

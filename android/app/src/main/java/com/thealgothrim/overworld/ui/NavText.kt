@@ -1,5 +1,6 @@
 package com.thealgothrim.overworld.ui
 
+import com.thealgothrim.overworld.shownInstruction
 import com.stadiamaps.ferrostar.core.NavigationUiState
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -12,7 +13,7 @@ import uniffi.ferrostar.VisualInstructionContent
 
 /** Turns Ferrostar's maneuver data into a game-style help-text sentence. */
 internal fun turnSentence(uiState: NavigationUiState, destination: String?): String {
-  val content = uiState.visualInstruction?.primaryContent ?: return "Follow the route."
+  val content = uiState.shownInstruction?.primaryContent ?: return "Follow the route."
   // Named roads come through as the road name; unnamed ones as a sentence ("Bear left.").
   val road = content.text.trim().takeUnless { it.endsWith(".") }.orEmpty()
   val type = content.maneuverType?.name.orEmpty()

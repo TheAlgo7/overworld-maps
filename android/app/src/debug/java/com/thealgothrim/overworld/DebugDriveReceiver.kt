@@ -122,6 +122,19 @@ class DebugDriveReceiver : BroadcastReceiver() {
         }
         // --ez frames true: how smoothly each map drew since the last call (fps, stutters, CPU/GPU
         // per frame), in logcat under DebugDrive; the first call starts a fresh count.
+        // --ez perframe true|false: every frame and automatic zoom step in logcat (OwFrame, OwZoom).
+        // --es linecheck "lat,lng;lat,lng;...": a walk along that line as Google's own (LineRoute), parsed by Ferrostar, its steps in logcat.
+        intent.getStringExtra("linecheck")?.let { l ->
+          val line = l.split(';').mapNotNull { p -> p.split(',').mapNotNull { it.trim().toDoubleOrNull() }.takeIf { it.size == 2 }?.let { GeographicCoordinate(it[0], it[1]) } }
+          val r = runCatching { AppModule.routes.lineRoute(line, 300.0) }
+          r.onFailure { Log.w("DebugDrive", "linecheck failed", it) }
+          r.getOrNull()?.firstOrNull()?.let { route ->
+            Log.i("DebugDrive", "linecheck: ${route.distance.toInt()} m, ${route.steps.size} steps")
+            route.steps.forEach { st -> Log.i("DebugDrive", "linecheck step ${st.distance.toInt()} m '${st.instruction}' card=${st.visualInstructions.firstOrNull()?.primaryContent?.let { "${it.maneuverType} ${it.maneuverModifier} ${it.text}" }} voice=${st.spokenInstructions.size}") }
+          } ?: Log.i("DebugDrive", "linecheck: no route")
+        }
+        intent.getStringExtra("carcam")?.let { com.thealgothrim.overworld.ui.DebugUi.carCamera.value = it }
+        if (intent.hasExtra("perframe")) com.thealgothrim.overworld.map.FrameStats.perFrame = intent.getBooleanExtra("perframe", false)
         if (intent.getBooleanExtra("frames", false)) {
           android.os.Handler(android.os.Looper.getMainLooper()).post { Log.i("DebugDrive", "frames: ${com.thealgothrim.overworld.map.FrameStats.summary() ?: "no map drew"}") }
         }

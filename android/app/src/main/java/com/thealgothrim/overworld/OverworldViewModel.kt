@@ -215,7 +215,15 @@ class OverworldViewModel :
   /** Shows the user's position on the map even before a trip starts. */
   override val navigationUiState: StateFlow<NavigationUiState> =
       combine(super.navigationUiState, lastLocation) { state, location ->
-            if (state.isNavigating()) state else state.copy(location = location)
+            when {
+              !state.isNavigating() -> state.copy(location = location)
+              // On foot the arrow is where the phone is. Ferrostar snaps it onto the route from up
+              // to 35 m away, and Indian lanes are often missing from OpenStreetMap: walking one
+              // (24 Nov), the arrow sat on the road the route took, then jumped back to the lane
+              // when the walk was called off the route, again and again.
+              AppModule.routes.tripMode == TravelMode.WALK -> (state.tripState as? TripState.Navigating)?.userLocation?.let { state.copy(location = it) } ?: state
+              else -> state
+            }
           }
           .stateIn(viewModelScope, SharingStarted.Eagerly, NavigationUiState.empty())
 
@@ -608,7 +616,11 @@ class OverworldViewModel :
    */
   val mapVariant: StateFlow<String?> =
       combine(AppModule.themeStore.theme, AppModule.themeStore.mapTime, onTrip, everyMinute()) { theme, time, trip, _ ->
-            if (trip && theme.hasRadar) theme.radarFor(variantFor(theme, time)) else variantFor(theme, time)
+            // Only GTA VI turns into its minimap on a trip (its minimap is its look, in the car too).
+            // GTA V's see-through radar and Red Dead's parchment radar washed both worlds out to
+            // grey and olive on every trip: "why they look so dull ... that's not their real
+            // colour" (Gaurav, 24 Nov). They keep their pause maps.
+            if (trip && theme.hasRadar && theme.carRadar) theme.radarFor(variantFor(theme, time)) else variantFor(theme, time)
           }
           .distinctUntilChanged()
           .stateIn(viewModelScope, SharingStarted.Eagerly, variantFor(AppModule.themeStore.theme.value, AppModule.themeStore.mapTime.value))

@@ -186,4 +186,30 @@ class LocationGateTest {
     }
     assertEquals("believed after 8 agreeing fixes", 7, believedAt)
   }
+
+  @Test
+  fun aPlaceLongLeftIsntHeldForever() {
+    // 24 Nov: the phone had stood at home; an hour later, 1 km away, the free-drive map was still
+    // handed home's place under each new fix's time ("fix 0 s old"), and a preview started there.
+    // Sparse fixes (the app in the background) that never line up 8 in a row kept it held.
+    val rules = GateRules()
+    var s = driveThenStop(rules, 100.0)
+    repeat(5) { rules.next(fix(s, 100.0, 0.1f)); s += 1.0 }
+    val far = 1_000.0
+    val first = rules.next(fix(s, far, 0.3f, accuracy = 6f))
+    assertTrue("one far fix is doubted", first is GateVerdict.Replace)
+    s += 15.0
+    val second = rules.next(fix(s, far + 20, 3.0f, accuracy = 6f))
+    assertTrue("held 15 s against good fixes: the new place is taken", second is GateVerdict.Pass)
+  }
+
+  @Test
+  fun aVagueFarFixStillDoesntMoveAStandingCar() {
+    val rules = GateRules()
+    var s = driveThenStop(rules, 100.0)
+    repeat(5) { rules.next(fix(s, 100.0, 0.1f)); s += 1.0 }
+    rules.next(fix(s, 600.0, 0.3f, accuracy = 80f))
+    s += 15.0
+    assertTrue(rules.next(fix(s, 620.0, 3.0f, accuracy = 80f)) is GateVerdict.Replace)
+  }
 }

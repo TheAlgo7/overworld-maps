@@ -10,6 +10,9 @@ object DebugUi {
   /** Open You on this tab ("none" closes it). */
   val you = MutableStateFlow<String?>(null)
 
+  /** The car preview's camera: "overview" (the whole route) or "recenter" (the glide back onto the car). */
+  val carCamera = MutableStateFlow<String?>(null)
+
   /** Open Settings on this tab (0 to 6), or close it with -1. */
   val settingsTab = MutableStateFlow<Int?>(null)
 

@@ -139,6 +139,8 @@ class GateRules {
   private var believedSpeed = 0f
   private var believedBearing: Float? = null
   private val doubted = ArrayList<GateFix>()
+  /** When fixes began disagreeing with a standing car's place, without one agreeing since; null while they agree. */
+  private var heldSince: Long? = null
 
   fun next(fix: GateFix): GateVerdict {
     val ref = believed
@@ -158,6 +160,7 @@ class GateRules {
         // Standing: the car stays where it stopped. The believed fix moves on in time only, so a
         // pull-away is judged against the last second, not the start of a long red light.
         doubted.clear()
+        heldSince = null
         believed = ref.copy(atMs = fix.atMs)
         return GateVerdict.Replace(ref.lat, ref.lng, 0f, believedBearing, note = null)
       }
@@ -195,6 +198,18 @@ class GateRules {
     }
     val note = "doubted a fix ${moved.toInt()} m away at ${"%.1f".format((fix.speed ?: 0f) * 3.6f)} km/h (believed ${"%.1f".format(believedSpeed * 3.6f)} km/h)"
     if (believedSpeed < STOPPED_MS) {
+      // Held long enough against sure fixes: the phone really is somewhere else. The hold renews the
+      // held place's time with every fix, so the 30 s "nothing to judge by" rule never came; sparse
+      // fixes that never lined up 8 in a row kept a place left an hour before (24 Nov: home, 1 km
+      // away, handed out as a fix 0 s old, and a route preview started from it).
+      val since = heldSince ?: fix.atMs.also { heldSince = it }
+      // Only fixes that tell one story (moved about as far as their speeds say): multipath parked on
+      // the crossing road, claiming 72 km/h without moving, stays held however long it lasts.
+      val consistent = doubted.size >= 2 && agree(doubted[doubted.size - 2], doubted.last())
+      if (consistent && fix.atMs - since >= MAX_HOLD_MS && (fix.accuracy ?: DEFAULT_ACCURACY_M) <= SURE_ACCURACY_M) {
+        believe(fix, fix.speed ?: 0f, ref)
+        return GateVerdict.Pass(note = "took a place ${moved.toInt()} m away after ${(fix.atMs - since) / 1000} s of fixes against the held one")
+      }
       believed = ref.copy(atMs = fix.atMs)
       return GateVerdict.Replace(ref.lat, ref.lng, 0f, believedBearing, note)
     }
@@ -221,6 +236,7 @@ class GateRules {
 
   private fun believe(fix: GateFix, speed: Float, previous: GateFix?) {
     doubted.clear()
+    heldSince = null
     believed = fix
     believedSpeed = speed
     // A heading only from a fix moving fast enough for it to mean something.
@@ -248,6 +264,10 @@ class GateRules {
     const val MAX_CARRY_S = 4f
     const val MIN_GAP_S = 0.2f
     const val STALE_MS = 30_000L
+    /** A standing car's place is held against disagreeing fixes this long at most. */
+    const val MAX_HOLD_MS = 10_000L
+    /** Only a fix this sure ends a hold early. */
+    const val SURE_ACCURACY_M = 20f
     const val HEADING_SPEED_MS = 2f
     const val HEADING_MOVE_M = 8f
     /** A quick car's 0 to 100 km/h in under 5 s. */

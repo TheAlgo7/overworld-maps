@@ -1,5 +1,6 @@
 package com.thealgothrim.overworld.ui
 
+import com.thealgothrim.overworld.shownInstruction
 import com.thealgothrim.overworld.ui.skin.SkinPillButton
 import com.thealgothrim.overworld.ui.skin.SkinRecenterButton
 import com.thealgothrim.overworld.ui.skin.SkinRoundButton
@@ -177,7 +178,7 @@ fun BoxScope.CarGameHud(
 
 @Composable
 private fun TurnCard(spec: SkinSpec, uiState: NavigationUiState, hazard: HazardAhead?, cue: CueAhead?, modifier: Modifier) {
-  val content = uiState.visualInstruction?.primaryContent
+  val content = uiState.shownInstruction?.primaryContent
   val distance = uiState.progress?.distanceToNextManeuver?.let(::formatDistance).orEmpty()
   val road = content?.text?.trim().orEmpty()
   val next = uiState.remainingSteps?.getOrNull(1)

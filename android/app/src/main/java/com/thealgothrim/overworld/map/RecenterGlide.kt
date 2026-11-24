@@ -35,6 +35,9 @@ class RecenterGlide {
   /** The arrow on this map, set by the map's layers. Read each frame of a glide, never composed. */
   internal var shown: DisplayedPosition? = null
 
+  /** Where the automatic zoom aims (AutoZoomEffect), so a glide onto the car lands at that zoom. */
+  internal var autoZoom: Double? = null
+
   /** The phone's "Keep map north up": a glide onto a trip lands facing north, not along the road. */
   var northUp: Boolean = false
 
@@ -83,7 +86,7 @@ fun RecenterGlideEffect(mapState: NavigationMapState) {
         val bearing = if (glide.northUp) 0.0 else location.course?.value?.let { (it - Bearing.North).inDegrees }
         val to =
             if (mode == NavigationCameraMode.FOLLOW_USER) options.browsingUser(target)
-            else options.navigatingUser(target, bearing ?: from.bearing)
+            else options.navigatingUser(target, bearing ?: from.bearing).let { p -> glide.autoZoom?.let { p.copy(zoom = it) } ?: p }
         mapState.cameraState.position = between(from, to, FastOutSlowInEasing.transform(f))
         if (f >= 1f) break
       }

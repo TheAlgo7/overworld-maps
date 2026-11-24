@@ -111,6 +111,20 @@ fun AutoZoomEffect(
         zoomed = zoomedAt.value
         heldUntil = System.currentTimeMillis() + MANUAL_HOLD_MS
       }
+      // Where the zoom should be now, kept for the re-centre glide so it lands there (see below).
+      val ui = uiState.value
+      val target = autoZoom(base, ui.location?.speed?.value, ui.progress?.distanceToNextManeuver?.takeIf { ui.isNavigating() }, reach)
+      state.glide.autoZoom = target
+      // The glide lands on this zoom itself. Easing in after it landed (on the camera's default
+      // zoom, about one level out) took 2 to 4 s of zoom steps, each one re-laying the map's
+      // labels and buildings: on the phone the car map fell from 118 to 65 fps every time, and in
+      // Android Auto the car icon stuttered as it "settled" (24 Nov drive).
+      if (state.glide.request != null) {
+        written = null
+        lastFrame = 0L
+        withFrameMillis {}
+        continue
+      }
       val following = state.cameraMode == NavigationCameraMode.FOLLOW_USER_WITH_BEARING
       if (!following) {
         written = null
@@ -132,8 +146,6 @@ fun AutoZoomEffect(
         delay(250)
         continue
       }
-      val ui = uiState.value
-      val target = autoZoom(base, ui.location?.speed?.value, ui.progress?.distanceToNextManeuver?.takeIf { ui.isNavigating() }, reach)
       val dt = if (lastFrame == 0L) 16L else (now - lastFrame).coerceIn(1L, 250L)
       lastFrame = now
       val gap = target - position.zoom
@@ -155,6 +167,7 @@ fun AutoZoomEffect(
       val step = (gap * (1 - exp(-dt / 1600.0))).coerceIn(-0.6 * dt / 1000.0, 0.6 * dt / 1000.0)
       val next = position.zoom + step
       state.cameraState.position = position.copy(zoom = next)
+      if (FrameStats.perFrame) android.util.Log.d("OwZoom", "t=${android.os.SystemClock.uptimeMillis()} zoom=${"%.3f".format(next)} target=${"%.2f".format(target)}")
       written = next
     }
   }

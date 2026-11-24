@@ -79,6 +79,8 @@ fun MinimapEdge(
      * put the N mid-screen beside the cards (Gaurav, 21 Nov).
      */
     cards: Boolean = false,
+    /** The north marker (Red Dead: the rim's four letters). Off on the cluster: Gaurav, 24 Nov. */
+    showNorth: Boolean = true,
 ) {
   val skin = theme.skin
   val waypoint =
@@ -173,7 +175,7 @@ fun MinimapEdge(
 
     // North, from the map's bearing: straight up on a north-up map, round the border as it turns.
     val north = -position.bearing
-    when (skin) {
+    if (showNorth) when (skin) {
       Skin.GTA6 ->
           EdgeDisc(border(north), NORTH_SIZE, Color.Black, Color(0x55FFFFFF)) {
             Text("N", style = TextStyle(fontFamily = Vi.sansSemiBold, fontSize = 13.sp, color = Vi.White))

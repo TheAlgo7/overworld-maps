@@ -36,6 +36,7 @@ object FrameStats {
       val now = SystemClock.uptimeMillis()
       val gap = if (lastAt == 0L) 0L else now - lastAt
       lastAt = now
+      if (perFrame) android.util.Log.d("OwFrame", "$name t=$now gap=$gap cpu=${"%.1f".format(encodingSeconds * 1000)} gpu=${"%.1f".format(renderingSeconds * 1000)}")
       // Each gap on the system trace's timeline (a no-op unless a trace is recording), so a stutter
       // lines up with what every thread was doing at that moment.
       if (android.os.Trace.isEnabled()) android.os.Trace.setCounter("ow.$name.gap", gap)
@@ -82,6 +83,9 @@ object FrameStats {
       return line
     }
   }
+
+  /** Debug only: every frame and every automatic zoom step in logcat (OwFrame, OwZoom), to line a stutter up with what moved. */
+  @Volatile var perFrame = false
 
   private val meters = ConcurrentHashMap<String, Meter>()
   /** The last summaries, newest last, for the report. */

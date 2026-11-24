@@ -317,7 +317,8 @@ fun OverworldClusterMap(
       ViMapLight(variant)
     }
     val destination = (uiState.routeGeometry?.takeIf { uiState.isNavigating() } ?: planner.preview?.route?.geometry)?.lastOrNull()
-    MinimapEdge(theme, mapState.cameraState, destination, room)
+    // No north on the cluster: it only ever follows the road ahead (Gaurav, 24 Nov).
+    MinimapEdge(theme, mapState.cameraState, destination, room, showNorth = false)
   }
 }
 
@@ -498,12 +499,16 @@ private fun OverworldLayers(
     ThemedDestination(stop.coordinate, theme, car, id = "ow-stop-$i")
   }
   // Under the flyovers like the route, except while on one; off a trip nothing says which, so on top.
+  // Only near a flyover: under them is also under every raised building, and walking a lane in
+  // Chhatarpur the buildings hid the arrow (24 Nov).
   val bridgesNow = extras.bridges
   val overBridge by
-      androidx.compose.runtime.remember(shown, bridgesNow, trip != null) {
+      androidx.compose.runtime.remember(shown, bridgesNow, extras.levels, trip != null) {
         androidx.compose.runtime.derivedStateOf {
           val along = shown?.along
-          trip == null || along == null || onFlyover(along, bridgesNow)
+          // Flyovers beside the route count too: the route can run on the road under one.
+          val decks = bridgesNow + extras.levels?.parallels.orEmpty().filter { it.level == com.thealgothrim.overworld.routing.Level.BRIDGE }.map { it.from..it.to }
+          trip == null || along == null || onFlyover(along, bridgesNow) || !nearFlyover(along, decks)
         }
       }
   shown?.let { ThemedPuck(it, theme, car, style, headingUp, overBridge = { overBridge }) }
