@@ -27,8 +27,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.maplibre.spatialk.geojson.Position
 import uniffi.ferrostar.CourseOverGround
+import uniffi.ferrostar.DeviationKind
 import uniffi.ferrostar.GeographicCoordinate
 import uniffi.ferrostar.RouteDeviation
+import uniffi.ferrostar.TripState
 import uniffi.ferrostar.UserLocation
 
 /**
@@ -42,13 +44,51 @@ import uniffi.ferrostar.UserLocation
  */
 @Composable
 fun rememberSmoothedUiState(uiState: NavigationUiState): NavigationUiState {
-  val onRoute =
+  val followingRoute =
       uiState.isNavigating() &&
           uiState.routeDeviation is RouteDeviation.NoDeviation &&
           (uiState.routeGeometry?.size ?: 0) >= 2
-  val smooth = rememberSmoothLocation(uiState.location, active = !onRoute)
+  // The raw fix: uiState.location is Ferrostar's point on the route while it thinks the car is on it.
+  val raw = (uiState.tripState as? TripState.Navigating)?.userLocation
+  val leaving = rememberLeaving(uiState, raw, followingRoute)
+  val onRoute = followingRoute && !leaving
+  val smooth = rememberSmoothLocation(if (leaving) raw else uiState.location, active = !onRoute)
   if (onRoute) return rememberLeadOnRoute(uiState)
+  // Left the line before Ferrostar called it: shown as off the route (arrow and camera on the fixes,
+  // the route from Ferrostar's last point on it), the way a called detour is.
+  if (leaving) return uiState.copy(location = smooth ?: raw, routeDeviation = RouteDeviation.Deviation(DeviationKind.CompletelyOffRoute(0.0)))
   return if (smooth == null) uiState else uiState.copy(location = smooth)
+}
+
+/** Whether the raw fix has clearly left the route line (see LeavingRoute). */
+@Composable
+private fun rememberLeaving(uiState: NavigationUiState, raw: UserLocation?, followingRoute: Boolean): Boolean {
+  val geometry = uiState.routeGeometry
+  val route = remember(geometry) { geometry?.takeIf { it.size >= 2 }?.let(::RoutePolyline) }
+  val tracker = remember(route) { LeavingRoute() }
+  return remember(raw, route, followingRoute) {
+    val progress = uiState.progress
+    if (!followingRoute || raw == null || route == null || progress == null) {
+      tracker.reset()
+      // Ferrostar's own detour (or the trip's end) takes over: nothing to write about.
+      if (uiState.routeDeviation !is RouteDeviation.NoDeviation || !uiState.isNavigating()) LeavingRoute.logged = false
+      false
+    } else {
+      // Looked for near Ferrostar's own place on the line, so a route passing near itself can't hide it.
+      val along = (route.length - progress.distanceRemaining).coerceIn(0.0, route.length)
+      val off = route.offsetNear(Position(raw.coordinates.lng, raw.coordinates.lat), along, reachAhead(raw.speed?.value))
+      tracker.update(off, raw.horizontalAccuracy, raw.speed?.value).also { leaving ->
+        // Once per change for all the maps showing it (phone, car), for the drive log.
+        if (leaving != LeavingRoute.logged) {
+          LeavingRoute.logged = leaving
+          com.thealgothrim.overworld.DriveLog.note(
+              if (leaving) "trip: arrow off the route line with the car (${off.toInt()} m), at ${com.thealgothrim.overworld.DriveLog.at(raw.coordinates)}"
+              else "trip: arrow back on the route line"
+          )
+        }
+      }
+    }
+  }
 }
 
 /**

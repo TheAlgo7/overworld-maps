@@ -185,6 +185,11 @@ fun BoxScope.NavigationLayer(
     onMute: () -> Unit,
     onEnd: () -> Unit,
     onSettings: () -> Unit,
+    /** Search for a place to stop at on the way (a friend's address, petrol). */
+    onAddStop: () -> Unit = {},
+    /** The stop added on the way, while it's still ahead, and how to drop it. */
+    stop: String? = null,
+    onSkipStop: () -> Unit = {},
     /** How tall the bottom part (street line and trip sheet) is, so the arrow can stay above it. */
     onBottomBlocked: (Dp) -> Unit = {},
     /** The part of the window the cards leave clear, for what GTA VI pins to the map's edge. */
@@ -297,10 +302,15 @@ fun BoxScope.NavigationLayer(
                 spec.body, 13.sp, spec.sub,
             )
           }
+          // Add a stop, one tap from the trip (26 Nov: dropping a friend without one rerouted 15 times).
+          SheetIconButton(spec, GameIcon.ADD_STOP, onAddStop)
+          Spacer(Modifier.width(8.dp))
           SheetIconButton(spec, if (expanded) GameIcon.CHEVRON_DOWN else GameIcon.CHEVRON_UP, { expanded = !expanded })
         }
         if (expanded) {
           SkinDivider(spec)
+          SkinRow(spec, "Add a stop", { expanded = false; onAddStop() }, icon = GameIcon.ADD_STOP)
+          stop?.let { SkinRow(spec, "Skip stop: $it", { expanded = false; onSkipStop() }, icon = GameIcon.CLOSE) }
           SkinRow(spec, if (uiState.isMuted == true) "Unmute voice" else "Mute voice", onMute, icon = if (uiState.isMuted == true) GameIcon.SOUND_ON else GameIcon.SOUND_OFF)
           SkinRow(spec, "Route overview", { expanded = false; onOverview() }, icon = GameIcon.OVERVIEW)
           SkinRow(spec, "Mark a camera here", { expanded = false; com.thealgothrim.overworld.AppModule.viewModel.markCamera() }, icon = GameIcon.CAMERA)

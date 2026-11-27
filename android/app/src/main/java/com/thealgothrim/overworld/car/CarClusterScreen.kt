@@ -16,6 +16,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import com.rallista.car.app.compose.ComposableScreen
 import com.stadiamaps.ferrostar.maplibreui.runtime.NavigationCameraMode
 import com.stadiamaps.ferrostar.maplibreui.runtime.navigationCameraOptions
@@ -67,6 +69,9 @@ class OverworldClusterSession : Session() {
 class CarClusterScreen(carContext: CarContext) : ComposableScreen(carContext) {
   private val surfaceAreaTracker = SurfaceAreaTracker { surfaceGestureCallback = it }
 
+  /** The turn card's last words and distance step, so Android Auto is only sent a card that changed. */
+  private var shownCard: Pair<String?, Long>? = null
+
   init {
     lifecycle.addObserver(
         object : DefaultLifecycleObserver {
@@ -76,6 +81,23 @@ class CarClusterScreen(carContext: CarContext) : ComposableScreen(carContext) {
           override fun onStop(owner: LifecycleOwner) = AppModule.viewModel.mapInView(false)
         }
     )
+    // The next turn as Android Auto's own small card on the cluster (see onGetTemplate): sent again
+    // when its words change or its distance moves on a step (10 m near the turn, 100 m further out).
+    lifecycleScope.launch {
+      AppModule.viewModel.navigationUiState.collect { state ->
+        val card =
+            if (!state.isNavigating()) null
+            else {
+              val distance = state.progress?.distanceToNextManeuver ?: 0.0
+              val step = if (distance < 1_000) 10.0 else 100.0
+              "${state.visualInstruction?.primaryContent?.text} ${state.isCalculatingNewRoute == true}" to (distance / step).toLong()
+            }
+        if (card != shownCard) {
+          shownCard = card
+          invalidate()
+        }
+      }
+    }
   }
 
   @Composable
@@ -112,13 +134,29 @@ class CarClusterScreen(carContext: CarContext) : ComposableScreen(carContext) {
     OverworldClusterMap(theme, AppModule.viewModel, state, cameraOptions, room)
   }
 
-  override fun onGetTemplate(): Template =
-      NavigationTemplate.Builder()
-          // The template needs a strip; a cluster shows only the map, so it is never drawn there.
-          .setActionStrip(
-              ActionStrip.Builder().addAction(Action.Builder().setTitle(carContext.getString(R.string.app_name)).setOnClickListener {}.build()).build()
-          )
-          .build()
+  /**
+   * The next turn in Android Auto's own compact card (the arrow, how far, the road), which the car
+   * draws on the cluster for a glance between the dials. Before, the cluster had only the map, and
+   * the waypoint marker riding round its edge (Gaurav, 27 Nov: "the floating dot is distracting, it
+   * should have a compact spot for where and when to turn").
+   */
+  override fun onGetTemplate(): Template {
+    val vm = AppModule.viewModel
+    val state = vm.navigationUiState.value
+    val trip = state.tripState?.takeIf { state.isNavigating() }
+    return NavigationTemplate.Builder()
+        // The template needs a strip; a cluster shows only the map, so it is never drawn there.
+        .setActionStrip(
+            ActionStrip.Builder().addAction(Action.Builder().setTitle(carContext.getString(R.string.app_name)).setOnClickListener {}.build()).build()
+        )
+        .apply {
+          if (trip != null) {
+            metricRoutingInfo(carContext, trip, AppModule.themeStore.carTheme.value.skin, rerouting = state.isCalculatingNewRoute == true, cue = vm.levelCueAhead(state, vm.extras.value))
+                ?.let { setNavigationInfo(it) }
+          }
+        }
+        .build()
+  }
 }
 
 /** The cluster's following zoom at about 40 km/h, before the theme's own offset: a little wider than the car screen's, for its smaller map. */

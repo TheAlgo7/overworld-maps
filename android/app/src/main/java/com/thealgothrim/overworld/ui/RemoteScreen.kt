@@ -98,6 +98,7 @@ fun RemoteScreen(viewModel: OverworldViewModel, onShowMap: () -> Unit) {
   val here = uiState.location?.coordinates
   val focus = LocalFocusManager.current
   var searchOpen by remember { mutableStateOf(false) }
+  val stop by viewModel.stop.collectAsState()
   var added by remember { mutableStateOf<String?>(null) }
 
   fun closeSearch() {
@@ -128,7 +129,11 @@ fun RemoteScreen(viewModel: OverworldViewModel, onShowMap: () -> Unit) {
     ) {
       Header(spec, theme, onShowMap)
       when {
-        navigating -> Trip(spec, uiState, extras, viewModel.remainingSeconds(uiState, extras), viewModel.hazardAhead(uiState, extras), viewModel::toggleMute, viewModel::stopNavigation)
+        navigating -> Trip(
+            spec, uiState, extras, viewModel.remainingSeconds(uiState, extras), viewModel.hazardAhead(uiState, extras), viewModel::toggleMute, viewModel::stopNavigation,
+            stop = stop?.name,
+            onSkipStop = { viewModel.skipStop { ok -> added = if (ok) "Stop skipped" else "Couldn't skip the stop" } },
+        )
         planner.preview != null -> Preview(spec, planner.preview!!, extras, testDrive, viewModel::cancelPreview, viewModel::startPreview)
       }
 
@@ -144,6 +149,8 @@ fun RemoteScreen(viewModel: OverworldViewModel, onShowMap: () -> Unit) {
             onQuery = viewModel::onQueryChange,
             onClear = { if (searchOpen) viewModel.onQueryChange("") else viewModel.clearDestination() },
             modifier = Modifier.fillMaxWidth(),
+            // On a trip a pick here is a stop on the way: say so before the bar is opened.
+            hint = if (navigating) "Add a stop on the way" else "Search here",
         )
         if (searchOpen) {
           SkinPanel(spec, Modifier.fillMaxWidth()) {
@@ -204,6 +211,9 @@ private fun Trip(
     hazard: HazardAhead?,
     onMute: () -> Unit,
     onEnd: () -> Unit,
+    /** The stop added on the way, if one is still ahead, and how to drop it. */
+    stop: String? = null,
+    onSkipStop: () -> Unit = {},
 ) {
   TurnBanner(spec, uiState, hazard)
   SkinPanel(spec, Modifier.fillMaxWidth()) {
@@ -223,6 +233,10 @@ private fun Trip(
         SkinPrimaryButton(spec, "End trip", onEnd, Modifier.weight(1f), GameIcon.CLOSE)
         val muted = uiState.isMuted == true
         SkinSecondaryButton(spec, if (muted) "Voice off" else "Voice on", onMute, icon = if (muted) GameIcon.SOUND_OFF else GameIcon.SOUND_ON)
+      }
+      stop?.let {
+        Spacer(Modifier.height(10.dp))
+        SkinSecondaryButton(spec, "Skip stop: $it", onSkipStop, Modifier.fillMaxWidth(), icon = GameIcon.CLOSE)
       }
     }
   }

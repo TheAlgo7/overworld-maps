@@ -236,6 +236,12 @@ class DebugDriveReceiver : BroadcastReceiver() {
       // The app's search for --es query (%s for spaces) from --ef lat/lng, the first six results as
       // the car would list them. With --es nearby FUEL (a Nearby name) instead: that kind, from
       // where the app thinks the car is (on a trip, along the route).
+      // Drop the stop added on the way, as Skip stop does.
+      "com.thealgothrim.overworld.DEBUG_SKIPSTOP" ->
+          vm.skipStop { ok ->
+            val trip = AppModule.ferrostarCore.state.value.tripState as? uniffi.ferrostar.TripState.Navigating
+            Log.i("DebugDrive", "skip stop: $ok, waypoints now ${trip?.remainingWaypoints?.map { "%.4f,%.4f".format(it.coordinate.lat, it.coordinate.lng) }}, ${trip?.progress?.distanceRemaining?.toInt()} m left")
+          }
       "com.thealgothrim.overworld.DEBUG_SEARCH" -> {
         val done = goAsync()
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {

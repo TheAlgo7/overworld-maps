@@ -93,17 +93,23 @@ fun rememberCameraUiState(uiState: NavigationUiState, shown: DisplayedPosition?,
   }
   val at = shown!!.location
   val p = at.position.value
-  val course = if (northUp) 0 else (((at.courseDegrees ?: 0.0).roundToInt() % 360) + 360) % 360
+  // No course on a route: Ferrostar's camera then keeps the bearing the camera has, and
+  // PreciseCameraBearing alone turns it, to the route's exact direction. Given the course (whole
+  // degrees only), Ferrostar set the rounded bearing each time it moved the camera and the exact
+  // one was put back a frame later: the map twitched 0.35 to 0.4 degrees left and right about three
+  // times a second (27 Nov, 180 reversals in 40 s on the DHU; "wiggles left right" in the Curvv).
+  val course = if (northUp) CourseOverGround(0u, null) else null
   return uiState.copy(
       routeGeometry = null,
-      location = fix!!.copy(coordinates = GeographicCoordinate(p.latitude, p.longitude), courseOverGround = CourseOverGround(course.toUShort(), null)),
+      location = fix!!.copy(coordinates = GeographicCoordinate(p.latitude, p.longitude), courseOverGround = course),
   )
 }
 
 /**
- * A fix carries its course in whole degrees, so the camera [rememberCameraUiState] steers would
- * turn a degree at a time. Called after the map view: where the camera has just been put on the
- * arrow, its bearing is set to the route's exact direction there.
+ * The camera's bearing on a route: the route's exact direction at the arrow. A fix carries its
+ * course in whole degrees only, so [rememberCameraUiState] gives Ferrostar none and this is the one
+ * thing that turns the map (see there). Called after the map view: where the camera has just been
+ * put on the arrow.
  */
 @Composable
 fun PreciseCameraBearing(camera: org.maplibre.compose.camera.CameraState, shown: DisplayedPosition?, enabled: Boolean) {
@@ -114,7 +120,7 @@ fun PreciseCameraBearing(camera: org.maplibre.compose.camera.CameraState, shown:
     val position = camera.position
     if (position.target != at.position.value) return@SideEffect
     val off = ((position.bearing - exact) % 360 + 540) % 360 - 180
-    if (off != 0.0 && kotlin.math.abs(off) <= 0.75) camera.position = position.copy(bearing = exact)
+    if (off != 0.0) camera.position = position.copy(bearing = exact)
   }
 }
 
@@ -268,6 +274,10 @@ class RoutePolyline(
     }
     return if (bestDistanceSquared > LOST_METRES * LOST_METRES) project(position) else best
   }
+
+  /** Metres from [position] to the line, looking near [fromMetres] as [projectNear] does. */
+  internal fun offsetNear(position: Position, fromMetres: Double, aheadMetres: Double): Double =
+      distanceMeters(positionAt(projectNear(position, fromMetres, aheadMetres).progressMeters), position)
 
   internal fun project(position: Position): RouteProjection {
     var bestDistanceSquared = Double.POSITIVE_INFINITY

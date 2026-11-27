@@ -100,6 +100,8 @@ fun BoxScope.BrowseLayer(
     onNorthUp: () -> Unit,
     mapArea: String? = null,
     metresPerDp: Double? = null,
+    /** The empty search bar's words (see SearchBar). */
+    searchHint: String = "Search here",
 ) {
   val focus = LocalFocusManager.current
   val destination = planner.destination
@@ -130,6 +132,7 @@ fun BoxScope.BrowseLayer(
             if (searchOpen) onQuery("") else onClear()
           },
           onSubmit = { AppModule.history.searched(it) },
+          hint = searchHint,
           modifier = Modifier.weight(1f),
       )
       Spacer(Modifier.width(8.dp))
@@ -261,6 +264,8 @@ internal fun SearchBar(
     modifier: Modifier = Modifier,
     /** The keyboard's search key: the query goes into history. */
     onSubmit: (String) -> Unit = {},
+    /** The greyed words in the empty bar: "Add a stop on the way" when a pick becomes a stop. */
+    hint: String = "Search here",
 ) {
   val focusRequester = remember { FocusRequester() }
   LaunchedEffect(open) { if (open) runCatching { focusRequester.requestFocus() } }
@@ -283,14 +288,14 @@ internal fun SearchBar(
           keyboardActions = KeyboardActions(onSearch = { onSubmit(query) }),
           modifier = Modifier.weight(1f).focusRequester(focusRequester).onFocusChanged { },
           decorationBox = { inner ->
-            if (query.isEmpty()) SkinText("Search here", spec.body, 17.sp, spec.sub)
+            if (query.isEmpty()) SkinText(hint, spec.body, 17.sp, spec.sub)
             inner()
           },
       )
       if (searching) SkinText("…", spec.body, 17.sp, spec.sub)
     } else {
       Box(Modifier.weight(1f).clickable(onClick = onOpen)) {
-        SkinText(placeName ?: "Search here", spec.body, 17.sp, if (placeName != null) spec.fg else spec.sub)
+        SkinText(placeName ?: hint, spec.body, 17.sp, if (placeName != null) spec.fg else spec.sub)
       }
     }
     if ((open && query.isNotEmpty()) || (!open && placeName != null)) {

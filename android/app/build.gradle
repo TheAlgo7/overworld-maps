@@ -21,8 +21,8 @@ android {
         // The Car App Library needs 29 (Android 10).
         minSdk 29
         targetSdk 36
-        versionCode 28
-        versionName "0.6.5"
+        versionCode 29
+        versionName "0.6.6"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         // Live traffic (TomTom free tier). Put tomtomKey=... in local.properties.
@@ -87,7 +87,7 @@ android {
     }
 }
 
-def ferrostar = '0.57.0'
+def ferrostar = '0.59.0'
 
 // MapLibre's default Android build renders with Vulkan, and the Snapdragon Vulkan driver on
 // Gaurav's Galaxy S24 Ultra fails to compile its shaders (only the background drew). Use the

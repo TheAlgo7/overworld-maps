@@ -316,9 +316,9 @@ fun OverworldClusterMap(
       val variant by AppModule.viewModel.carMapVariant.collectAsState()
       ViMapLight(variant)
     }
-    val destination = (uiState.routeGeometry?.takeIf { uiState.isNavigating() } ?: planner.preview?.route?.geometry)?.lastOrNull()
-    // No north on the cluster: it only ever follows the road ahead (Gaurav, 24 Nov).
-    MinimapEdge(theme, mapState.cameraState, destination, room, showNorth = false)
+    // No north (Gaurav, 24 Nov) and no waypoint riding round the edge (27 Nov: "the floating dot is
+    // distracting") on the cluster: it only follows the road ahead, and the next turn is Android
+    // Auto's small card there (see CarClusterScreen).
   }
 }
 
@@ -426,6 +426,18 @@ private fun FollowedMapView(
     onMapClick: (GeographicCoordinate, DpOffset) -> NavigationMapClickResult = { _, _ -> NavigationMapClickResult.Pass },
     content: @Composable @MaplibreComposable () -> Unit,
 ) {
+  // Debug: the camera every frame (OwCam in logcat), to line a wiggle up with what moved it.
+  androidx.compose.runtime.LaunchedEffect(mapState) {
+    androidx.compose.runtime.snapshotFlow { mapState.cameraState.position }.collect { p ->
+      if (FrameStats.perFrame) {
+        android.util.Log.d(
+            "OwCam",
+            "m=${System.identityHashCode(mapState) % 1000} t=${android.os.SystemClock.uptimeMillis()} b=${"%.2f".format(p.bearing)} z=${"%.3f".format(p.zoom)} " +
+                "lat=${"%.6f".format(p.target.latitude)} lng=${"%.6f".format(p.target.longitude)} mode=${mapState.cameraMode}",
+        )
+      }
+    }
+  }
   NavigationMapView(
       baseStyle = baseStyle,
       navigationMapState = mapState,

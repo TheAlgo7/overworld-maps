@@ -1,57 +1,31 @@
 package com.thealgothrim.overworld.car
 
 import android.content.Intent
-import android.net.Uri
-import com.stadiamaps.ferrostar.car.app.intent.NavigationDestination
-import com.stadiamaps.ferrostar.car.app.intent.NavigationIntentParser
+import com.stadiamaps.ferrostar.car.app.intent.CarAppMapIntent
+import com.stadiamaps.ferrostar.car.app.intent.CarAppMapIntentParser
+
+/** Where a navigation request wants to go: a point, a name to search for, or both. */
+data class NavigationDestination(val latitude: Double?, val longitude: Double?, val query: String?)
 
 /**
  * Where a navigation request wants to go: "Hey Google, navigate to India Gate" in Android Auto, or
  * an address tapped in a message. They arrive as geo: links (geo:28.61,77.22, geo:0,0?q=India+Gate,
  * geo:0,0?q=28.61,77.22(India Gate)) or Google Maps' google.navigation:q=... links.
  *
- * Ferrostar's NavigationIntentParser reads the q= part with Uri.getQueryParameter, which throws on
- * every geo: link (they are "opaque" URIs, not scheme://host ones), so a navigation request closed
- * the app in the car. This reads the link itself and keeps Ferrostar's coordinate rules.
+ * Ferrostar's old NavigationIntentParser threw on every geo: link (Uri.getQueryParameter on an
+ * opaque URI), so this used to read the links itself. Since Ferrostar 0.59 its CarAppMapIntentParser
+ * reads them safely, covering the same forms and more (labelled pins, avoid and mode).
  */
-internal fun Intent.navigationDestination(): NavigationDestination? {
-  val uri = data ?: return null
-  val ssp = uri.encodedSchemeSpecificPart ?: return null
-  return when (uri.scheme) {
-    // geo:lat,lng[;u=...][?q=...]
-    "geo" -> {
-      val q = params(ssp.substringAfter('?', ""))["q"]
-      val labelled = q?.let(::labelledCoordinates)
-      labelled
-          ?: NavigationIntentParser.parseGeoSsp(
-              coordString = Uri.decode(ssp.substringBefore('?').substringBefore(';')),
-              query = q,
-          )
+internal fun Intent.navigationDestination(): NavigationDestination? =
+    when (val parsed = CarAppMapIntentParser.parse(this)) {
+      is CarAppMapIntent.Navigate ->
+          when (val d = parsed.destination) {
+            is CarAppMapIntent.Navigate.Destination.Coordinate -> NavigationDestination(d.location.lat, d.location.lng, d.label)
+            is CarAppMapIntent.Navigate.Destination.Query -> NavigationDestination(null, null, d.query)
+          }
+      is CarAppMapIntent.Pin -> NavigationDestination(parsed.location.lat, parsed.location.lng, parsed.label)
+      // A search near a point (geo:lat,lng?q=Name opened on the phone): the point, named.
+      is CarAppMapIntent.Search -> NavigationDestination(parsed.near?.lat, parsed.near?.lng, parsed.query)
+      is CarAppMapIntent.DisplayMap -> NavigationDestination(parsed.center.lat, parsed.center.lng, null)
+      else -> null
     }
-    // google.navigation:q=lat,lng or google.navigation:q=place+name[&mode=d]
-    "google.navigation" -> params(ssp)["q"]?.let { labelledCoordinates(it) ?: NavigationIntentParser.parseGoogleNavigationSsp(it) }
-    else -> null
-  }
-}
-
-/** a=1&b=two+words → {a: 1, b: two words} */
-private fun params(query: String): Map<String, String> =
-    query
-        .split('&')
-        .mapNotNull { pair ->
-          val (key, value) = pair.split('=', limit = 2).takeIf { it.size == 2 } ?: return@mapNotNull null
-          Uri.decode(key) to Uri.decode(value.replace('+', ' ')).trim()
-        }
-        .filter { it.second.isNotEmpty() }
-        .toMap()
-
-/** Google Maps' "lat,lng(Label)" (or plain "lat,lng") as a destination, else null. */
-private fun labelledCoordinates(q: String): NavigationDestination? {
-  val match = LABELLED.matchEntire(q) ?: return null
-  val lat = match.groupValues[1].toDoubleOrNull() ?: return null
-  val lng = match.groupValues[2].toDoubleOrNull() ?: return null
-  if (lat !in -90.0..90.0 || lng !in -180.0..180.0 || (lat == 0.0 && lng == 0.0)) return null
-  return NavigationDestination(lat, lng, match.groupValues[3].trim().ifEmpty { null })
-}
-
-private val LABELLED = Regex("""\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*(?:\((.*)\))?\s*""")

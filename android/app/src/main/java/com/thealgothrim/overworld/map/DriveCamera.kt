@@ -93,6 +93,7 @@ fun AutoZoomEffect(
     var heldUntil = 0L
     var lastFrame = 0L
     var arrived = false
+    var wasNavigating = uiState.value.isNavigating()
     var released = release?.value
     var zoomed = zoomedAt?.value
     fun report(on: Boolean) {
@@ -113,6 +114,12 @@ fun AutoZoomEffect(
       }
       // Where the zoom should be now, kept for the re-centre glide so it lands there (see below).
       val ui = uiState.value
+      // A trip starting (or ending) is a new view, set at the default zoom: land on this one in a
+      // step, as on opening. Eased, Start in the car crept in by 0.8 levels for 3 s (27 Nov, DHU).
+      if (ui.isNavigating() != wasNavigating) {
+        wasNavigating = ui.isNavigating()
+        arrived = false
+      }
       val target = autoZoom(base, ui.location?.speed?.value, ui.progress?.distanceToNextManeuver?.takeIf { ui.isNavigating() }, reach)
       state.glide.autoZoom = target
       // The glide lands on this zoom itself. Easing in after it landed (on the camera's default

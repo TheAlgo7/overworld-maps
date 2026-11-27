@@ -118,11 +118,11 @@ class CarScreenSmokeTest {
     assertEquals(CarColor.TYPE_CUSTOM, driving.backgroundColor!!.type)
     assertEquals(expected, driving.backgroundColor!!.color)
     assertEquals(4, driving.mapActionStrip!!.actions.size)
-    assertEquals(listOf("End", "Nearby", "Settings"), driving.actionStrip!!.actions.map { it.title.toString() })
+    assertEquals(listOf("End", "Add stop", "Settings"), driving.actionStrip!!.actions.map { it.title.toString() })
     // + Cam joins them when it's switched on.
     main { store.setCarCamButton(true) }
     val withCam = main { screen.onGetTemplate() } as NavigationTemplate
-    assertEquals(listOf("End", "Nearby", "Settings", "+ Cam"), withCam.actionStrip!!.actions.map { it.title.toString() })
+    assertEquals(listOf("End", "Add stop", "Settings", "+ Cam"), withCam.actionStrip!!.actions.map { it.title.toString() })
     main { store.setCarCamButton(false) }
     // Km in Settings means km on the dashboard, whatever the phone's language (the emulator is en-US).
     val unit = routing.currentDistance!!.displayUnit

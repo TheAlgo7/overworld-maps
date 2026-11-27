@@ -145,12 +145,16 @@ class CarNearbyScreen(carContext: CarContext) : Screen(carContext) {
 }
 
 /** The kinds of nearby place, one tap each. Its own screen or a map panel. */
-internal fun nearbyGridTemplate(withBack: Boolean, onKind: (Nearby) -> Unit): GridTemplate {
+internal fun nearbyGridTemplate(withBack: Boolean, onSearch: (() -> Unit)? = null, onSkip: (() -> Unit)? = null, onKind: (Nearby) -> Unit): GridTemplate {
   val grid = ItemList.Builder()
+  // A stop already added: dropping it comes first (plans change).
+  onSkip?.let { grid.addItem(GridItem.Builder().setTitle("Skip stop").setImage(carIcon(GameIcon.CLOSE)).setOnClickListener(it).build()) }
+  // On a trip: any place by name as a stop (a friend's address), before the kinds of place.
+  onSearch?.let { grid.addItem(GridItem.Builder().setTitle("Search").setImage(carIcon(GameIcon.SEARCH)).setOnClickListener(it).build()) }
   Nearby.shown().forEach { kind ->
     grid.addItem(GridItem.Builder().setTitle(kind.label).setImage(carIcon(kind.icon)).setOnClickListener { onKind(kind) }.build())
   }
-  return GridTemplate.Builder().setTitle("Nearby").apply { if (withBack) setHeaderAction(Action.BACK) }.setSingleList(grid.build()).build()
+  return GridTemplate.Builder().setTitle(if (onSearch != null) "Add a stop" else "Nearby").apply { if (withBack) setHeaderAction(Action.BACK) }.setSingleList(grid.build()).build()
 }
 
 /** The closest places of [kind] ([places] null while they load). Its own screen or a map panel. */

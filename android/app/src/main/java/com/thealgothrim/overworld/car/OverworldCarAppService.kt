@@ -81,10 +81,11 @@ class OverworldCarSession : Session() {
   /** Starts a trip to the place in a navigation intent (a geo: or google.navigation: link). */
   private fun navigateTo(intent: Intent): Boolean {
     val destination = intent.navigationDestination() ?: return false
-    val at = destination.location
+    val lat = destination.latitude
+    val lng = destination.longitude
     val query = destination.query?.takeIf { it.isNotBlank() }
     when {
-      at != null -> AppModule.viewModel.startNavigation(GeographicCoordinate(at.latitude, at.longitude), query)
+      lat != null && lng != null -> AppModule.viewModel.startNavigation(GeographicCoordinate(lat, lng), query)
       // A place by name only ("geo:0,0?q=India Gate"): look it up like the phone's search does.
       query != null -> AppModule.viewModel.navigateToQuery(query)
       else -> return false

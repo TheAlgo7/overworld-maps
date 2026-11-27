@@ -249,7 +249,20 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
         when (p) {
           CarPanel.Settings -> carSettingsTemplate(withBack = true)
           CarPanel.Saved -> savedPlacesTemplate(withBack = true, onPick = ::pickSaved)
-          CarPanel.NearbyKinds -> nearbyGridTemplate(withBack = true, onKind = ::loadNearby)
+          // On a trip a pick becomes a stop on the way, and Search finds any place for one.
+          CarPanel.NearbyKinds ->
+              nearbyGridTemplate(
+                  withBack = true,
+                  onSearch = if (uiState?.isNavigating() == true) ::search else null,
+                  onSkip =
+                      viewModel.stop.value?.takeIf { uiState?.isNavigating() == true }?.let {
+                        {
+                          open(null)
+                          viewModel.skipStop { ok -> androidx.car.app.CarToast.makeText(carContext, if (ok) "Stop skipped" else "Couldn't skip the stop", androidx.car.app.CarToast.LENGTH_SHORT).show() }
+                        }
+                      },
+                  onKind = ::loadNearby,
+              )
           is CarPanel.NearbyList -> nearbyListTemplate(p.kind, p.places, withBack = true, onPick = ::pickNearby)
           // Not reached: results only open as the themed panel (see search()).
           is CarPanel.Results -> nearbyGridTemplate(withBack = true, onKind = ::loadNearby)
@@ -511,7 +524,31 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
     )
   }
 
+  /** What the car screen last showed, for the drive log. */
+  private var shownKind: String? = null
+
+  /**
+   * What the car shows, with each change written to the drive log. On the 26 Nov drive a trip
+   * started from the phone left the car showing the preview's Start; three ways of starting one on
+   * the desktop head unit all switched over within 1.5 s, so the log says what the car was on next time.
+   */
   override fun onGetTemplate(): Template {
+    val template = buildTemplate()
+    val kind =
+        when {
+          panel != null && !themedLists -> "a $panel list"
+          uiState?.isNavigating() == true -> "the trip"
+          viewModel.planner.value.preview != null -> "the route preview"
+          else -> "the map"
+        } + " (Ferrostar ${if (viewModel.navigationUiState.value.isNavigating()) "on a trip" else "idle"})"
+    if (kind != shownKind) {
+      shownKind = kind
+      com.thealgothrim.overworld.DriveLog.note("car: showing $kind")
+    }
+    return template
+  }
+
+  private fun buildTemplate(): Template {
     panel?.takeIf { !themedLists }?.let { return hostPanelTemplate(it) }
     val theme = themeStore.carTheme.value
     val state = uiState
@@ -540,8 +577,10 @@ class CarNavigationScreen(carContext: CarContext) : ComposableScreen(carContext)
           .setActionStrip(if (themeStore.carGameHud.value) searchStrip() else
               ActionStrip.Builder()
                   .addAction(worldAction(GameIcon.CLOSE, R.string.end_trip) { viewModel.stopNavigation() })
-                  // Petrol, food, toilets along the rest of the route; a pick becomes a stop.
-                  .addAction(worldAction(GameIcon.NEARBY, R.string.nearby, titled = !narrowStrip) { showNearby() })
+                  // Any place by name, or petrol, food, toilets along the rest of the route: a pick
+                  // becomes a stop. Named for what it does on a trip (26 Nov: dropping a friend
+                  // without a stop rerouted 15 times in 7 minutes).
+                  .addAction(worldAction(GameIcon.ADD_STOP, "Add stop", titled = !narrowStrip) { showNearby() })
                   .addAction(worldAction(GameIcon.SETTINGS, R.string.settings, titled = !narrowStrip) { showSettings() })
                   .apply {
                     // + Cam, when it's switched on: Android Auto's own button, where the old HUD

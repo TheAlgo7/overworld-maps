@@ -65,6 +65,59 @@ class DeviationAndProjectionTest {
     assertTrue(d.judge(70.0, 45.0, t0.plusSeconds(5)) is RouteDeviation.NoDeviation)
   }
 
+  /**
+   * The 26 Nov drive, 23:23:16 to 23:23:28: the car took a right the route didn't want, GPS good to
+   * 3.8 m, at about 25 km/h. Metres off the route each second, as the track recorded them. The old
+   * rules called it at the last fix (77 m); turning away is called two fixes after 20 m.
+   */
+  @Test
+  fun aCleanTurnOffTheRouteIsCalledInTwoSeconds() {
+    val offs = listOf(9.0, 13.0, 18.0, 23.0, 28.0, 34.0, 40.0, 46.0, 52.0, 58.0, 64.0, 70.0, 77.0)
+    val d = SustainedDeviation()
+    val called = offs.indices.first { i -> d.judge(offs[i], 3.8, t0.plusSeconds(i.toLong()), speed = 7.0, against = false, angle = 55.0) is RouteDeviation.Deviation }
+    assertEquals(28.0, offs[called], 0.0)
+    // The old rules alone (no heading to go on) took until 64 m.
+    val old = SustainedDeviation()
+    val oldCalled = offs.indices.first { i -> old.judge(offs[i], 3.8, t0.plusSeconds(i.toLong()), speed = 7.0) is RouteDeviation.Deviation }
+    assertTrue(offs[oldCalled] >= 60.0)
+  }
+
+  @Test
+  fun aServiceRoadAlongsideStaysOnTheRouteEvenWithAWobblyHeading() {
+    // 22 m beside the route, not getting further: no quick call, whatever the course says.
+    val d = SustainedDeviation()
+    for (s in 0 until 7) assertTrue(d.judge(22.0 + (s % 2), 5.0, t0.plusSeconds(s.toLong()), speed = 12.0, against = false, angle = 35.0) is RouteDeviation.NoDeviation)
+  }
+
+  @Test
+  fun aTurnAwayNeedsASharpFixAndAHeadingOffTheLine() {
+    val offs = listOf(20.0, 25.0, 30.0, 35.0)
+    // Drifting off along the route's own direction (a road widening, GPS creeping): not a turn.
+    val along = SustainedDeviation()
+    assertTrue(offs.indices.none { i -> along.judge(offs[i], 5.0, t0.plusSeconds(i.toLong()), speed = 10.0, against = false, angle = 8.0) is RouteDeviation.Deviation })
+    // The same turn with fixes good only to 18 m: left to the slower rules.
+    val vague = SustainedDeviation()
+    assertTrue(offs.indices.none { i -> vague.judge(offs[i], 18.0, t0.plusSeconds(i.toLong()), speed = 10.0, against = false, angle = 60.0) is RouteDeviation.Deviation })
+  }
+
+  @Test
+  fun theArrowLetsGoOfTheLineWhenTheCarDoes() {
+    val l = com.thealgothrim.overworld.map.LeavingRoute()
+    // On the line, GPS wobbling a few metres: stays.
+    for (off in listOf(3.0, 6.0, 9.0, 5.0)) assertTrue(!l.update(off, 3.8, 12.0))
+    // One fix 17 m out is wobble; the second in a row is the car leaving.
+    assertTrue(!l.update(17.0, 3.8, 7.0))
+    assertTrue(l.update(23.0, 3.8, 7.0))
+    // Held until the car is back near the line.
+    assertTrue(l.update(12.0, 3.8, 7.0))
+    assertTrue(!l.update(6.0, 3.8, 7.0))
+    // One fix far out leaves at once; a standing car or a vague fix never does.
+    assertTrue(l.update(35.0, 3.8, 7.0))
+    l.reset()
+    assertTrue(!l.update(35.0, 3.8, 0.3))
+    assertTrue(!l.update(35.0, 30.0, 7.0))
+  }
+
   @Test
   fun distanceToTheStepsAhead() {
     val east = listOf(GeographicCoordinate(28.5, 77.2), GeographicCoordinate(28.5, 77.21))

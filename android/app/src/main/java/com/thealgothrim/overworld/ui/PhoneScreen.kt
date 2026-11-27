@@ -136,6 +136,10 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
   val keepNorthUp by AppModule.prefs.northUp.collectAsState()
   val extras by viewModel.extras.collectAsState()
   var searchOpen by remember { mutableStateOf(false) }
+  // On a trip: the search is open to pick a stop on the way (see NavigationLayer's Add a stop).
+  var addingStop by remember { mutableStateOf(false) }
+  val stop by viewModel.stop.collectAsState()
+  if (!navigating && addingStop) addingStop = false
   var arrivedAt by remember { mutableStateOf<String?>(null) }
   val rotated by remember { derivedStateOf { abs(mapState.cameraState.position.bearing) > 1.0 } }
 
@@ -160,6 +164,10 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
   BackHandler(settingsOpen && !layersOpen) { settingsOpen = false }
   BackHandler(layersOpen) { layersOpen = false }
   BackHandler(indexOpen) { indexOpen = false }
+  BackHandler(addingStop && !overlay) {
+    addingStop = false
+    viewModel.onQueryChange("")
+  }
 
   // A Timeline day on the map: its pieces, and the camera framing them.
   val daySegments by androidx.compose.runtime.produceState<List<com.thealgothrim.overworld.timeline.Segment>?>(null, dayOnMap) {
@@ -385,6 +393,44 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
     val menuOpen = youOpen || settingsOpen || indexOpen
     Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).graphicsLayer { alpha = if (menuOpen) 0f else 1f }) {
       when {
+        navigating && addingStop ->
+            // The usual search (Home, Work, recents, place kinds) with the trip still running under
+            // it: a pick becomes a stop on the way, then on to where the trip was going.
+            BrowseLayer(
+                spec = spec,
+                planner = planner,
+                saved = saved,
+                here = uiState.location?.coordinates,
+                searchOpen = true,
+                onSearchOpen = { open ->
+                  if (!open) {
+                    addingStop = false
+                    viewModel.onQueryChange("")
+                  }
+                },
+                rotated = rotated,
+                onQuery = viewModel::onQueryChange,
+                onNearby = { viewModel.searchNearby(it) },
+                onChoose = { place ->
+                  addingStop = false
+                  viewModel.onQueryChange("")
+                  notice = "Adding a stop at ${place.name}…"
+                  viewModel.addStop(place) { ok -> notice = if (ok) "Stop added: ${place.name}" else "Couldn't route via ${place.name}" }
+                },
+                onClear = {},
+                onDirections = {},
+                onSettings = { settingsOpen = true },
+                onLayers = { layersOpen = true },
+                onLocate = locate,
+                onIndex = {},
+                onYou = {},
+                compass = compass,
+                following = mapState.isTrackingUser,
+                onNorthUp = northUp,
+                mapArea = mapArea,
+                metresPerDp = scale,
+                searchHint = "Add a stop on the way",
+            )
         navigating ->
             NavigationLayer(
                 spec = spec,
@@ -400,6 +446,12 @@ private fun PhoneMapScreen(viewModel: OverworldViewModel) {
                 onMute = viewModel::toggleMute,
                 onEnd = viewModel::stopNavigation,
                 onSettings = { settingsOpen = true },
+                onAddStop = {
+                  viewModel.onQueryChange("")
+                  addingStop = true
+                },
+                stop = stop?.name,
+                onSkipStop = { viewModel.skipStop { ok -> notice = if (ok) "Stop skipped" else "Couldn't skip the stop" } },
                 onBottomBlocked = { bottomBlocked = it },
                 onMapRoom = { mapRoom = it },
                 onSpeedBox = { speedBox = it },

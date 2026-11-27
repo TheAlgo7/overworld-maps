@@ -7,7 +7,7 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewModelScope
-import com.stadiamaps.ferrostar.car.app.intent.NavigationDestination
+import com.thealgothrim.overworld.car.NavigationDestination
 import com.stadiamaps.ferrostar.core.DefaultNavigationViewModel
 import com.stadiamaps.ferrostar.core.InvalidStatusCodeException
 import com.stadiamaps.ferrostar.core.NavigationUiState
@@ -152,6 +152,11 @@ class OverworldViewModel :
   /** Whether location is allowed; the car's location screen closes itself when it turns true. */
   val locationAllowed: StateFlow<Boolean> = hasLocationPermission.asStateFlow()
   private val lastLocation = MutableStateFlow<UserLocation?>(null)
+
+  // Up here, before the init blocks that watch it: they run in order, and one read it while null.
+  private val _stop = MutableStateFlow<Place?>(null)
+  /** The stop added on the way (see addStop), until it's reached, skipped or the trip ends. */
+  val stop: StateFlow<Place?> = _stop.asStateFlow()
   /** Which way the last fixes moved, for when GPS gives no course of its own. */
   @Volatile private var movementHeading: Double? = null
   /** Fixes thrown out in a row by [plausible]. */
@@ -332,6 +337,22 @@ class OverworldViewModel :
               delay(2_000)
             }
           }
+    }
+    viewModelScope.launch {
+      // The added stop is done once Ferrostar has passed its waypoint (or the trip ended): from then
+      // on the trip just carries on to where it was going.
+      core.state.collect { s ->
+        val place = _stop.value ?: return@collect
+        val trip = s.tripState as? TripState.Navigating
+        if (trip == null) {
+          _stop.value = null
+          return@collect
+        }
+        if (trip.remainingWaypoints.none { metres(it.coordinate, place.coordinate) < STOP_MATCH_METRES }) {
+          _stop.value = null
+          DriveLog.note("trip: reached the stop at ${place.name}, on to the destination")
+        }
+      }
     }
     viewModelScope.launch {
       // Each second of a trip as the app showed it, for a problem report (see Trace).
@@ -1158,7 +1179,23 @@ class OverworldViewModel :
       while (true) {
         delay(60_000)
         val line = com.thealgothrim.overworld.map.FrameStats.summary() ?: continue
-        if (navigationUiState.value.isNavigating() || carDark.value != null) DriveLog.note("frames: $line")
+        val navigating = navigationUiState.value.isNavigating()
+        if (navigating || carDark.value != null) {
+          // The 26 Nov drive sat at exactly 30 fps with each frame 32 ms for stretches of 10 to 20
+          // minutes: a cap from outside (phone heat, Android Auto's video rate), not the map's work.
+          // The phone's heat level beside it says which.
+          val heat =
+              when (AppModule.context.getSystemService(android.os.PowerManager::class.java)?.currentThermalStatus) {
+                android.os.PowerManager.THERMAL_STATUS_NONE -> "cool"
+                android.os.PowerManager.THERMAL_STATUS_LIGHT -> "warm"
+                android.os.PowerManager.THERMAL_STATUS_MODERATE -> "hot (moderate)"
+                android.os.PowerManager.THERMAL_STATUS_SEVERE -> "hot (severe)"
+                null -> "unknown"
+                else -> "hot (critical)"
+              }
+          val speed = (navigationUiState.value.location ?: lastLocation.value)?.speed?.value?.let { "%.0f km/h".format(it * 3.6) } ?: "?"
+          DriveLog.note("frames: $line; phone $heat, ${if (navigating) "trip" else "free drive"} at $speed")
+        }
       }
     }
     viewModelScope.launch {
@@ -1281,6 +1318,38 @@ class OverworldViewModel :
         if (_testDrive.value) locationProvider.enableSimulationOn(safe)
         core.replaceRoute(route = safe)
         AppModule.saved.addRecent(place)
+        _stop.value = place
+        DriveLog.note("trip: stop added at ${place.name}, ${DriveLog.at(place.coordinate)}")
+        onDone(true)
+      }
+    }
+  }
+
+  /**
+   * Drop the stop added on the way and go straight on to where the trip was going: plans change
+   * (the friend got out earlier, the pump was shut).
+   */
+  fun skipStop(onDone: (Boolean) -> Unit = {}) {
+    val place = _stop.value ?: return onDone(false)
+    val trip = core.state.value.tripState as? TripState.Navigating ?: return onDone(false)
+    val rest = trip.remainingWaypoints.filterNot { metres(it.coordinate, place.coordinate) < STOP_MATCH_METRES }
+    if (rest.isEmpty() || rest.size == trip.remainingWaypoints.size) {
+      _stop.value = null
+      return onDone(false)
+    }
+    viewModelScope.launch(Dispatchers.IO) {
+      val route =
+          runCatching { core.getRoutes(trip.userLocation, rest).first() }
+              .onFailure { Log.w(TAG, "routing without ${place.name} failed", it) }
+              .getOrNull()
+      withContext(Dispatchers.Main) {
+        if (route == null || !core.state.value.isNavigating()) return@withContext onDone(false)
+        val safe = route.safeForCar()
+        if (_testDrive.value) locationProvider.enableSimulationOn(safe)
+        // Cleared first: the new route has no stop, and the watcher would call it reached.
+        _stop.value = null
+        core.replaceRoute(route = safe)
+        DriveLog.note("trip: skipped the stop at ${place.name}")
         onDone(true)
       }
     }
@@ -1340,6 +1409,8 @@ class OverworldViewModel :
 
   companion object {
     private const val TAG = "OverworldViewModel"
+    /** A remaining waypoint this close to the added stop is that stop. */
+    private const val STOP_MATCH_METRES = 60.0
     /** How quickly a new arrival estimate takes over (a time constant, in seconds). */
     private const val ETA_EASE_SECONDS = 20.0
     /** A fix younger than this is where the car is; an older one is checked against the phone's latest. */
